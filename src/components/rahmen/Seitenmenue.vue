@@ -27,6 +27,7 @@ import { appEinstellungen } from '../../stores/settings.js'
 import { PAGES, pagesForMode, istModusAn } from '../../config/menu.js'
 import { seiteImMarkt } from '../../config/markt.js'
 import { aktiverMarkt } from '../../stores/markt.js'
+import { gewaehlteBoerse, BOT_BROKERS } from '../../stores/filters.js'
 import { useIstTelefon } from '../../utils/geraet.js'
 
 const LiveSymbolPicker = defineAsyncComponent(() => import('../LiveSymbolPicker.vue'))
@@ -68,6 +69,8 @@ function sichtbar(seite) {
     if (!seiteImMarkt(seite, aktiverMarkt.value)) return false
     if (seite.nurDesktop && istTelefon.value && Number(u?.[seite.mobilFlag]) !== 1) return false
     if (seite.id === 'kiAgent' && !kiAn.value) return false
+    // Bots gibt es nur bei einer Bot-Börse (Pionex); bei Bitunix/Bitget wäre der Eintrag leer
+    if (seite.id === 'bots' && gewaehlteBoerse.value && !BOT_BROKERS.includes(gewaehlteBoerse.value)) return false
     return true
 }
 
