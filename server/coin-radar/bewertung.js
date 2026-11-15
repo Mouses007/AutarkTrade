@@ -128,7 +128,7 @@ const klemme = (n) => {
 }
 
 /** Lineare Abbildung von [von,bis] auf [0,100], ausserhalb gedeckelt. */
-function skala(wert, von, bis) {
+export function skala(wert, von, bis) {
     const w = Number(wert)
     if (!Number.isFinite(w)) return 0
     if (bis === von) return 0

@@ -35,6 +35,9 @@ import {
     bewerte, pruefeHuerden, vergibRaenge, rangkorrelation,
     STANDARD_GEWICHTE, STANDARD_HUERDEN, STANDARD_HUERDEN_AKTIEN,
 } from './bewertung.js'
+import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, GEWICHTE_AKTIEN } from './aktien-kennzahlen.js'
+import { ladeTagesdaten, INDEX } from './aktien-tagesdaten.js'
+import { sitzungVon } from '../../shared/aktien-sitzung.js'
 import * as marktdaten from '../marktdaten/index.js'
 import { ladeAktienUniversum, waehleReferenz, boersenFelder } from './aktien-universum.js'
 
@@ -304,9 +307,44 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         }
     }
 
+    /*
+     * ── Stufe 3d (nur Aktien): Stärke gegen den Index ───────────────────
+     *
+     * Rendite über 3, 6 und 12 Monate gegen SPY und der Abstand zum
+     * 52-Wochen-Hoch — aus Tageskursen der echten Aktie, nicht des Futures
+     * (`aktien-tagesdaten.js`). Fällt die Kursquelle aus, läuft der Radar
+     * weiter; die Stärke ist dann unbekannt und fällt aus der Note.
+     */
+    let tagesdaten = { je: new Map(), index: null, grund: null, gemerkt: 0, abgerufen: 0 }
+    const staerkeJe = new Map()
+    if (aktien && !abbruch()) {
+        melde({ schritt: 'staerke', gesamt: offen.length })
+        try {
+            tagesdaten = await ladeTagesdaten(
+                knex,
+                offen.map((a) => ({ symbol: a.symbol, id: aktienTitel.get(a.symbol)?.id ?? null, ticker: aktienTitel.get(a.symbol)?.ticker })),
+                (f) => melde({ schritt: 'staerke', ...f }),
+            )
+        } catch (e) {
+            tagesdaten.grund = 'abrufFehlgeschlagen'
+            logWarn('coin-radar', `Tagesdaten nicht ladbar: ${e.message}`)
+        }
+        const index = tagesdaten.index?.[INDEX.haupt]
+        const liste = offen.map((a) => {
+            const t = tagesdaten.je.get(a.symbol)
+            const st = t && index ? staerkeGegenIndex(t, index) : { rs3m: null, rs6m: null, rs12m: null }
+            staerkeJe.set(a.symbol, st)
+            return st
+        })
+        // Rang im Feld der Titel, die die Hürden genommen haben — je Zeitraum, dann gemittelt.
+        staerkeImFeld(liste).forEach((rang, i) => { staerkeJe.get(offen[i].symbol).rang = rang })
+    }
+
     // ── Stufe 4: Bewertung ──────────────────────────────────────────────
     melde({ schritt: 'bewerten', gesamt: offen.length })
-    const gewichte = { ...STANDARD_GEWICHTE, ...(einst.gewichte || {}) }
+    const gewichte = aktien
+        ? { ...GEWICHTE_AKTIEN, ...(einst.gewichteAktien || {}) }
+        : { ...STANDARD_GEWICHTE, ...(einst.gewichte || {}) }
     const zeilen = []
 
     for (const [i, a] of offen.entries()) {
@@ -339,7 +377,31 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
             }
 
             const jahresRate = fundingJahresRate(a.roh.fundingRate, a.roh.fundingIntervallH)
-            const b = bewerte({ ...a.roh, fundingJahresRate: jahresRate }, ze, gewichte, haupt)
+            /*
+             * Aktien bekommen eine eigene Note (`aktien-kennzahlen.js`): Stärke
+             * gegen den Index, Nähe zum 52-Wochen-Hoch, Volumen gegen dieselbe
+             * Tageszeit. Funding zählt dort nicht mit — es steht als
+             * Kostenzeile daneben.
+             */
+            let b, tages = null
+            if (aktien) {
+                const tz = rvolTageszeit(kerzen[haupt])
+                const st = staerkeJe.get(a.symbol) || {}
+                const t = tagesdaten.je.get(a.symbol) || null
+                b = bewerteAktie({ kerzen: ze[haupt], rvol: tz?.rvol ?? null, staerkeRang: st.rang ?? null, abstandHochPct: t?.abstandHochPct ?? null }, gewichte)
+                b.bestaetigt = null
+                tages = {
+                    rs3m: st.rs3m ?? null, rs6m: st.rs6m ?? null, rs12m: st.rs12m ?? null, staerkeRang: st.rang ?? null,
+                    perf3m: t?.perf3m ?? null, perf6m: t?.perf6m ?? null, perf12m: t?.perf12m ?? null,
+                    abstandHochPct: t?.abstandHochPct ?? null, quelle: t?.quelle ?? null,
+                    rvolBasis: tz?.basis ?? null, rvolProben: tz?.proben ?? null, rvolAlt: ze[haupt].rvol,
+                    gewichtBekannt: b.gewichtBekannt, duenn: b.duenn, sitzung: tz?.sitzung ?? null,
+                }
+                // Die Spalte `rvol` trägt bei Aktien den tageszeitbereinigten Wert — unbekannt bleibt leer.
+                ze[haupt] = { ...ze[haupt], rvol: tz?.rvol ?? null }
+            } else {
+                b = bewerte({ ...a.roh, fundingJahresRate: jahresRate }, ze, gewichte, haupt)
+            }
 
             zeilen.push({
                 laufId: lauf.id,
@@ -357,7 +419,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
                 ...ausfuehrungsFelder(ausfuehrung.get(a.symbol)),
                 ...btcFelder(btcVergleich.get(a.symbol)),
                 boersen: JSON.stringify(listungFuer(a.symbol)),
-                jeZeiteinheit: JSON.stringify({ ...ze, hinweise: b.hinweise, bestaetigt: b.bestaetigt }),
+                jeZeiteinheit: JSON.stringify({ ...ze, hinweise: b.hinweise, bestaetigt: b.bestaetigt, ...(tages ? { tages } : {}) }),
                 teilnoten: JSON.stringify(b.teilnoten),
                 erstelltAm: jetzt,
             })
@@ -392,6 +454,19 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
     // Über ALLE Zeilen des Laufs, nicht nur die dieses Durchgangs — sonst
     // vergliche eine Wiederaufnahme eine halbe Rangfolge mit einer ganzen.
     const vergleich = await beharrlichkeit(knex, lauf.id, alleZeilen, aktien ? 'aktien' : 'krypto')
+
+    if (aktien) {
+        // Woher die Stärke kam und in welcher Börsensitzung gemessen wurde — das
+        // Volumen eines Sonntags ist ein anderes als das eines Dienstags um zehn.
+        quellenStand.staerke = {
+            ok: Boolean(tagesdaten.index) && tagesdaten.je.size > 0,
+            grund: tagesdaten.grund, index: INDEX.haupt,
+            mit: tagesdaten.je.size, gemerkt: tagesdaten.gemerkt, abgerufen: tagesdaten.abgerufen,
+            indexPerf: tagesdaten.index?.[INDEX.haupt] || null, zweit: tagesdaten.index?.[INDEX.zweit] || null,
+        }
+        quellenStand.sitzung = sitzungVon(jetzt)
+        await knex('coinradar_laeufe').where('id', lauf.id).update({ quellenStand: JSON.stringify(quellenStand) })
+    }
 
     await knex('coinradar_laeufe').where('id', lauf.id).update({
         status: 'fertig',

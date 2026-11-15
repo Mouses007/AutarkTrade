@@ -34,7 +34,7 @@ export function universumAus(titel = [], quelle) {
         for (const l of eigene) {
             // Nur USDT-Kontrakte: der marktweite Ticker und die Hürden rechnen in USDT.
             if (l.quote && l.quote !== 'USDT') continue
-            map.set(l.symbol, { ticker: t.ticker, name: t.name || null, unterart: t.unterart, listungen: t.listungen })
+            map.set(l.symbol, { id: t.id ?? null, ticker: t.ticker, name: t.name || null, unterart: t.unterart, listungen: t.listungen })
         }
     }
     return map

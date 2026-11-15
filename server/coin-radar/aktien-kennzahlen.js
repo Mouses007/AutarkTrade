@@ -1,0 +1,209 @@
+/**
+ * Aktien-Radar: was eine Aktie anders gemessen haben will als ein Coin
+ * (`docs/RECHERCHE-AKTIEN.md`, 15.11.2026).
+ *
+ * Der Coin-Radar fragt «bewegt es sich, ist etwas los, trendet es, was kostet
+ * das Halten». Für Aktien ist anderes besser belegt und anderes falsch:
+ *
+ *   Stärke       Rendite über 3, 6 und 12 Monate GEGEN den Index (SPY) — im
+ *                Querschnitt die am besten belegte Kennzahl für Aktien. Als
+ *                Rang im Feld je Zeitraum, nicht als absolute Zahl: «stärker
+ *                als 80 % der handelbaren Titel» ist die Aussage.
+ *   Hoch-Nähe    Abstand zum 52-Wochen-Hoch (ebenfalls belegt).
+ *   Im Spiel     relatives Volumen — aber gegen DIESELBE Tageszeit. Das
+ *                Volumen einer Aktie ist über den Tag U-förmig; ein Vergleich
+ *                mit den letzten 20 Kerzen meldet jeden Morgen einen Ausbruch
+ *                und jede Nacht Flaute.
+ *   Bewegung     ATR % wie beim Coin.
+ *   Trend        ADX wie beim Coin, mit kleinem Gewicht.
+ *
+ * Funding ist KEINE Teilnote mehr: beim Aktien-Future entsteht der Kurs an der
+ * echten Börse, Funding sind dort Haltekosten und sagen nichts über die Aktie.
+ * Es steht als Kostenzeile neben der Note.
+ *
+ * Tageskurse kommen von der echten Aktie (Kursquelle), nicht vom Future — den
+ * gibt es erst seit Monaten, zwölf Monate Stärke wären sonst nie messbar.
+ *
+ * Rein — kein Netz, keine Datenbank. Unbekannt bleibt `null` und fällt aus dem
+ * Nenner der Note, statt als gut oder schlecht zu zählen.
+ */
+import { sitzungVon, nyTeile } from '../../shared/aktien-sitzung.js'
+import { skala, ANKER } from './bewertung.js'
+
+/** Vorgabe-Gewichte der Aktien-Note. Summe 100. */
+export const GEWICHTE_AKTIEN = {
+    staerke: 35,
+    hochNaehe: 20,
+    imSpiel: 20,
+    bewegung: 15,
+    trend: 10,
+}
+
+/** Gewichte der Zeiträume in der Stärke. Fehlt einer (junge Firma), verteilt sich sein Anteil auf die übrigen. */
+const STAERKE_GEWICHT = { m3: 0.4, m6: 0.3, m12: 0.3 }
+/** Ab diesem Abstand zum 52-Wochen-Hoch gibt es keine Punkte mehr. */
+const HOCH_FERN_PCT = -30
+/** Mindestens so viele Vergleichskerzen derselben Stunde bzw. Sitzung. */
+const MIN_PROBEN_STUNDE = 4
+const MIN_PROBEN_SITZUNG = 8
+/** Sitzungen, in denen die US-Börse geschlossen ist. */
+const GESCHLOSSEN = ['wochenende', 'feiertag']
+/** Ist weniger als dieser Anteil des Gewichts gemessen, wird die Note gedeckelt. */
+export const MIN_GEWICHT_BEKANNT = 60
+/** Deckel für Noten, die auf zu wenig Gemessenem stehen. */
+export const DECKEL_DUENN = 49
+
+const zahl = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null)
+const median = (liste) => {
+    const s = [...liste].sort((a, b) => a - b)
+    const m = Math.floor(s.length / 2)
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+/**
+ * Relatives Volumen der letzten Kerze gegen dieselbe Tageszeit.
+ *
+ * Verglichen wird zuerst mit früheren Kerzen derselben New Yorker Stunde in
+ * derselben Sitzung (Dienstag 10 Uhr gegen Montag 10 Uhr, nie gegen Samstag
+ * 10 Uhr). Gibt es davon zu wenige — am Wochenende, nach einem Feiertag —,
+ * mit allen früheren Kerzen derselben Sitzung. Reicht auch das nicht: `null`.
+ * Am Wochenende und an US-Feiertagen gibt es gar keinen Vergleich (`rvol: null`,
+ * `basis: 'geschlossen'`).
+ * Der Median statt des Mittels, damit ein einzelner Zahlen-Tag den
+ * Vergleichswert nicht hebt.
+ *
+ * @param {{t:number, v:number}[]} kerzen  geschlossene Kerzen, älteste zuerst
+ * @returns {{rvol: number|null, basis: 'stunde'|'sitzung'|'geschlossen', proben: number, sitzung: string} | null}
+ */
+export function rvolTageszeit(kerzen = []) {
+    if (kerzen.length < 2) return null
+    const letzte = kerzen[kerzen.length - 1]
+    const aktuell = zahl(Number(letzte.v))
+    if (aktuell == null) return null
+    const sitzung = sitzungVon(letzte.t)
+    // Bei geschlossener Börse ist der Future so dünn, dass eine Stunde aus
+    // einzelnen Trades besteht (gemessen 15.11.2026, LLYUSDT: Median 11 Stück
+    // je Stunde, einzelne Stunden 50–100). Ein «5-faches Volumen» ist dort
+    // Rauschen — der Vergleich bleibt aus.
+    if (GESCHLOSSEN.includes(sitzung)) return { rvol: null, basis: 'geschlossen', proben: 0, sitzung }
+    const stunde = Math.floor(nyTeile(letzte.t).minuten / 60)
+    const gleicheStunde = [], gleicheSitzung = []
+    for (let i = 0; i < kerzen.length - 1; i++) {
+        const k = kerzen[i]
+        const v = Number(k.v)
+        if (!Number.isFinite(v) || sitzungVon(k.t) !== sitzung) continue
+        gleicheSitzung.push(v)
+        if (Math.floor(nyTeile(k.t).minuten / 60) === stunde) gleicheStunde.push(v)
+    }
+    const [proben, basis] = gleicheStunde.length >= MIN_PROBEN_STUNDE ? [gleicheStunde, 'stunde']
+        : gleicheSitzung.length >= MIN_PROBEN_SITZUNG ? [gleicheSitzung, 'sitzung'] : [null, null]
+    if (!proben) return null
+    const mitte = median(proben)
+    return mitte > 0 ? { rvol: aktuell / mitte, basis, proben: proben.length, sitzung } : null
+}
+
+/**
+ * Mehrrendite gegen den Index je Zeitraum, in Prozentpunkten. Unbekannt bleibt null.
+ *
+ * @param {{perf3m?, perf6m?, perf12m?}} titel   Renditen der Aktie in %
+ * @param {{perf3m?, perf6m?, perf12m?}} index   Renditen des Index in %
+ * @returns {{rs3m: number|null, rs6m: number|null, rs12m: number|null}}
+ */
+export function staerkeGegenIndex(titel = {}, index = {}) {
+    const diff = (a, b) => (zahl(a) != null && zahl(b) != null ? a - b : null)
+    return { rs3m: diff(titel.perf3m, index.perf3m), rs6m: diff(titel.perf6m, index.perf6m), rs12m: diff(titel.perf12m, index.perf12m) }
+}
+
+/**
+ * Rang im Feld: 0 = schwächster, 100 = stärkster, Gleichstand teilt sich den
+ * mittleren Rang. Unbekannte Werte bekommen `null` und zählen nicht zum Feld.
+ * Ein Feld aus einem einzigen Titel hat keinen Rang.
+ *
+ * @param {(number|null)[]} werte
+ * @returns {(number|null)[]}
+ */
+export function raengeImFeld(werte = []) {
+    const bekannt = werte.filter((w) => zahl(w) != null)
+    if (bekannt.length < 2) return werte.map(() => null)
+    return werte.map((w) => {
+        if (zahl(w) == null) return null
+        let kleiner = 0, gleich = 0
+        for (const b of bekannt) { if (b < w) kleiner++; else if (b === w) gleich++ }
+        return ((kleiner + (gleich - 1) / 2) / (bekannt.length - 1)) * 100
+    })
+}
+
+/**
+ * Stärke eines jeden Titels als Zahl 0–100: der Rang im Feld JE ZEITRAUM,
+ * danach gewichtet gemittelt (3 Monate 40 %, 6 und 12 Monate je 30 %).
+ *
+ * Bewusst nicht die Prozentpunkte selbst gewichtet: ein gehebelter ETF mit
+ * +300 % über zwölf Monate und −49 % über die letzten drei stünde sonst ganz
+ * oben (so gemessen an MUU, 15.11.2026). Im Rang zählt jeder Zeitraum gleich
+ * viel, egal wie extrem der Wert ist. Fehlt ein Zeitraum (junge Firma),
+ * verteilt sich sein Anteil auf die übrigen.
+ *
+ * @param {{rs3m, rs6m, rs12m}[]} liste  Ergebnis von `staerkeGegenIndex` je Titel
+ * @returns {(number|null)[]}
+ */
+export function staerkeImFeld(liste = []) {
+    const felder = [['rs3m', STAERKE_GEWICHT.m3], ['rs6m', STAERKE_GEWICHT.m6], ['rs12m', STAERKE_GEWICHT.m12]]
+    const raenge = felder.map(([feld]) => raengeImFeld(liste.map((x) => x?.[feld] ?? null)))
+    return liste.map((_, i) => {
+        let summe = 0, gewicht = 0
+        felder.forEach(([, g], f) => {
+            if (raenge[f][i] == null) return
+            summe += raenge[f][i] * g
+            gewicht += g
+        })
+        return gewicht > 0 ? summe / gewicht : null
+    })
+}
+
+/**
+ * Note einer Aktie.
+ *
+ * @param {object} e
+ * @param {{atrPct, adx}} e.kerzen        Kennzahlen der Hauptzeiteinheit (`rechneZeiteinheit`)
+ * @param {number|null} e.rvol            relatives Volumen gegen dieselbe Tageszeit
+ * @param {number|null} e.staerkeRang     Rang im Feld, 0–100
+ * @param {number|null} e.abstandHochPct  Abstand zum 52-Wochen-Hoch in % (≤ 0)
+ * @param {object} [gewichte]
+ * @returns {{note: number|null, teilnoten: object, hinweise: string[], gewichtBekannt: number, duenn: boolean}}
+ *          `gewichtBekannt` = Anteil des Gewichts (0–100), der gemessen werden konnte
+ */
+export function bewerteAktie(e = {}, gewichte = GEWICHTE_AKTIEN) {
+    const g = { ...GEWICHTE_AKTIEN, ...(gewichte || {}) }
+    const k = e.kerzen || {}
+    const teilnoten = {
+        staerke: zahl(e.staerkeRang),
+        hochNaehe: zahl(e.abstandHochPct) != null ? skala(e.abstandHochPct, HOCH_FERN_PCT, 0) : null,
+        imSpiel: zahl(e.rvol) != null ? skala(e.rvol, 1, ANKER.rvolVoll) : null,
+        bewegung: zahl(k.atrPct) != null ? skala(k.atrPct, 0, ANKER.atrPctVoll) : null,
+        trend: zahl(k.adx) != null ? skala(k.adx, ANKER.adxUnten, ANKER.adxVoll) : null,
+    }
+    const hinweise = []
+    if (teilnoten.staerke == null) hinweise.push('Stärke unbekannt')
+    if (teilnoten.hochNaehe == null) hinweise.push('52-Wochen-Hoch unbekannt')
+    if (teilnoten.imSpiel == null) hinweise.push('Volumen zur Tageszeit nicht vergleichbar')
+
+    const gesamt = Object.values(g).reduce((a, b) => a + (Number(b) || 0), 0) || 1
+    let summe = 0, bekannt = 0
+    for (const [feld, note] of Object.entries(teilnoten)) {
+        const gewicht = Number(g[feld]) || 0
+        if (note == null || !gewicht) continue
+        summe += note * gewicht
+        bekannt += gewicht
+    }
+    const gewichtBekannt = Math.round((bekannt / gesamt) * 100)
+    let note = bekannt > 0 ? Math.round(summe / bekannt) : null
+    // Steht die Note auf weniger als 60 % des Gewichts (z. B. ohne Tagesdaten),
+    // darf sie nicht oben in der Rangliste landen: ein Titel, über den man
+    // wenig weiss, ist kein Spitzenkandidat. Gedeckelt, nicht abgewertet.
+    const duenn = note != null && gewichtBekannt < MIN_GEWICHT_BEKANNT
+    if (duenn && note > DECKEL_DUENN) {
+        note = DECKEL_DUENN
+        hinweise.push('Note gedeckelt: zu wenig gemessen')
+    }
+    return { note, teilnoten, hinweise, gewichtBekannt, duenn }
+}

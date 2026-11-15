@@ -61,6 +61,7 @@ async function starteLauf() {
     fehler.value = ''
     fortschritt.value = { schritt: 'universum' }
     strom = new AbortController()
+    let laufFehler = ''
     try {
         const antwort = await fetch('/api/coin-radar/lauf?markt=aktien', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: strom.signal,
@@ -83,10 +84,12 @@ async function starteLauf() {
                 let e
                 try { e = JSON.parse(z.slice(6)) } catch { continue }
                 if (e.type === 'fortschritt') fortschritt.value = e
-                else if (e.type === 'fehler') fehler.value = e.aus ? t('aktienradar.quelleAus') : e.fehler
+                else if (e.type === 'fehler') laufFehler = e.aus ? t('aktienradar.quelleAus') : e.fehler
             }
         }
         await lade()
+        // `lade()` räumt die Fehlerzeile ab — ein gescheiterter Lauf muss danach noch dastehen.
+        if (laufFehler) fehler.value = t('aktienradar.laufFehler', { fehler: laufFehler })
     } catch (e) {
         if (e.name !== 'AbortError') fehler.value = e.message
     } finally {
@@ -112,7 +115,23 @@ const zahl = (x, stellen = 1) => (x == null ? '—' : new Intl.NumberFormat(loca
 const gross = (x) => (x == null ? '—' : new Intl.NumberFormat(locale.value, { notation: 'compact', maximumFractionDigits: 1 }).format(Math.round(x)))
 const zeit = (ms) => (ms ? new Intl.DateTimeFormat(locale.value, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(Number(ms))) : '—')
 const geordnet = (liste = []) => [...liste].sort((a, b) => RANG[a.art] - RANG[b.art] || a.boerse.localeCompare(b.boerse))
-const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? '—', imSpiel: n?.imSpiel ?? '—', trend: n?.trend ?? '—', kosten: n?.kosten ?? '—' })
+const rund = (x) => (x == null ? '—' : Math.round(x))
+const prozent = (x, stellen = 0) => (x == null ? '—' : `${x > 0 ? '+' : ''}${zahl(x, stellen)} %`)
+// Läufe von vor dem Umbau tragen noch die Coin-Teilnoten (mit `kosten`).
+const teilText = (n) => ('staerke' in (n || {})
+    ? t('aktienradar.teilnotenNeu', { staerke: rund(n.staerke), hochNaehe: rund(n.hochNaehe), imSpiel: rund(n.imSpiel), bewegung: rund(n.bewegung), trend: rund(n.trend) })
+    : t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? '—', imSpiel: n?.imSpiel ?? '—', trend: n?.trend ?? '—', kosten: n?.kosten ?? '—' }))
+const tages = (z) => z.jeZeiteinheit?.tages || null
+const staerkeText = (z) => {
+    const g = tages(z)
+    return g ? t('aktienradar.staerkeWerte', { m3: prozent(g.rs3m), m6: prozent(g.rs6m), m12: prozent(g.rs12m), index: staerke.value?.index || 'SPY' }) : ''
+}
+const rvolText = (z) => {
+    const g = tages(z)
+    return g?.rvolBasis ? t('aktienradar.rvolBasis_' + g.rvolBasis, { n: g.rvolProben }) : t('aktienradar.rvolOhne')
+}
+const staerke = computed(() => lauf.value?.quellenStand?.staerke || null)
+const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
 </script>
 
 <template>
@@ -128,6 +147,11 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? '�
             <template v-if="referenz"> {{ t('aktienradar.referenz', { ticker: referenz }) }}</template>
             <template v-else> {{ t('aktienradar.ohneReferenz') }}</template>
         </p>
+        <p v-if="!laeuft && sitzung" class="leise">
+            {{ t('aktienradar.sitzung', { sitzung: t('strategies.aktien.sitzung_' + sitzung) }) }}
+            <template v-if="sitzung !== 'regulaer'"> {{ t('aktienradar.sitzungDuenn') }}</template>
+        </p>
+        <Hinweis v-if="!laeuft && staerke && !staerke.ok" art="warn">{{ t('aktienradar.staerkeFehlt_' + (staerke.grund || 'abrufFehlgeschlagen')) }}</Hinweis>
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
 
         <Kreisel v-if="laedt" />
@@ -147,6 +171,8 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? '�
                         <th class="rechts">{{ t('aktienradar.umsatz') }}</th>
                         <th class="rechts">{{ t('aktienradar.spread') }}</th>
                         <template v-if="!mitHuerden">
+                            <th class="rechts" :title="t('aktienradar.staerkeInfo')">{{ t('aktienradar.staerke') }}</th>
+                            <th class="rechts" :title="t('aktienradar.hochInfo')">{{ t('aktienradar.hoch') }}</th>
                             <th class="rechts" :title="t('aktienradar.atrInfo')">ATR %</th>
                             <th class="rechts" :title="t('aktienradar.rvolInfo')">RVOL</th>
                             <th class="rechts" :title="t('aktienradar.adxInfo')">ADX</th>
@@ -173,8 +199,10 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? '�
                         <td class="rechts">{{ gross(z.umsatz24h) }}</td>
                         <td class="rechts">{{ z.spreadBp == null ? '—' : zahl(z.spreadBp, 1) + ' bp' }}</td>
                         <template v-if="!mitHuerden">
+                            <td class="rechts" :title="staerkeText(z)">{{ rund(tages(z)?.staerkeRang) }}</td>
+                            <td class="rechts">{{ tages(z)?.abstandHochPct == null ? '—' : zahl(tages(z).abstandHochPct, 0) + ' %' }}</td>
                             <td class="rechts">{{ zahl(z.atrPct, 2) }}</td>
-                            <td class="rechts">{{ z.rvol == null ? '—' : zahl(z.rvol, 1) + '×' }}</td>
+                            <td class="rechts" :title="rvolText(z)">{{ z.rvol == null ? '—' : zahl(z.rvol, 1) + '×' }}</td>
                             <td class="rechts">{{ zahl(z.adx, 0) }}</td>
                             <td class="rechts">{{ z.fundingJahresRate == null ? '—' : zahl(z.fundingJahresRate, 0) + ' %' }}</td>
                             <td class="rechts" :title="z.besteBoerse ? t('aktienradar.besteBoerse', { boerse: PLATZ[z.besteBoerse] || z.besteBoerse, bp: zahl(z.rundlaufBp, 1) }) : ''">
@@ -305,10 +333,10 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? '�
 
 .liste td.plaetze {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.3rem;
-    white-space: normal;
-    /* Fünf Handelsplätze in zwei Zeilen statt in fünf — sonst wird jede Zeile turmhoch. */
-    min-width: 22rem;
+    /* Eine Zeile je Titel: mit den Spalten Stärke und 52-Wochen-Hoch rollt die
+       Tabelle ohnehin waagrecht — umbrechende Marken machten jede Zeile turmhoch. */
+    white-space: nowrap;
 }
 </style>

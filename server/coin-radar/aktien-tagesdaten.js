@@ -1,0 +1,94 @@
+/**
+ * Aktien-Radar: Tageskennzahlen der echten Aktie und des Index holen.
+ *
+ * Stärke über 3, 6 und 12 Monate und der Abstand zum 52-Wochen-Hoch brauchen
+ * ein Jahr Tageskurse — die Futures gibt es erst seit Monaten. Deshalb kommen
+ * sie von der Kursquelle (Yahoo, hinter dem Quellen-Schalter):
+ *
+ *   1. gemerkt   der Newcomer-Radar rechnet dieselben Kennzahlen täglich für
+ *                jeden Titel (`newcomer_titel.kennzahlen`) — ist sein Stand
+ *                frisch, kostet der Lauf keinen Abruf;
+ *   2. Abruf     sonst zwei Jahre Tageskerzen je Titel, nur für die Titel,
+ *                die die Hürden genommen haben.
+ *
+ * Fällt die Quelle aus, läuft der Radar weiter: die Stärke bleibt dann
+ * unbekannt und fällt aus der Note (`bewerteAktie`), der Grund steht im Lauf.
+ */
+import { holeChart, NichtGefunden, Gebremst } from '../newcomer-radar/kursquelle.js'
+import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
+import { kennzahlen } from '../newcomer-radar/kennzahlen.js'
+import { istAus } from '../quellen/aus.js'
+import { logWarn } from '../logger.js'
+
+/** Index, gegen den die Stärke gemessen wird, und der Technologie-Index als zweite Angabe. */
+export const INDEX = { haupt: 'SPY', zweit: 'QQQ' }
+const FRISCH_MS = 48 * 60 * 60_000
+const PAUSE_MS = 120
+const warte = (ms) => new Promise((r) => setTimeout(r, ms))
+
+const auszug = (k, quelle) => ({
+    perf3m: k.perf3m ?? null, perf6m: k.perf6m ?? null, perf12m: k.perf12m ?? null,
+    abstandHochPct: k.abstandHochPct ?? null, hoch52w: k.hoch52w ?? null, letzteKerze: k.letzteKerze ?? null,
+    quelle,
+})
+
+/** Gemerkte Kennzahlen des Newcomer-Radars je Instrument-ID (nur frische, mit 12-Monats-Feld). */
+async function gemerkte(knex, ids, jetzt) {
+    const je = new Map()
+    if (!ids.length || !(await knex.schema.hasTable('newcomer_titel'))) return { je, kursSymbole: new Map() }
+    const kursSymbole = new Map()
+    for (const z of await knex('newcomer_titel').whereIn('instrumentId', ids).select('instrumentId', 'kursSymbol', 'kennzahlen', 'stand')) {
+        if (z.kursSymbol) kursSymbole.set(z.instrumentId, z.kursSymbol)
+        let k = null
+        try { k = JSON.parse(z.kennzahlen || 'null') } catch { k = null }
+        // Stände von vor der Einführung von `perf12m` zählen als veraltet.
+        if (k && 'perf12m' in k && k.perf3m !== undefined && jetzt - Number(z.stand) < FRISCH_MS) je.set(z.instrumentId, k)
+    }
+    return { je, kursSymbole }
+}
+
+/**
+ * @param {object} knex
+ * @param {{symbol: string, id: number|null, ticker: string}[]} titel
+ * @param {(f: {fertig: number, gesamt: number}) => void} [melde]
+ * @returns {Promise<{je: Map<string, object>, index: object|null, grund: string|null, gemerkt: number, abgerufen: number}>}
+ */
+export async function ladeTagesdaten(knex, titel, melde = () => { }, jetzt = Date.now()) {
+    const aus = { je: new Map(), index: null, grund: null, gemerkt: 0, abgerufen: 0 }
+    if (!titel.length) return aus
+    try {
+        const [haupt, zweit] = await Promise.all([holeChart(INDEX.haupt, jetzt), holeChart(INDEX.zweit, jetzt).catch(() => null)])
+        aus.index = {
+            [INDEX.haupt]: auszug(kennzahlen(haupt.kerzen, { jetzt }), 'abruf'),
+            ...(zweit ? { [INDEX.zweit]: auszug(kennzahlen(zweit.kerzen, { jetzt }), 'abruf') } : {}),
+        }
+    } catch (e) {
+        aus.grund = istAus(e) ? 'quelleAus' : e instanceof Gebremst ? 'gebremst' : 'indexFehlt'
+        if (!istAus(e)) logWarn('coin-radar', `Index ${INDEX.haupt}: ${e.message}`)
+        return aus
+    }
+
+    const { je: gemerkt, kursSymbole } = await gemerkte(knex, titel.map((t) => t.id).filter(Boolean), jetzt)
+    let fertig = 0
+    for (const t of titel) {
+        fertig++
+        const k = t.id ? gemerkt.get(t.id) : null
+        if (k) { aus.je.set(t.symbol, auszug(k, 'gemerkt')); aus.gemerkt++; continue }
+        const kursSymbol = (t.id && kursSymbole.get(t.id)) || kursSymbolKandidaten(t.ticker)[0]
+        if (!kursSymbol) continue
+        try {
+            const chart = await holeChart(kursSymbol, jetzt)
+            aus.je.set(t.symbol, auszug(kennzahlen(chart.kerzen, { jetzt, ipoDatum: chart.meta.ipoDatum }), 'abruf'))
+            aus.abgerufen++
+        } catch (e) {
+            // Bremst die Quelle, hört der Lauf auf zu fragen — was schon da ist, bleibt.
+            if (e instanceof Gebremst) { aus.grund = 'gebremst'; break }
+            if (istAus(e)) { aus.grund = 'quelleAus'; break }
+            if (!(e instanceof NichtGefunden)) logWarn('coin-radar', `Tagesdaten ${kursSymbol}: ${e.message}`)
+        }
+        if (fertig % 10 === 0) melde({ fertig, gesamt: titel.length })
+        await warte(PAUSE_MS)
+    }
+    melde({ fertig: titel.length, gesamt: titel.length })
+    return aus
+}

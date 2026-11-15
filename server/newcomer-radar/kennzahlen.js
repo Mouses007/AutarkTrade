@@ -65,6 +65,8 @@ export function kennzahlen(kerzen, opt = {}) {
         perf1m: runde(rendite(kerzen, TAGE_MONAT)),
         perf3m: runde(perf3m),
         perf6m: runde(rendite(kerzen, 6 * TAGE_MONAT)),
+        // Braucht gut ein Jahr Historie — für den Aktien-Radar (Stärke über 12 Monate).
+        perf12m: runde(rendite(kerzen, TAGE_JAHR)),
         // Seit der ersten Kerze — nur aussagekräftig, solange die Historie kürzer als ein Jahr ist.
         seitStartPct: n >= 2 && n < TAGE_JAHR && kerzen[0].o > 0 ? runde((kurs / kerzen[0].o - 1) * 100) : null,
         relStaerke3m: perf3m != null && refPerf != null ? runde(perf3m - refPerf) : null,
