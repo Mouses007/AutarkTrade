@@ -241,7 +241,7 @@ export const AGENT_TOOLS = [
                     description: 'alle = keine Einschränkung. imSpiel = RVOL über der Schwelle. trendend = ADX über der Schwelle. bestaetigt = beide Zeiteinheiten stimmen überein. laeuftMitBtc = starker Bitcoin-Gleichlauf. eigenstaendig = kaum Bitcoin-Bezug.'
                 },
                 boerse: { type: 'string', enum: ['bitunix', 'bitget', 'pionex'], description: 'Nur Coins zeigen, die auf dieser Börse handelbar sind.' },
-                markt: { type: 'string', enum: ['krypto', 'aktien'], description: 'krypto (default) = Coin-Radar. aktien = ranking of the Aktien-Radar page (stock mode).' }
+                markt: { type: 'string', enum: ['krypto', 'aktien'], description: 'krypto (default) = Coin-Radar. aktien = ranking of the Aktien-Radar page (stock mode): stock futures, scored by strength against the index, distance to the 52-week high, volume for the time of day, movement and trend (funding is only a holding cost there). With aktien the filters laeuftMitBtc/eigenstaendig refer to the coupling to the INDEX future named in the result (e.g. SPY) — never call it a Bitcoin correlation.' }
             }
         }
     },
@@ -479,6 +479,66 @@ const COIN_RADAR_FILTER = {
 
 const fmtZahl = v => (v === null || v === undefined ? '?' : Number(v).toFixed(2))
 
+// ── Aktien-Radar: eigene Zeile, eigener Hinweis (Audit 15.11.2026, FACH-H-003) ──
+// Der Unterbau ist der des Coin-Radars, die Spalten heissen darum `btc…`. Bei
+// Aktien tragen sie die Kopplung an den Index-Future des Laufs
+// (`quellenStand.referenz`, z. B. SPY). Bis zum Audit ging das als «BTC-Bezug»
+// ans Modell, mit dem Krypto-Hinweis zur Note.
+const SITZUNG_TEXT = { regulaer: 'reguläre Sitzung', vor: 'vorbörslich', nach: 'nachbörslich', nacht: 'Nacht in New York', wochenende: 'Wochenende', feiertag: 'US-Feiertag' }
+const KOPPLUNG_TEXT = { laeuftMit: 'läuft mit', laeuftGegen: 'läuft dagegen', eigenstaendig: 'eigenständig', teilweise: 'teilweise', unbekannt: 'unbekannt' }
+const endlich = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v))
+const mitVorzeichen = (v, stellen = 0) => `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(stellen)}`
+/** Börsenkürzel sind eigene Stammdaten, werden aber trotzdem auf ihr Alphabet begrenzt — nie ein Firmenname. */
+const kuerzelVon = v => String(v ?? '').replace(/[^A-Za-z0-9.\-]/g, '').slice(0, 16)
+
+/** Rein: aus Lauf und Zeilen des Aktien-Radars das Ergebnis fürs Modell. */
+export function aktienRadarErgebnis({ lauf, zeilen, filter = 'alle', boerse = '' }) {
+    const qs = sicherParseJson(lauf.quellenStand, {}) || {}
+    const referenz = kuerzelVon(qs.referenz?.ticker) || null
+    const index = kuerzelVon(qs.staerke?.index) || 'Index'
+    const sitzung = SITZUNG_TEXT[qs.sitzung] ? qs.sitzung : null
+
+    const zeile = z => {
+        const g = z.jeZeiteinheit?.tages || {}
+        const ticker = kuerzelVon(z.boersen?.ticker)
+        const symbol = kuerzelVon(z.symbol)
+        const mehr = [['3 M', g.rs3m], ['6 M', g.rs6m], ['12 M', g.rs12m]].filter(([, v]) => endlich(v)).map(([n, v]) => `${n} ${mitVorzeichen(v)}`)
+        const teile = [
+            `#${z.rang} ${ticker && ticker !== symbol ? `${ticker} (Future ${symbol})` : symbol}`,
+            `Note ${z.note}${g.duenn ? ` (steht auf wenig Gemessenem${endlich(g.gewichtBekannt) ? `: ${Number(g.gewichtBekannt)} % des Gewichts` : ''}; solche Noten sind gedeckelt)` : ''}`,
+            `Stärke-Rang ${endlich(g.staerkeRang) ? Math.round(Number(g.staerkeRang)) : '?'} von 100${mehr.length ? ` (Mehrrendite gegen ${index} in Prozentpunkten: ${mehr.join(', ')})` : ''}`,
+            `zum 52-Wochen-Hoch ${endlich(g.abstandHochPct) ? `${Number(g.abstandHochPct).toFixed(0)} %` : '?'}`,
+            `nächste Quartalszahlen ${!endlich(g.zahlenIn) ? 'unbekannt' : Number(g.zahlenIn) === 0 ? 'heute' : `in ${Number(g.zahlenIn)} Tagen`}${endlich(g.zahlenIn) && g.zahlenGeschaetzt === true ? ' (Termin geschätzt)' : ''}`,
+            `ATR% ${fmtZahl(z.atrPct)}`,
+            `RVOL zur Tageszeit ${fmtZahl(z.rvol)}`,
+            `ADX ${fmtZahl(z.adx)}`,
+            `Haltekosten ${fmtZahl(z.fundingJahresRate)}% p.a.`,
+            referenz
+                ? `Kopplung an ${referenz} ${KOPPLUNG_TEXT[deuteKopplung(z.btcKorrelation)]}${z.btcKorrelation != null ? ` (${(Number(z.btcKorrelation) * 100).toFixed(0)}%)` : ''}`
+                : 'Kopplung an den Index nicht gemessen',
+        ]
+        if (z.rundlaufBp != null) teile.push(`Ausführung ${fmtZahl(z.rundlaufBp)} bp${z.besteBoerse ? ` (${z.besteBoerse})` : ''}`)
+        if (z.umsatz24h != null) teile.push(`Umsatz ${(Number(z.umsatz24h) / 1e6).toFixed(0)} Mio USD`)
+        return teile.join(', ')
+    }
+
+    return {
+        markt: 'aktien',
+        stand: new Date(Number(lauf.erstelltAm)).toISOString(),
+        filter,
+        boerse: boerse || null,
+        anzahlGezeigt: zeilen.length,
+        referenz: referenz ? `Kopplung gemessen an ${referenz} (Index-Future), nicht an Bitcoin.` : 'Kein Index-Future an der Quelle — die Kopplung fehlt in diesem Lauf.',
+        sitzung: sitzung
+            ? `Gemessen in der Sitzung «${SITZUNG_TEXT[sitzung]}» (New Yorker Zeit).${sitzung !== 'regulaer' ? ' Der Future ist dann dünn; Umsatz, Spread und Volumen sind mit einem Lauf zur Börsenzeit nicht vergleichbar.' : ''}`
+            : 'Sitzung des Laufs unbekannt.',
+        hinweis: 'Der Aktien-Radar ordnet Aktien-Futures: Die Note setzt sich aus Stärke gegen den Index, Nähe zum 52-Wochen-Hoch, Volumen zur Tageszeit, Bewegung und Trend zusammen; Haltekosten (Funding) und Zahlentermin zählen nicht mit. '
+            + 'Stärke und 52-Wochen-Hoch stammen aus Tageskursen der Aktie, alles andere vom Future an der Börse. '
+            + 'Die Note ist keine Kursprognose und sagt nichts über die Richtung; kurz vor Quartalszahlen kann der Kurs springen. Keine Handelsempfehlung daraus ableiten.',
+        rangliste: zeilen.map(zeile),
+    }
+}
+
 // Aktuelle Coin-Radar-Rangliste — letzter FERTIGER Lauf, dieselbe Abfrage wie
 // GET /api/coin-radar/zeilen (server/coin-radar-api.js), nur ohne Express und
 // mit knappen Textzeilen statt Rohdaten, damit der Agent nicht ~100 Zeilen mit
@@ -514,7 +574,7 @@ async function toolQueryCoinRadar(knex, params) {
         })
     }
 
-    if (zeilen.length === 0) return { error: 'Kein Coin passt zu diesem Filter.' }
+    if (zeilen.length === 0) return { error: anlageklasse === 'aktien' ? 'Kein Titel passt zu diesem Filter.' : 'Kein Coin passt zu diesem Filter.' }
 
     const limit = Math.min(30, Math.max(1, Number(params.limit) || 12))
     zeilen = zeilen.slice(0, limit)
@@ -532,6 +592,10 @@ async function toolQueryCoinRadar(knex, params) {
         if (z.rundlaufBp != null) teile.push(`Ausführung ${fmtZahl(z.rundlaufBp)} bp${z.besteBoerse ? ` (${z.besteBoerse})` : ''}`)
         if (z.umsatz24h != null) teile.push(`Umsatz ${(Number(z.umsatz24h) / 1e6).toFixed(0)} Mio USD`)
         return teile.join(', ')
+    }
+
+    if (anlageklasse === 'aktien') {
+        return aktienRadarErgebnis({ lauf: letzterLauf, zeilen, filter, boerse })
     }
 
     return {
