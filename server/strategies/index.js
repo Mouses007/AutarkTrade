@@ -45,8 +45,9 @@ export const RISK_PARAMS = [
     // (09:30–16:00 New Yorker Zeit, Handelstage) sperren. Der Future handelt
     // rund um die Uhr, ist dort aber dünn — am Wochenende etwa ein Zehntel des
     // Stundenvolumens (`shared/aktien-sitzung.js`). Bei Coins ohne Wirkung.
-    // Entschieden wird nach dem Füllzeitpunkt (`einstiegRegulaer`, dieselbe
-    // Regel wie die Hinterlegung im Chart); ab 1d nicht anwendbar und ohne
+    // Entschieden wird nach dem Füllzeitpunkt (`einstiegRegulaer`; ein Limit
+    // in der Kerze zählt, wenn sie mindestens zur Hälfte in der Sitzung
+    // liegt); ab 1d nicht anwendbar und ohne
     // Wirkung — der Backtest meldet es (`stats.aktien.nurRegulaerWirkt`).
     { key: 'nurRegulaereSitzung', type: 'boolean', default: false, group: 'limits', nurAktien: true },
     // Nur Aktien-Futures: keine Einstiege von einem Tag vor bis einem Tag nach

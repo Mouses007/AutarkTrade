@@ -89,7 +89,9 @@ ok(gesperrt.stats.aktien.nurRegulaer === true && gesperrt.setups.some((s) => s.r
 
 // ── Sitzungssperre nach Füllzeitpunkt statt Kerzenbeginn (FUN-H-005) ──
 {
-    const { nyTeile, kerzeBeruehrtRegulaer } = await import('../shared/aktien-sitzung.js')
+    const { nyTeile, sitzungenDerKerze } = await import('../shared/aktien-sitzung.js')
+    // RAS-05: Limit in der Kerze — sie muss mindestens zur Hälfte in der regulären Sitzung liegen (gezählt in halben Stunden).
+    const anteilRegulaer = (t, iv) => { const l = sitzungenDerKerze(t, iv); return l.filter((x) => x === 'regulaer').length / l.length }
     ok(gesperrt.stats.aktien.nurRegulaerWirkt === true && aktie.stats.aktien.nurRegulaerWirkt === false, '1h: der Schalter wirkt und das Ergebnis sagt es')
     // Dieselbe Strategie, aber Limit in der Auslösekerze (Zeitpunkt in der Kerze unbekannt) und beliebige Kerzenlänge.
     const variante = (iv, zurEroeffnung) => ({
@@ -123,7 +125,7 @@ ok(gesperrt.stats.aktien.nurRegulaer === true && gesperrt.setups.some((s) => s.r
     // 1h, Limit in der Kerze: die Kerze 09:00–10:00 New York enthält die Eröffnung und war bisher gesperrt
     const limit = await laufIv('1h', H, false, AKTIE, an)
     const neunUhr = limit.trades.filter((t) => nyTeile(t.entryTime).minuten === 9 * 60)
-    ok(limit.trades.length > 5 && limit.trades.every((t) => kerzeBeruehrtRegulaer(t.entryTime, H)), `1h Limit: jede Auslösekerze berührt die reguläre Sitzung (${limit.trades.length} Trades)`)
+    ok(limit.trades.length > 5 && limit.trades.every((t) => anteilRegulaer(t.entryTime, H) >= 0.5), `1h Limit: jede Auslösekerze liegt mindestens zur Hälfte in der regulären Sitzung (${limit.trades.length} Trades)`)
     ok(neunUhr.length >= 1, `1h Limit: die Eröffnungskerze 09:00–10:00 ist handelbar (${neunUhr.length})`)
     const offen = await laufIv('1h', H, true, AKTIE, an)
     ok(offen.trades.length > 5 && offen.trades.every((t) => sitzungVon(t.entryTime) === 'regulaer') && offen.trades.length < limit.trades.length,
@@ -136,10 +138,16 @@ ok(gesperrt.stats.aktien.nurRegulaer === true && gesperrt.setups.some((s) => s.r
     ok(!tagMit.funnel.entrySkipped.ausserhalb_sitzung && tagMit.stats.aktien.nurRegulaer === true && tagMit.stats.aktien.nurRegulaerWirkt === false,
         '1d: gesetzt, aber ohne Wirkung — steht im Ergebnis')
 
-    // 4h: Kerzen auf UTC; gesperrt wird, was die Sitzung nicht berührt, in Sommer- wie Winterzeit
+    // 4h: Kerzen auf UTC; gesperrt wird, was nicht mindestens zur Hälfte in der Sitzung liegt (RAS-05) — vorher
+    // genügte «berührt», und im Winter galten 07–11 und 15–19 New Yorker Zeit als regulär.
     const vier = await laufIv('4h', 4 * H, false, AKTIE, an)
-    ok(vier.trades.length > 5 && vier.trades.every((t) => kerzeBeruehrtRegulaer(t.entryTime, 4 * H)) && vier.funnel.entrySkipped.ausserhalb_sitzung > 5
-        && vier.stats.aktien.nurRegulaerWirkt === true, `4h Limit: nur Kerzen, die die Sitzung berühren (${vier.trades.length} Trades, ${vier.funnel.entrySkipped.ausserhalb_sitzung} gesperrt)`)
+    const vierOhne = await laufIv('4h', 4 * H, false, AKTIE)
+    const stunde = (t) => nyTeile(t.entryTime).minuten / 60
+    ok(vier.trades.length > 5 && vier.trades.every((t) => anteilRegulaer(t.entryTime, 4 * H) >= 0.5) && vier.funnel.entrySkipped.ausserhalb_sitzung > 5
+        && vier.stats.aktien.nurRegulaerWirkt === true, `4h Limit: nur Kerzen, die mindestens zur Hälfte in der Sitzung liegen (${vier.trades.length} Trades, ${vier.funnel.entrySkipped.ausserhalb_sitzung} gesperrt)`)
+    ok(vier.trades.every((t) => [8, 11, 12].includes(stunde(t))), `4h Limit: Einstiege nur in den Kerzen ab 08:00, 12:00 (Sommer) und 11:00 (Winter) New Yorker Zeit (${[...new Set(vier.trades.map(stunde))].sort((a, b) => a - b).join(', ')})`)
+    const randOhne = vierOhne.trades.filter((t) => [7, 15].includes(stunde(t))).length
+    ok(randOhne > 0, `4h ohne Schalter: es gibt Einstiege in den Winter-Randkerzen 07–11 / 15–19 (${randOhne}) — mit Schalter keine`)
 
     // Krypto: der Schalter ändert nichts, auf keiner Zeiteinheit
     for (const [tf, iv] of [['1h', H], ['4h', 4 * H], ['1d', 24 * H]]) {

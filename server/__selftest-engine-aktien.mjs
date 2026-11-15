@@ -62,7 +62,16 @@ engine.setAgentHook(null)
 const kontexte = {}
 const frische = {}
 const abrufe = []
+// `modus.aus`: der Aktien-Modus ist ausgeschaltet — wie der echte `aktienKontext` antwortet die Attrappe dann nur
+// noch, wenn der Aufrufer den Schalter ausdrücklich übergeht (`trotzModusAus`, RAS-03). `fragen` schreibt mit.
+const modus = { aus: false }
+const fragen = []
+const kontextModul = await import('./aktien/kontext.js')
+kontextModul._setzeModusLeser(async () => (modus.aus ? 0 : 1))
+const stelleModus = (aus) => { modus.aus = aus; kontextModul.vergissModus() }
 engine.setAktienKontext(async (symbol, opt) => {
+    fragen.push({ symbol, opt })
+    if (modus.aus && opt?.trotzModusAus !== true) return null
     if (opt?.splitsFrisch) { abrufe.push(symbol); if (frische[symbol]) return frische[symbol] }
     return kontexte[symbol] ?? null
 })
@@ -90,12 +99,14 @@ async function leeren() {
     for (const k of Object.keys(kontexte)) delete kontexte[k]
     for (const k of Object.keys(frische)) delete frische[k]
     abrufe.length = 0
+    fragen.length = 0
 }
 
 // Löst jedes wartende Setup auf der jüngsten Kerze aus — mit den Marken des Setups.
 registerStrategy({ id: 'test_aktie', name: 'Test Aktie', supportedTimeframes: ['1h'], params: [], warmupCandles: 50,
     detect({ candles, openSetups, aktie }) {
         globalThis.__detektorAktie = aktie   // was die Engine dem Detektor über den Markt sagt (FACH-H-009)
+        globalThis.__imDetektor?.()          // Eingriff mitten im Takt (RAS-03: Schalter während des Takts umgelegt)
         const k = candles[candles.length - 1]
         // `__zurEroeffnung`: Markt-Einstieg zur Eröffnung der Auslösekerze (sonst Limit irgendwo in der Kerze)
         return { setups: [], events: openSetups.map((s) => ({ id: s.id, status: 'triggered', triggeredAt: k.t, candleTime: k.t,
@@ -578,10 +589,187 @@ console.log('\nSplit: offene Papier-Position und wartende Setups')
         `${sf.neu?.status}, Einstieg ${sf.neu?.entry}, Vermerk ${sf.neu?.splitsAngewendet}`)
 }
 
+// ── 5b. Aktien-Modus aus: Aktien-Instanz eröffnet nichts, offene Positionen bleiben Aktie (RAS-03) ──
+console.log('\nAktien-Modus aus: Aktien-Instanz setzt aus, offene Positionen werden als Aktie gepflegt (RAS-03)')
+{
+    const D = Date.UTC(2026, 10, 10, 16)   // Dienstag, reguläre Sitzung
+    const AKT = { anlageklasse: 'aktien' }
+    const stand = async () => ({
+        setup: await knex('strategy_setups').where('id', 700).first(),
+        position: await knex('strategy_positions').where('instanceId', 60).first(),
+        trade: await knex('strategy_trades').where('instanceId', 60).first(),
+        laeufe: await knex('strategy_runs').where('instanceId', 60),
+        instanz: await knex('strategy_instances').where('id', 60).first(),
+    })
+    const stelle = async (extra, { aus }) => {
+        await leeren()
+        stelleModus(aus)
+        kontexte.NVDAUSDT = AKTIE
+        globalThis.__engineMarkt = markt(D)
+        await knex('strategy_instances').insert(instanz('NVDAUSDT', {}, extra))
+        await knex('strategy_setups').insert(setup('NVDAUSDT', D))
+    }
+    const warnungen = []
+    const warnStumm = console.warn
+    console.warn = (...a) => warnungen.push(a.join(' '))
+    try {
+        // Aktien-Instanz, Modus aus: nichts eröffnet, Grund an der Instanz und einmal im Log
+        await stelle(AKT, { aus: true })
+        await engine.tick()
+        let z = await stand()
+        pruefe('Aktien-Instanz, Modus aus: keine Position, das Setup wartet weiter, kein Lauf',
+            !z.position && z.setup?.status === 'armed' && z.laeufe.length === 0, `${z.setup?.status}, ${z.laeufe.length} Läufe, Position ${z.position?.status}`)
+        pruefe('…der Grund steht an der Instanz', /Aktien-Modus ist ausgeschaltet/.test(z.instanz?.lastError || ''), z.instanz?.lastError)
+        engine.resetSymbolCache()
+        await engine.tick()
+        z = await stand()
+        const gemeldet = warnungen.filter((w) => /Aktien-Modus ist ausgeschaltet/.test(w)).length
+        pruefe('…und einmal im Log, nicht je Takt', gemeldet === 1 && !z.position, `${gemeldet} Zeilen`)
+        // Modus wieder an: dieselbe Instanz handelt wieder, der Grund ist weg
+        stelleModus(false)
+        engine.resetSymbolCache()
+        await engine.tick()
+        z = await stand()
+        pruefe('Modus wieder an: die Instanz eröffnet wieder, der Grund ist gelöscht', z.position?.status === 'open' && z.instanz?.lastError === '', `Position ${z.position?.status}, „${z.instanz?.lastError}"`)
+
+        // Krypto-Instanz bei ausgeschaltetem Modus: unverändert — sie handelt, und fragt nie am Schalter vorbei
+        await stelle({}, { aus: true })
+        await engine.tick()
+        z = await stand()
+        pruefe('Krypto-Instanz, Modus aus: handelt wie bisher', z.position?.status === 'open' && !z.instanz?.lastError, `Position ${z.position?.status}`)
+        pruefe('…und übergeht den Schalter nie', fragen.length > 0 && fragen.every((f) => f.opt?.trotzModusAus === undefined), JSON.stringify(fragen.map((f) => f.opt)))
+
+        // Schalter mitten im Takt umgelegt (nach dem Erkennen): der Einstieg wird abgelehnt, mit Grund am Setup
+        await stelle(AKT, { aus: false })
+        globalThis.__imDetektor = () => stelleModus(true)
+        await engine.tick()
+        globalThis.__imDetektor = null
+        z = await stand()
+        pruefe('Schalter mitten im Takt aus: Einstieg abgelehnt (`aktien_modus_aus`), keine Position',
+            !z.position && z.setup?.status === 'rejected' && z.setup.rejectReason === engine.AKTIEN_MODUS_AUS && z.laeufe[0]?.finalAction === 'reject_risk',
+            `${z.setup?.status}/${z.setup?.rejectReason}`)
+
+        // Offene Position einer Aktien-Instanz über einen Split 20:1, Modus aus: umgerechnet statt als Kurssturz gebucht
+        const S = Date.UTC(2026, 6, 15, 14)
+        const ALT = { o: 480, h: 482, l: 478, c: 480 }, NEU = { o: 24, h: 24.1, l: 23.9, c: 24 }
+        const KORU = { ...AKTIE, ticker: 'KORU', splits: [{ t: S, faktor: 20, text: '20:1' }] }
+        const offen = async (extra) => {
+            await leeren()
+            stelleModus(true)
+            kontexte.KORUUSDT = KORU
+            globalThis.__engineMarkt = markt(S + 2 * H, (t) => (t < S ? ALT : NEU))
+            await knex('strategy_instances').insert(instanz('KORUUSDT', {}, extra))
+            await knex('strategy_setups').insert({ ...setup('KORUUSDT', S, { entry: 480, stopLoss: 470, takeProfit: 520 }), status: 'open' })
+            await knex('strategy_positions').insert({ id: 80, instanceId: 60, setupId: 700, mode: 'paper', broker: 'bitunix', symbol: 'KORUUSDT', timeframe: '1h',
+                direction: 'long', qty: 2, initialQty: 2, entryPrice: 480, entryTime: S - 10 * H, stopLoss: 470, initialStopLoss: 470, takeProfit: 520,
+                leverage: 5, notionalUsdt: 960, marginUsdt: 192, feeOpen: 0.192, maePrice: 478, mfePrice: 482,
+                clientOrderId: 'ctj-60-700', lastCandleTime: S - 2 * H, status: 'open' })
+            await engine.tick()
+            return { p: await knex('strategy_positions').where('id', 80).first(), trade: await knex('strategy_trades').where('instanceId', 60).first() }
+        }
+        for (const [name, extra] of [['aktive', { ...AKT, enabled: 1 }], ['pausierte', { ...AKT, enabled: 0 }]]) {
+            const o = await offen(extra)
+            pruefe(`${name} Aktien-Instanz, Modus aus, Split 20:1 bei offener Position: umgerechnet (Menge × 20, Kurse ÷ 20), kein Trade`,
+                !o.trade && o.p?.status === 'open' && nah(o.p.qty, 40) && nah(o.p.entryPrice, 24) && nah(o.p.stopLoss, 23.5) && Number(o.p.lastCandleTime) === S + H,
+                `Trade ${o.trade?.exitReason} @ ${o.trade?.exitPrice}, Menge ${o.p?.qty}`)
+            pruefe(`…der Kontext wurde am Schalter vorbei gefragt (${name})`, fragen.length > 0 && fragen.every((f) => f.opt?.trotzModusAus === true && f.opt.market === 'futures'), JSON.stringify(fragen.map((f) => f.opt)))
+        }
+        // Gegenprobe: ohne die Kennzeichnung als Aktien-Instanz ist das Symbol bei «Modus aus» ein Coin — der Sprung reisst den Stop
+        const coin = await offen({ enabled: 0 })
+        pruefe('Gegenprobe (Instanz nicht als Aktie gekennzeichnet, Modus aus): als Coin gerechnet, der Sprung wird als Stop gebucht',
+            coin.trade?.exitReason === 'sl' && Number(coin.trade.netPnl) < -900, `${coin.trade?.exitReason}, netto ${coin.trade?.netPnl}`)
+    } finally {
+        console.warn = warnStumm
+        globalThis.__imDetektor = null
+        stelleModus(false)
+    }
+}
+
+// ── 5c. Wartungsmarge: der Hebel der Position, nicht der global gedeckelte (RAS-07) ──
+console.log('\nWartungsmarge bei globalem Hebel-Deckel (RAS-07)')
+{
+    // Instanz 50×, Deckel 20×: die Papier-Position wird mit 50× gebucht (Marge 2 %), der Deckel begrenzt nur die Grösse.
+    // Die Wartungsmarge muss deshalb nach 50× gedeckelt bleiben (1 %). Nach dem Vorschlag aus dem Review (20× → 2,5 %)
+    // läge sie über der Anfangsmarge, und die Position wäre auf einer flachen Kerze sofort liquidiert.
+    const D = Date.UTC(2026, 10, 10, 16)
+    await leeren()
+    await knex('settings').where('id', 1).update({ strategyMaxLeverage: 20 })
+    kontexte.NVDAUSDT = AKTIE
+    globalThis.__engineMarkt = markt(D)
+    await knex('strategy_instances').insert(instanz('NVDAUSDT', { leverage: 50, maintenanceMarginPct: 0 }))
+    await knex('strategy_setups').insert(setup('NVDAUSDT', D, { stopLoss: 96, takeProfit: 108 }))
+    await engine.tick()
+    const eroeffnet = await knex('strategy_positions').where('instanceId', 60).first()
+    engine.resetSymbolCache()
+    globalThis.__engineMarkt = markt(D + 3 * H)
+    await engine.tick()
+    const p = await knex('strategy_positions').where('instanceId', 60).first()
+    const tr = await knex('strategy_trades').where('instanceId', 60).first()
+    pruefe('Instanz 50×, Deckel 20×: die Position steht mit dem Hebel der Instanz (50×, Marge 2 %)',
+        Number(eroeffnet?.leverage) === 50 && nah(eroeffnet.marginUsdt, Number(eroeffnet.notionalUsdt) / 50, 1e-6), `Hebel ${eroeffnet?.leverage}, Marge ${eroeffnet?.marginUsdt}`)
+    pruefe('…und bleibt auf flachen Kerzen offen: Wartungsmarge nach 50× gedeckelt (1 %), keine Sofort-Liquidation',
+        !tr && p?.status === 'open' && Number(p.lastCandleTime) === D + 2 * H, `Trade ${tr?.exitReason} @ ${tr?.exitPrice}, Stand ${p?.lastCandleTime}`)
+    await knex('settings').where('id', 1).update({ strategyMaxLeverage: 25 })
+}
+
+// ── 5d. Split-Verdacht ab 1,25× (RAS-09) ─────────────────────────────────
+console.log('\nSplit-Verdacht unter 1,8×: Split 3:2 ja, Zahlen-Gap ±15 % nein (RAS-09)')
+{
+    const S = Date.UTC(2026, 6, 15, 14)
+    const k = (c) => ({ o: c, h: c * 1.002, l: c * 0.998, c })
+    const TITEL = { ...AKTIE, ticker: 'KORU', splits: [] }
+    const stelle = async ({ nach, marken = {} }) => {
+        await leeren()
+        kontexte.KORUUSDT = TITEL
+        globalThis.__engineMarkt = markt(S + 2 * H, (t) => k(t < S ? 150 : nach))
+        await knex('strategy_instances').insert(instanz('KORUUSDT', {}, { enabled: 0, anlageklasse: 'aktien' }))
+        await knex('strategy_setups').insert({ ...setup('KORUUSDT', S, { entry: 150, stopLoss: 140, takeProfit: 200 }), status: 'open' })
+        await knex('strategy_positions').insert({ id: 80, instanceId: 60, setupId: 700, mode: 'paper', broker: 'bitunix', symbol: 'KORUUSDT', timeframe: '1h',
+            direction: 'long', qty: 2, initialQty: 2, entryPrice: 150, entryTime: S - 10 * H, stopLoss: 140, initialStopLoss: 140, takeProfit: 200,
+            leverage: 5, notionalUsdt: 300, marginUsdt: 60, feeOpen: 0.06, maePrice: 149.7, mfePrice: 150.3,
+            clientOrderId: 'ctj-60-700', lastCandleTime: S - 2 * H, status: 'open', ...marken })
+        await engine.tick()
+    }
+    const lies = async () => ({ p: await knex('strategy_positions').where('id', 80).first(), trade: await knex('strategy_trades').where('instanceId', 60).first() })
+    // Split 3:2, den die Kursquelle noch nicht führt: 150 → 100 (Verhältnis 1,5 — unter der alten Schwelle 1,8)
+    await stelle({ nach: 100 })
+    let z = await lies()
+    pruefe('Split 3:2 unbekannt (150 → 100): ausgesetzt statt am Stop gebucht, Splits frisch nachgefragt',
+        !z.trade && z.p?.status === 'open' && nah(z.p.qty, 2) && Number(z.p.lastCandleTime) === S - 2 * H && abrufe.includes('KORUUSDT'), `Trade ${z.trade?.exitReason} @ ${z.trade?.exitPrice}`)
+    frische.KORUUSDT = { ...TITEL, splits: [{ t: S, faktor: 1.5, text: '3:2' }] }
+    engine.resetSymbolCache()
+    await engine.tick()
+    z = await lies()
+    pruefe('…sobald die Kursquelle ihn führt: Position umgerechnet (Menge × 1,5, Kurse ÷ 1,5), kein Trade',
+        !z.trade && nah(z.p?.qty, 3) && nah(z.p?.entryPrice, 100) && nah(z.p?.stopLoss, 140 / 1.5) && Number(z.p?.lastCandleTime) === S + H, `Trade ${z.trade?.exitReason}, Menge ${z.p?.qty}`)
+    // Kurslücke nach Zahlen −15 %: kein Verdacht — der Stop wird sofort gebucht, keine Nachfrage
+    await stelle({ nach: 127.5 })
+    z = await lies()
+    pruefe('Zahlen-Gap −15 % (150 → 127,5): kein Verdacht, der Stop wird gebucht wie immer, keine Nachfrage an der Kursquelle',
+        z.trade?.exitReason === 'sl' && abrufe.length === 0, `Trade ${z.trade?.exitReason}, ${abrufe.length} Nachfragen`)
+    // …und +15 %: fortgeschrieben, offen
+    await stelle({ nach: 172.5 })
+    z = await lies()
+    pruefe('Zahlen-Gap +15 % (150 → 172,5): kein Verdacht, Position fortgeschrieben und offen',
+        !z.trade && z.p?.status === 'open' && Number(z.p.lastCandleTime) === S + H && abrufe.length === 0, `Trade ${z.trade?.exitReason}, Stand ${z.p?.lastCandleTime}`)
+    // Coin mit demselben Sprung 1,5×: nie ein Split-Verdacht
+    await leeren()
+    globalThis.__engineMarkt = markt(S + 2 * H, (t) => k(t < S ? 150 : 100))
+    await knex('strategy_instances').insert(instanz('ALTUSDT', {}, { enabled: 0 }))
+    await knex('strategy_setups').insert({ ...setup('ALTUSDT', S, { entry: 150, stopLoss: 140, takeProfit: 200 }), status: 'open' })
+    await knex('strategy_positions').insert({ id: 80, instanceId: 60, setupId: 700, mode: 'paper', broker: 'bitunix', symbol: 'ALTUSDT', timeframe: '1h',
+        direction: 'long', qty: 2, initialQty: 2, entryPrice: 150, entryTime: S - 10 * H, stopLoss: 140, initialStopLoss: 140, takeProfit: 200,
+        leverage: 5, notionalUsdt: 300, marginUsdt: 60, feeOpen: 0.06, maePrice: 149.7, mfePrice: 150.3, clientOrderId: 'ctj-60-700', lastCandleTime: S - 2 * H, status: 'open' })
+    await engine.tick()
+    z = await lies()
+    pruefe('Coin mit Sprung 1,5×: unverändert — Stop gebucht, kein Aussetzen', z.trade?.exitReason === 'sl' && abrufe.length === 0, `Trade ${z.trade?.exitReason}`)
+}
+
 // ── 6. `aktienKontext({ splitsFrisch })`: am Zwölf-Stunden-Speicher vorbei ──
 console.log('\nAktien-Kontext: Splits frisch holen')
 {
-    const { aktienKontext, anlageklasseVon, leereKontextCache, vergissModus } = await import('./aktien/kontext.js')
+    const { aktienKontext, anlageklasseVon, leereKontextCache, vergissModus, aktienModusAn, _setzeModusLeser } = await import('./aktien/kontext.js')
+    _setzeModusLeser(null)   // ab hier der echte Schalter aus der Datenbank
     // Aktien-Futures gibt es nur mit eingeschaltetem Aktien-Modus (FUN-K-002) — Gegenprobe weiter unten.
     await knex('settings').where('id', 1).update({ modusAktienAn: 1, marktdatenQuelle: 'binance' })
     const [iid] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'KORU', unterart: 'etf', name: 'Korea Bull 3X' })
@@ -662,10 +850,44 @@ console.log('\nAktien-Kontext: Splits frisch holen')
             pruefe('Modus aus: Instanz-Klasse Krypto, nichts gemischt', (await anlageklasseVon(['KORUUSDT'])).klasse === 'krypto'
                 && (await anlageklasseVon(['BTCUSDT', 'KORUUSDT'])).gemischt === false)
             pruefe('Modus aus: kein Abruf an die Kursquelle', splitAbrufe === davor, `${splitAbrufe - davor} Abrufe`)
+            // RAS-03: nur die ausdrückliche Option übergeht den Schalter (Engine, offene Positionen einer Aktien-Instanz)
+            pruefe('Modus aus, `trotzModusAus`: der Titel bleibt Aktie, mit seinen Splits', (await aktienKontext('KORUUSDT', { trotzModusAus: true }))?.ticker === 'KORU'
+                && Array.isArray((await aktienKontext('KORUUSDT', { trotzModusAus: true })).splits))
+            pruefe('…Spot und ein Coin bleiben auch damit Krypto', (await aktienKontext('KORUUSDT', { trotzModusAus: true, market: 'spot' })) === null
+                && (await aktienKontext('BTCUSDT', { trotzModusAus: true })) === null)
+            pruefe('…nur genau `true` zählt, und ohne die Option weiter null', (await aktienKontext('KORUUSDT', { trotzModusAus: 1 })) === null && (await aktienKontext('KORUUSDT')) === null)
         }
         await knex('settings').where('id', 1).update({ modusAktienAn: 1 })
         vergissModus()
         pruefe('Modus wieder an: wieder Aktie', (await aktienKontext('KORUUSDT'))?.ticker === 'KORU')
+
+        // RAS-08: ein Lesefehler ist kein «aus»
+        console.log('\nAktien-Modus: Lesefehler (RAS-08)')
+        {
+            const jetztEcht = Date.now
+            let vor = 0, lesungen = 0, kaputt = false, wert = 1
+            Date.now = () => jetztEcht() + vor
+            try {
+                _setzeModusLeser(async () => { lesungen++; if (kaputt) throw new Error('Datenbank gesperrt'); return wert })
+                pruefe('gelesen: an', (await aktienModusAn()) === true && lesungen === 1)
+                kaputt = true
+                vor += 31_000   // die 30 s des Speichers sind um
+                pruefe('Lesefehler nach Ablauf: der letzte bekannte Wert (an) gilt weiter', (await aktienModusAn()) === true && lesungen === 2, `${lesungen} Lesungen`)
+                pruefe('…und der Titel bleibt Aktie', (await aktienKontext('KORUUSDT'))?.ticker === 'KORU')
+                const davor = lesungen
+                await aktienModusAn()
+                pruefe('…der Fehler wird nicht gemerkt: die nächste Frage liest wieder', lesungen > davor, `${lesungen - davor} Lesungen`)
+                kaputt = false; wert = 0
+                pruefe('wieder lesbar und inzwischen aus: aus', (await aktienModusAn()) === false)
+                kaputt = true; vor += 31_000
+                pruefe('Lesefehler bei bekanntem «aus»: bleibt aus', (await aktienModusAn()) === false)
+                _setzeModusLeser(async () => { throw new Error('keine Datenbank') })
+                pruefe('Lesefehler ohne bekannten Wert: aus', (await aktienModusAn()) === false && (await aktienKontext('KORUUSDT')) === null)
+            } finally {
+                Date.now = jetztEcht
+                _setzeModusLeser(null)
+            }
+        }
     } finally {
         globalThis.fetch = fetchEcht
         leereKontextCache()

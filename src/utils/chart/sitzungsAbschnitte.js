@@ -31,8 +31,10 @@ export const ARTEN = ['rand', 'nacht', 'zu']
 /**
  * Art der Fläche hinter einer Kerze — `null`, wenn sie die reguläre Sitzung berührt.
  * Welche Sitzungen eine Kerze überdeckt, sagt `sitzungenDerKerze` — dieselbe
- * Regel, nach der Backtest und Engine den Schalter «nur reguläre Sitzung»
- * entscheiden (`einstiegRegulaer`, FUN-H-005).
+ * Zählung, mit der Backtest und Engine den Schalter «nur reguläre Sitzung»
+ * entscheiden (`einstiegRegulaer`, FUN-H-005). Der Schalter ist strenger: er
+ * verlangt für ein Limit in der Kerze mindestens die Hälfte in der Sitzung
+ * (RAS-05). Jede Kerze, die er zulässt, ist hier frei — nicht umgekehrt.
  * @param {number} t      Öffnungszeit in ms
  * @param {number} ivMs   Kerzenlänge in ms
  * @returns {'rand'|'nacht'|'zu'|null}

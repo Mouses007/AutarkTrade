@@ -201,6 +201,49 @@ export function verdaechtigeSpruenge(kerzen = [], ab = VERDACHT_AB) {
     return aus
 }
 
+/**
+ * Ab diesem Verhältnis prüft der PAPIERBETRIEB einen Sprung als Split-Verdacht,
+ * wenn er weit über der üblichen Kerzenbewegung liegt (`UEBER_RAUSCHEN`).
+ * Gemeint sind die Splits 4:3 (1,33) und 3:2 (1,5): auch mit einer Bewegung
+ * von ±15 % am Ex-Tag liegt 3:2 zwischen 1,30 und 1,76 — über dieser Schwelle
+ * und unter 1,8. Ein Split 5:4 (1,25) liegt genau auf der Grenze und wird nur
+ * erkannt, wenn der Kurs am Ex-Tag nicht dagegen läuft; ebenso 4:3 bei mehr
+ * als +6 %. Eine Kurslücke nach Zahlen von ±15 % ist ein Verhältnis von 1,18
+ * bzw. 1,15 und bleibt darunter (Selbsttest `__selftest-splits.mjs`).
+ */
+const VERDACHT_ENG_AB = 1.25
+
+/**
+ * Split-Verdacht für den Papierbetrieb (`strategy-engine.js`): wie
+ * `verdaechtigeSpruenge` jeder Sprung ab 1,8×, dazu Sprünge ab 1,25×, wenn sie
+ * mindestens das Vierfache der üblichen Bewegung von Kerze zu Kerze ausmachen —
+ * das Kriterium aus `findeSprung`. Vorher blieb ein Split 3:2 oder 4:3, den die
+ * Kursquelle noch nicht führt, unbemerkt, und die Position wurde am Stop
+ * gebucht (Review 15.11.2026, RAS-09).
+ *
+ * Der Preis: auch ein ECHTER Kurssprung ab −20 % / +25 % von einer Kerze zur
+ * nächsten setzt die Runde für das Symbol aus, bis die Wartezeit der Engine um
+ * ist (vorher erst ab −44 % / +80 %). Gebucht wird er danach wie jede Bewegung.
+ * Backtest und Radar benutzen weiter `verdaechtigeSpruenge`.
+ *
+ * @param {object[]} kerzen  aufsteigend
+ * @param {{nach?: number, ab?: number}} [opt]  `nach`: nur Sprünge, deren Kerze nach diesem Zeitpunkt beginnt
+ * @returns {{t: number, verhaeltnis: number}[]}
+ */
+export function auffaelligeSpruenge(kerzen = [], { nach = -Infinity, ab = VERDACHT_ENG_AB } = {}) {
+    const aus = []
+    for (let i = 1; i < kerzen.length; i++) {
+        if (!(kerzen[i].t > nach)) continue
+        const a = kerzen[i - 1].c, b = kerzen[i].c
+        if (!(a > 0) || !(b > 0)) continue
+        const sprung = Math.abs(Math.log(a / b))
+        if (sprung < Math.log(ab)) continue
+        // Ab 1,8× wie bisher ohne weitere Bedingung; darunter muss der Sprung aus dem Rauschen ragen.
+        if (sprung >= Math.log(VERDACHT_AB) || sprung >= UEBER_RAUSCHEN * ueblicheBewegung(kerzen, i)) aus.push({ t: kerzen[i].t, verhaeltnis: a / b })
+    }
+    return aus
+}
+
 /** Kleinster Sprung zweier Schlusskurse, hinter dem ein anwendbarer Split stehen kann (Faktor 1,3 abzüglich Toleranz). */
 const SPLIT_MOEGLICH_AB = 1.15
 

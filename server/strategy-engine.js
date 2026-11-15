@@ -37,8 +37,8 @@ import { istTestbetrieb } from './umgebung.js'
 import { istAus as marktdatenAus } from './marktdaten/index.js'
 import { aussortierteZeilen } from './strategie-aussortiert.js'
 import { zeitpunkt } from '../shared/strategieChart.js'
-import { aktienKontext } from './aktien/kontext.js'
-import { bereinigeSplits, positionUeberSplit, faelligeSplits, leseSplitVermerk, verdaechtigeSpruenge } from './aktien/splits.js'
+import { aktienKontext, aktienModusAn } from './aktien/kontext.js'
+import { bereinigeSplits, positionUeberSplit, faelligeSplits, leseSplitVermerk, auffaelligeSpruenge } from './aktien/splits.js'
 import { handelstagBeginn, einstiegRegulaer } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, terminListe } from '../shared/aktien-zahlen.js'
 
@@ -105,6 +105,31 @@ export function setAgentHook(fn) { agentHook = fn }
 let kontextQuelle = aktienKontext
 export function setAktienKontext(fn) { kontextQuelle = typeof fn === 'function' ? fn : aktienKontext }
 const kontextVon = async (symbol, opt) => kontextQuelle(symbol, opt)
+
+/**
+ * Womit die Engine den Aktien-Kontext für ein Symbol einer Instanz fragt.
+ *
+ * Eine Instanz, die als Aktien-Instanz angelegt wurde (`anlageklasse =
+ * 'aktien'`), bleibt das auch bei ausgeschaltetem Aktien-Modus: ihre offenen
+ * Positionen brauchen weiter Splits, Börsentag und Rutsch-Aufschlag
+ * (`trotzModusAus`, siehe `aktienKontext`). Bis 15.11.2026 lieferte der
+ * Kontext dann `null`, und die Instanz handelte als Coin weiter — UTC-Tag,
+ * keine Sitzungsregel, ein Split als Kurssturz gebucht (Review RAS-03). Neue
+ * Einstiege gibt es in dieser Zeit nicht (`aktienModusAusFuer`).
+ * Krypto-Instanzen fragen wie bisher.
+ */
+const kontextOpt = (instance) => (instance?.anlageklasse === 'aktien'
+    ? { market: instance.market, trotzModusAus: true }
+    : { market: instance?.market })
+
+/** Grund am Setup und im Protokoll, wenn eine Aktien-Instanz bei ausgeschaltetem Aktien-Modus nichts eröffnet. */
+export const AKTIEN_MODUS_AUS = 'aktien_modus_aus'
+const AKTIEN_MODUS_AUS_TEXT = 'Aktien-Modus ist ausgeschaltet — die Instanz eröffnet nichts Neues; offene Positionen werden weiter gepflegt'
+/** Ist diese Instanz eine Aktien-Instanz, während der Aktien-Modus aus ist? */
+const aktienModusAusFuer = async (instance) => instance?.anlageklasse === 'aktien' && !(await aktienModusAn())
+// Einmal je Instanz ins Log, nicht je Takt (wie `ausGemeldet`).
+const modusAusGemeldet = new Set()
+
 
 // ── Instanz laden ────────────────────────────────────────────────────────
 
@@ -335,8 +360,9 @@ export function risikoKontextAbfragen(knex, instanceId, now, tagesBeginn = start
  * `rechneUeberSplitsUm` offene Positionen um.
  *
  * `verdacht` (nur Aktien-Futures, sonst `null`): ein junger Sprung ≥ 1,8×
- * zwischen zwei Schlusskursen, den auch die FRISCH geholten Splits nicht
- * erklären (`verdaechtigeSpruenge` — dieselbe Prüfung wie im Backtest). Die
+ * zwischen zwei Schlusskursen — oder ≥ 1,25×, wenn er weit über der üblichen
+ * Kerzenbewegung liegt —, den auch die FRISCH geholten Splits nicht erklären
+ * (`auffaelligeSpruenge` in `aktien/splits.js`). Die
  * Kursquelle führt einen Split womöglich noch nicht, und der Speicher in
  * `aktien/kontext.js` hält auch eine leere Liste zwölf Stunden für bekannt;
  * ohne diese Wache träfe die erste Kerze nach dem Sprung unbereinigt den Stop
@@ -344,10 +370,11 @@ export function risikoKontextAbfragen(knex, instanceId, now, tagesBeginn = start
  * (Audit 15.11.2026, FUN-F-006). Die Aufrufer setzen bei Verdacht die Runde
  * aus; der nächste Takt fragt wieder.
  */
-async function mitSplits(symbol, candles, market) {
+async function mitSplits(symbol, candles, opt) {
     if (!candles?.length) return { kerzen: candles, bericht: [], aktie: null, verdacht: null }
-    // `market` der Instanz geht mit: ein Spot-Symbol ist nie ein Aktien-Future (BUG-K-001).
-    let aktie = await kontextVon(symbol, { market })
+    // `opt` aus `kontextOpt(instance)`: der Markt der Instanz geht mit — ein Spot-Symbol ist nie
+    // ein Aktien-Future (BUG-K-001) —, und eine Aktien-Instanz fragt am Modus-Schalter vorbei.
+    let aktie = await kontextVon(symbol, opt)
     // Coin: unverändert, und kein Blick auf Sprünge — dort gibt es keine Splits.
     if (!aktie) return { kerzen: candles, bericht: [], aktie, verdacht: null }
     const rechne = (a) => (a.splits?.length ? bereinigeSplits(candles, a.splits) : { kerzen: candles, splits: [] })
@@ -355,7 +382,7 @@ async function mitSplits(symbol, candles, market) {
     let verdacht = jungerSprung(b.kerzen)
     if (verdacht) {
         // Am Speicher vorbei nachfragen (dort gebremst auf einmal je zehn Minuten und Symbol).
-        const frisch = await kontextVon(symbol, { splitsFrisch: true, market }).catch(() => null)
+        const frisch = await kontextVon(symbol, { ...opt, splitsFrisch: true }).catch(() => null)
         if (frisch) {
             aktie = frisch
             b = rechne(aktie)
@@ -374,10 +401,15 @@ async function mitSplits(symbol, candles, market) {
  */
 const SPLIT_VERDACHT_MS = 72 * 3600_000
 
-/** Der jüngste verdächtige Sprung innerhalb der Wartezeit — oder `null`. */
+/**
+ * Der jüngste verdächtige Sprung innerhalb der Wartezeit — oder `null`.
+ * `auffaelligeSpruenge`: wie bisher jeder Sprung ab 1,8×, dazu Sprünge ab 1,25×
+ * (Split 3:2, 4:3, 5:4), wenn sie das Vierfache der üblichen Kerzenbewegung
+ * übersteigen (Review 15.11.2026, RAS-09).
+ */
 function jungerSprung(kerzen) {
     const ab = kerzen[kerzen.length - 1].t - SPLIT_VERDACHT_MS
-    const liste = verdaechtigeSpruenge(kerzen).filter((x) => x.t > ab)
+    const liste = auffaelligeSpruenge(kerzen, { nach: ab })
     return liste.length ? liste[liste.length - 1] : null
 }
 
@@ -391,8 +423,8 @@ function meldeSplitVerdacht(schluessel, symbol, verdacht) {
         + 'Runde ausgesetzt, Splits werden neu geholt (längstens drei Tage, danach zählt der Sprung als Kursbewegung)')
 }
 
-async function splitBereinigt(symbol, candles, market) {
-    return (await mitSplits(symbol, candles, market)).kerzen
+async function splitBereinigt(symbol, candles, opt) {
+    return (await mitSplits(symbol, candles, opt)).kerzen
 }
 
 const kurz = (v) => (Number.isFinite(Number(v)) ? String(Number(Number(v).toPrecision(8))) : '–')
@@ -581,7 +613,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         { endlich: true, aktie: instance.anlageklasse === 'aktien' })
 
     let { kerzen: candles, bericht: splitBericht, aktie, verdacht: splitVerdacht } = await mitSplits(symbol,
-        await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }), instance.market)
+        await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }), kontextOpt(instance))
     // Für Aktien-Futures reist der Rutsch-Aufschlag ausserhalb der regulären
     // Sitzung mit (Vorgabe 0); bei Coins nie.
     const costs = kostenAus(instance.risk, { aktie: Boolean(aktie) })
@@ -599,7 +631,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     const kurzVon = candles[candles.length - 1].t
     if (candles.length < bedarf * 0.9 && nachgefragt.get(key) !== kurzVon) {
         nachgefragt.set(key, kurzVon)
-        const frisch = await mitSplits(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }), instance.market)
+        const frisch = await mitSplits(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }), kontextOpt(instance))
         if (frisch.kerzen.length > candles.length) { candles = frisch.kerzen; splitBericht = frisch.bericht; splitVerdacht = frisch.verdacht }
     }
     if (candles.length < 50) return { skipped: 'zu wenige Kerzen' }
@@ -634,6 +666,12 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         partialTpPct: p.partialTpPct,
         // Wartungsmarge je Symbol (0 in der Instanz = von der Börse holen),
         // damit Papierbetrieb und Backtest denselben Liquidationspreis rechnen.
+        // Der Hebel der INSTANZ, nicht der global gedeckelte: die Papier-Position
+        // wird mit `instance.risk.leverage` gebucht (`openPaperPosition`), der
+        // Deckel `strategyMaxLeverage` begrenzt nur die Grösse. Mit dem
+        // gedeckelten Hebel (Vorschlag aus Review RAS-07) läge die Wartungsmarge
+        // eines Aktien-Futures über der Anfangsmarge der Position — Instanz 50×,
+        // Deckel 20×: 2,5 % gegen 2 % — und sie wäre sofort liquidiert (FUN-H-002).
         maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: instance.risk.leverage }),
     })
 
@@ -681,7 +719,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         try {
             htfCandles = await splitBereinigt(symbol, await getClosedCandles(
                 symbol, p.htfTimeframe, anzahl, { market: instance.market },
-            ), instance.market)
+            ), kontextOpt(instance))
         } catch (e) {
             htfCandles = null
         }
@@ -904,10 +942,15 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
 
     // (a3) Aktien-Futures: Börsensitzung statt UTC-Tag. Auf Wunsch nur in der
     // regulären US-Sitzung einsteigen — massgebend ist, wann gefüllt wird
-    // (`einstiegRegulaer`, dieselbe Funktion wie im Backtest und dieselbe
-    // Regel wie im Chart, FUN-H-005). Ab 1d ist der Schalter nicht anwendbar
+    // (`einstiegRegulaer`, dieselbe Funktion wie im Backtest, FUN-H-005; ein
+    // Limit in der Kerze zählt, wenn sie mindestens zur Hälfte in der Sitzung
+    // liegt, RAS-05). Ab 1d ist der Schalter nicht anwendbar
     // und bleibt ohne Wirkung.
-    const aktie = await kontextVon(setup.symbol, { market: instance.market })
+    // Aktien-Instanz bei ausgeschaltetem Aktien-Modus: nichts eröffnen. Der Takt
+    // überspringt solche Instanzen schon (`verarbeiteInstanz`); hier steht die
+    // Sperre noch einmal, falls der Schalter mitten im Takt umgelegt wurde.
+    if (await aktienModusAusFuer(instance)) return beenden('reject_risk', AKTIEN_MODUS_AUS, 'Aktien-Modus ausgeschaltet')
+    const aktie = await kontextVon(setup.symbol, kontextOpt(instance))
     if (aktie && instance.risk?.nurRegulaereSitzung) {
         const urteil = einstiegRegulaer(Number(ev?.candleTime ?? ev?.triggeredAt) || now, timeframeMs(setup.timeframe), einstiegsArtVon(ev, setup))
         if (!urteil.regulaer) return beenden('reject_risk', 'ausserhalb_sitzung', `Sitzung ${urteil.sitzung}`)
@@ -1102,6 +1145,23 @@ async function verarbeiteInstanz(row, schalter) {
     }
     if (!instance.enabled || !instance.symbols.length) return
 
+    // Aktien-Instanz, Aktien-Modus aus: nichts erkennen, nichts eröffnen. Ihre
+    // offenen Positionen pflegt `pflegeOffenePositionen` in jedem Takt weiter —
+    // mit Aktien-Kontext (`kontextOpt`). Der Grund steht einmal im Log und,
+    // solange es so ist, an der Instanz (`lastError`, die Oberfläche zeigt ihn).
+    if (await aktienModusAusFuer(instance)) {
+        if (!modusAusGemeldet.has(instance.id)) {
+            modusAusGemeldet.add(instance.id)
+            logWarn('strategy-engine', `Instanz ${instance.id} (${instance.name}) ausgesetzt: ${AKTIEN_MODUS_AUS_TEXT}`)
+        }
+        if (row.lastError !== AKTIEN_MODUS_AUS_TEXT) {
+            await getKnex()('strategy_instances').where('id', instance.id)
+                .update({ lastError: AKTIEN_MODUS_AUS_TEXT }).catch(() => {})
+        }
+        return { skipped: AKTIEN_MODUS_AUS }
+    }
+    modusAusGemeldet.delete(instance.id)
+
     if (running.get(instance.id)) return          // Guard je Instanz
     running.set(instance.id, true)
 
@@ -1200,7 +1260,7 @@ async function pflegeOffenePositionen() {
             const tfMs = timeframeMs(pflegeTf)
             const bedarf = Math.min(990, Math.max(60, Math.ceil((Date.now() - minAb) / tfMs) + 3))
             const { kerzen: candles, bericht: splitBericht, aktie, verdacht: splitVerdacht } = await mitSplits(symbol,
-                await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }), instance.market)
+                await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }), kontextOpt(instance))
             if (!candles?.length) continue
             // Unerklärter Sprung, über den die Position noch nicht fortgeschrieben ist: aussetzen (siehe `mitSplits`).
             if (splitVerdacht && splitVerdacht.t > minAb) {
@@ -1228,6 +1288,7 @@ async function pflegeOffenePositionen() {
                 maxHoldMs: ((instance.params.maxHoldCandles ?? regeln?.maxHoldCandles ?? 0) || 0) * timeframeMs(pflegeTf),
                 partialTpR: instance.params.partialTpR,
                 partialTpPct: instance.params.partialTpPct,
+                // Hebel der Instanz — mit ihm ist die Position gebucht (siehe `verarbeiteSymbol`).
                 maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: instance.risk.leverage }),
             })
         } catch (e) {
@@ -1396,7 +1457,7 @@ export async function killSwitch({ closePositions = false } = {}) {
             const preis = await getLastPrice(row.symbol, { market: instance.market }).catch(() => Number(row.entryPrice))
             const r = await schliessePositionManuell({
                 instance, positionRow: row, price: preis, time: Date.now(),
-                costs: kostenAus(instance.risk, { aktie: Boolean(await kontextVon(row.symbol, { market: instance.market }).catch(() => null)) }),
+                costs: kostenAus(instance.risk, { aktie: Boolean(await kontextVon(row.symbol, kontextOpt(instance)).catch(() => null)) }),
                 reason: 'manual',
             }).catch((err) => ({ ok: false, reason: err.message }))
             if (r.ok) geschlossen++

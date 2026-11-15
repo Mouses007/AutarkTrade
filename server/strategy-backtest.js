@@ -640,9 +640,10 @@ export async function runBacktest(opts) {
 
             // Aktien: auf Wunsch nur in der regulären US-Sitzung einsteigen.
             // Massgebend ist, wann gefüllt wird — dieselbe Regel wie in der
-            // Engine und im Chart (`einstiegRegulaer`): eine Stundenkerze ab
-            // 09:00 New Yorker Zeit enthält die Eröffnung und zählt, ausser der
-            // Einstieg liegt auf ihrer Eröffnung um 09:00.
+            // Engine (`einstiegRegulaer`): ein Limit in der Kerze zählt, wenn
+            // sie mindestens zur Hälfte in der Sitzung liegt (die Stundenkerze
+            // ab 09:00 New Yorker Zeit also ja, RAS-05), ausser der Einstieg
+            // liegt auf ihrer Eröffnung um 09:00.
             if (nurRegulaerWirkt && !einstiegRegulaer(triggerKerze.t, timeframeMs(timeframe), einstiegsArt).regulaer) {
                 bump(funnel.entrySkipped, 'ausserhalb_sitzung')
                 setup.status = 'rejected'

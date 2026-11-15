@@ -62,11 +62,20 @@ const modusAusDb = async () => (await getKnex()('settings').select('modusAktienA
 let modusLeser = modusAusDb
 const modusAusWert = (w) => w === true || Number(w) === 1
 
-/** Ist der Aktien-Modus eingeschaltet? Nicht lesbar (keine Datenbank, Spalte fehlt) = aus. */
+/**
+ * Ist der Aktien-Modus eingeschaltet?
+ *
+ * Ein LESEFEHLER (Datenbank kurz nicht erreichbar, gesperrte SQLite) ist kein
+ * «aus»: der letzte bekannte Wert gilt weiter, und gemerkt wird nichts — die
+ * nächste Frage liest wieder. Vorher stand der Fehler 30 s als «aus» im
+ * Speicher, und ein Engine-Takt in dieser Zeit rechnete Aktien-Kerzen ohne
+ * Split-Bereinigung und Sitzungsregeln (Review 15.11.2026, RAS-08). Nur ohne
+ * bekannten Wert (keine Datenbank im Selbsttest, Spalte fehlt) gilt «aus».
+ */
 export async function aktienModusAn() {
     if (modusGemerkt.an !== undefined && Date.now() - modusGemerkt.ts < MODUS_MS) return modusGemerkt.an
-    let an = false
-    try { an = modusAusWert(await modusLeser()) } catch { an = false }
+    let an
+    try { an = modusAusWert(await modusLeser()) } catch { return modusGemerkt.an ?? false }
     modusGemerkt = { an, ts: Date.now() }
     return an
 }
@@ -162,7 +171,7 @@ async function baue(symbol, wo) {
 
 /**
  * @param {string} symbol  wie die Marktdatenquelle es nennt (`NVDAUSDT`)
- * @param {{splitsFrisch?: boolean, market?: 'spot'|'futures', boerse?: string}} [opt]
+ * @param {{splitsFrisch?: boolean, market?: 'spot'|'futures', boerse?: string, trotzModusAus?: boolean}} [opt]
  *        `market`: `spot` ist nie ein Aktien-Future (BUG-K-001). `boerse`: die Börse, von der die
  *        Kerzen kommen, wenn es NICHT die Marktdatenquelle ist (Chart mit eigener Quelle), oder
  *        `jede`, wenn der Aufrufer die Börse des Symbols nicht kennt.
@@ -171,12 +180,22 @@ async function baue(symbol, wo) {
  *        dann so lange (Audit 15.11.2026, FUN-F-006). Für den Papierbetrieb, wenn in den Kerzen
  *        ein Sprung steht, den die bekannten Splits nicht erklären; höchstens alle zehn Minuten
  *        je Symbol, dazwischen gilt der Speicher.
+ *        `trotzModusAus`: den Schalter «Aktien-Modus» übergehen. NUR für die Strategie-Engine und
+ *        nur für Instanzen, die als Aktien-Instanz angelegt wurden (`anlageklasse = 'aktien'`):
+ *        ihre OFFENEN Positionen müssen auch bei ausgeschaltetem Modus als Aktien-Future gepflegt
+ *        werden — sonst bucht der Papierbetrieb einen Split als Kurssturz (Review 15.11.2026,
+ *        RAS-03). Neue Einstiege eröffnet die Engine in dieser Zeit nicht. Dafür gehen die Abrufe
+ *        für Splits und Termine dieses einen Titels weiter hinaus. Alle anderen Aufrufer
+ *        (Backtest, Radar, Chart) lassen die Option weg: dort heisst «Modus aus» Krypto.
  * @returns {Promise<null | {ticker, name, unterart, boerse, kursSymbol, splits: object[]|null, splitsGrund: string|null,
  *           termine: {naechster, vergangene}|null, termineGrund: string|null}>}
  */
-export async function aktienKontext(symbol, { splitsFrisch = false, market, boerse } = {}) {
+export async function aktienKontext(symbol, { splitsFrisch = false, market, boerse, trotzModusAus = false } = {}) {
     const sym = String(symbol || '').toUpperCase()
-    if (istSpot(market) || !(await aktienModusAn())) return null
+    if (istSpot(market)) return null
+    // Der Speicher darunter ist für beide Wege derselbe: er hält nur, was der Stamm sagt, und
+    // `vergissModus()` leert ihn beim Umschalten.
+    if (trotzModusAus !== true && !(await aktienModusAn())) return null
     // Der Schlüssel trägt die Börse: «kein Titel» an der einen darf die Antwort für die andere nicht stellen.
     // Der Markt braucht keinen Platz darin — Spot kommt gar nicht bis zum Speicher.
     const wo = woVon(boerse)

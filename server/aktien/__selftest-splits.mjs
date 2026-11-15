@@ -4,7 +4,7 @@
  *   node server/aktien/__selftest-splits.mjs
  */
 import assert from 'node:assert/strict'
-import { ausSplits, bereinigeSplits, bereinigeSeite, verdaechtigeSpruenge, bereinigeFunding, positionUeberSplit, faelligeSplits, leseSplitVermerk, ohneSplitSprung, ohneSplitSpruengeJe, faktorNaheEins } from './splits.js'
+import { ausSplits, bereinigeSplits, bereinigeSeite, verdaechtigeSpruenge, bereinigeFunding, positionUeberSplit, faelligeSplits, leseSplitVermerk, ohneSplitSprung, ohneSplitSpruengeJe, faktorNaheEins, auffaelligeSpruenge } from './splits.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -228,6 +228,46 @@ ok(gestueckelt.every((k, i) => Math.abs(k.c - r.kerzen[i].c) < 1e-9 && Math.abs(
     ok(merk.size === 3 && merk.get('KORU').offen === false && merk.get('KORU').splits.length === 1 && merk.get('KORU').splits[0].text === '20:1', 'gemerkt: KORU umgerechnet — über zwei Zeiteinheiten nur ein Eintrag')
     ok(merk.get('SOXS').offen && merk.get('MSTU').offen && !merk.has('NVDA'), 'gemerkt: SOXS (leere Liste) und MSTU (unbekannt) offen, NVDA ohne Sprung gar nicht')
     ok(!gefragt.includes('NVDA') && gefragt.filter((x) => x === 'KORU').length === 2, 'Splits nur für Titel mit Sprung geholt')
+}
+
+// ── Split-Verdacht des Papierbetriebs ab 1,25× (`auffaelligeSpruenge`, RAS-09) ──
+{
+    // Stundenkerzen einer Aktie mit gewöhnlichem Rauschen (±0,6 % je Kerze, fester Zufall); ab Kerze 150 gilt `mal`.
+    let saat = 7
+    const zufall = () => { saat = (saat * 1103515245 + 12345) % 2147483648; return saat / 2147483648 }
+    const rauschen = Array.from({ length: 300 }, () => 1 + (zufall() - 0.5) * 0.012)
+    const reihe = (mal, breite = 1) => {
+        let p = 100
+        return rauschen.map((r, i) => {
+            p *= 1 + (r - 1) * breite
+            const c = p * (i >= 150 ? mal : 1)
+            return { t: t0 + i * H, o: c, h: c * 1.002, l: c * 0.998, c, v: 1 }
+        })
+    }
+    const bei = (k) => auffaelligeSpruenge(k).map((x) => (x.t - t0) / H)
+    // Keine Fehlalarme bei gewöhnlichen Kurslücken
+    ok(bei(reihe(1)).length === 0, 'ruhige Reihe: kein Verdacht')
+    for (const luecke of [0.85, 1.15, 0.9, 1.1, 0.81, 1.24]) {
+        ok(bei(reihe(luecke)).length === 0, `Kurslücke ${luecke > 1 ? '+' : '−'}${Math.round(Math.abs(luecke - 1) * 100)} % (Zahlen): kein Verdacht`)
+    }
+    // Tageskerzen eines schwankungsreichen Titels (±3 % je Kerze) mit Zahlen-Gap ±15 %: ebenfalls nichts
+    ok(bei(reihe(0.85, 5)).length === 0 && bei(reihe(1.15, 5)).length === 0, 'schwankungsreicher Titel (±3 % je Kerze), Lücke ±15 %: kein Verdacht')
+    // Splits unter 1,8×, die bisher durchrutschten
+    for (const [text, mal] of [['3:2', 1 / 1.5], ['4:3', 3 / 4], ['3:2 mit −15 % am Ex-Tag', 0.85 / 1.5], ['3:2 mit +15 % am Ex-Tag', 1.15 / 1.5], ['Zusammenlegung 2:3', 1.5]]) {
+        const treffer = bei(reihe(mal))
+        ok(treffer.length === 1 && treffer[0] === 150, `Split ${text}: Verdacht an der Sprungkerze`)
+        ok(verdaechtigeSpruenge(reihe(mal)).length === 0, `…den die alte Schwelle 1,8× nicht sah (${text})`)
+    }
+    // Das Rausch-Kriterium: ein Sprung 1,5×, der in der Kerzenbewegung untergeht, ist kein Verdacht — ab 1,8× wie bisher immer
+    const wild = (mal) => Array.from({ length: 200 }, (_, i) => { const c = (i % 2 ? 112 : 100) * (i >= 101 ? mal : 1); return { t: t0 + i * H, o: c, h: c * 1.01, l: c * 0.99, c, v: 1 } })
+    ok(auffaelligeSpruenge(wild(1 / 1.5)).length === 0, 'Reihe mit ±12 % je Kerze, Sprung 1,5×: geht im Rauschen unter, kein Verdacht')
+    ok(auffaelligeSpruenge(wild(1 / 2.5)).length >= 1 && auffaelligeSpruenge(wild(1 / 2.5)).length === verdaechtigeSpruenge(wild(1 / 2.5)).length, 'ab 1,8× unverändert: jeder solche Sprung, auch in unruhiger Reihe')
+    ok(auffaelligeSpruenge(kerzen).length === 1 && auffaelligeSpruenge(kerzen)[0].t === verdaechtigeSpruenge(kerzen)[0].t, 'Sprung 20:1: derselbe Treffer wie bisher')
+    // `nach`: nur junge Sprünge
+    ok(auffaelligeSpruenge(reihe(1 / 1.5), { nach: t0 + 150 * H }).length === 0 && auffaelligeSpruenge(reihe(1 / 1.5), { nach: t0 + 149 * H }).length === 1, '`nach` begrenzt auf Sprünge nach dem Zeitpunkt')
+    // Der Preis der engeren Schwelle, ausdrücklich: ein echter Sturz um 40 % (1,67×) ist für den Papierbetrieb jetzt ein Verdacht
+    ok(auffaelligeSpruenge(sturz).length === 1 && verdaechtigeSpruenge(sturz).length === 0, 'echter Sturz um 40 %: Verdacht im Papierbetrieb (Runde ausgesetzt), weiterhin keiner in Backtest und Radar')
+    ok(auffaelligeSpruenge([]).length === 0 && auffaelligeSpruenge([{ t: 1, c: 0 }, { t: 2, c: 5 }]).length === 0, 'leer und Kurs 0: nichts')
 }
 
 console.log(`✓ Split-Wache: ${n} Prüfungen`)

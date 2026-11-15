@@ -2611,9 +2611,10 @@
       "sitzung_wochenende": "Weekend",
       "sitzung_feiertag": "US holiday",
       "jeSitzungHinweis": "Times in New York time. Outside the regular session the future is thin; spread and slippage are larger there than the simulation assumes.",
-      "jeSitzungNurRegulaer": "Even with “regular US session only”, a trade can appear outside “Regular”: the switch allows a candle as soon as it touches the regular session (the hourly candle from 09:00 runs until 10:00). The table sorts by the start of the candle, so it lands under “Pre-market”."
+      "jeSitzungNurRegulaer": "Even with “regular US session only”, a trade can appear outside “Regular”: for a limit or stop the switch allows a candle that lies at least half inside the regular session (the hourly candle from 09:00, on 4h in summer the candle from 08:00 New York time). The table sorts by the start of the candle, so it lands under “Pre-market”."
     },
     "reason_instanz_inaktiv": "Instance was restarted or paused meanwhile — nothing opened",
+    "reason_aktien_modus_aus": "Stock mode switched off — nothing opened",
     "reason_no_target": "No usable target (anchor on the wrong side)",
     "reason_size_too_small": "Position size below the minimum",
     "reason_agent_veto": "Rejected by the AI agent",
@@ -3048,7 +3049,7 @@
       "leverage": "Leverage",
       "cooldownMinutes": "Cooldown per symbol (minutes)",
       "nurRegulaereSitzung": "Stocks: regular US session only",
-      "nurRegulaereSitzungHint": "Stock futures only. Blocks entries outside 09:30–16:00 New York time on trading days. What counts is the time of the entry: a market entry at the open or close of the candle must lie inside the session; for a limit inside the candle it is enough that the candle touches the session (like the shading in the chart – the hourly candle from 09:00 counts, on 4h also a candle that runs past 16:00). Not applicable and without effect from the 1d timeframe upwards. The future trades around the clock but is thin outside. No effect on coins.",
+      "nurRegulaereSitzungHint": "Stock futures only. Blocks entries outside 09:30–16:00 New York time on trading days. What counts is the time of the entry: a market entry at the open or close of the candle must lie inside the session; for a limit or stop inside the candle the time is unknown – the candle must then lie at least half inside the session (the hourly candle from 09:00 counts; on 4h in summer 08–12 and 12–16, in winter only 11–15 New York time). A permitted candle can therefore lie up to half outside. Not applicable and without effect from the 1d timeframe upwards. The future trades around the clock but is thin outside. No effect on coins.",
       "meideZahlentermine": "Stocks: avoid earnings dates",
       "meideZahlentermineHint": "Stock futures only. No entry from one day before to one day after earnings. If the dates are unknown the block has no effect. No effect on coins.",
       "duplicateScope": "One position per … (symbol / symbol+timeframe)",

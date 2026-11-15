@@ -154,19 +154,27 @@ console.log('\nOverlay-Liste: Coins sehen die Aktien-Ebenen nicht')
     check('jede Aktien-Ebene ist gekennzeichnet', OVERLAYS.filter((o) => o.nurAktien).map((o) => o.id).join() === 'zahlen,sitzungen')
 }
 
-console.log('Chart und Schalter «nur reguläre Sitzung»: eine Regel (FUN-H-005)')
+console.log('Chart und Schalter «nur reguläre Sitzung» (FUN-H-005, RAS-05)')
 {
     // Drei Wochen samt Zeitumstellung (1.11.2026) und Thanksgiving, jede Zeiteinheit bis 4h
+    // Der Chart hinterlegt nach «berührt», der Schalter verlangt für ein Limit in der Kerze
+    // mindestens die Hälfte in der Sitzung (RAS-05): was er zulässt, ist im Chart frei — nicht umgekehrt.
     let abweichung = ''
     let geprueft = 0
+    let freiAberGesperrt = 0
     for (const iv of [5 * MIN, 15 * MIN, 30 * MIN, H, 2 * H, 4 * H]) {
         for (let t = Date.UTC(2026, 9, 26); t < Date.UTC(2026, 10, 30); t += iv) {
             const frei = artDerKerze(t, iv) === null
             geprueft++
-            if (frei !== einstiegRegulaer(t, iv, 'kerze').regulaer || frei !== kerzeBeruehrtRegulaer(t, iv)) { abweichung = `${new Date(t).toISOString()} ${iv / MIN}m`; break }
+            const zugelassen = einstiegRegulaer(t, iv, 'kerze').regulaer
+            if (frei && !zugelassen) freiAberGesperrt++
+            // bis 30 Minuten hat eine Kerze genau eine Sitzung: dort sind beide Regeln dieselbe
+            if ((zugelassen && !frei) || frei !== kerzeBeruehrtRegulaer(t, iv) || (iv <= 30 * MIN && frei !== zugelassen)) { abweichung = `${new Date(t).toISOString()} ${iv / MIN}m`; break }
         }
     }
-    check(`was der Chart nicht hinterlegt, lässt der Schalter zu – und nur das (${geprueft} Kerzen)`, !abweichung, abweichung)
+    check(`was der Schalter zulässt, hinterlegt der Chart nicht; bis 30 Minuten sind beide Regeln gleich (${geprueft} Kerzen)`, !abweichung, abweichung)
+    check('ab 1h ist der Schalter strenger: es gibt freie Kerzen, die er sperrt (4h Winter 07–11, 15–19)', freiAberGesperrt > 0
+        && artDerKerze(Date.UTC(2026, 10, 11, 20), 4 * H) === null && !einstiegRegulaer(Date.UTC(2026, 10, 11, 20), 4 * H, 'kerze').regulaer, `${freiAberGesperrt}`)
     check('ab 1d: der Chart hinterlegt nichts, der Schalter ist nicht anwendbar',
         sitzungsAbschnitte([Date.UTC(2026, 7, 12)], 24 * H).length === 0 && einstiegRegulaer(Date.UTC(2026, 7, 12), 24 * H).anwendbar === false)
 }

@@ -273,6 +273,8 @@ export function sitzungenDerKerze(t, ivMs) {
  * Berührt die Kerze die reguläre Sitzung? Die Regel des Charts
  * (`src/utils/chart/sitzungsAbschnitte.js`): eine Kerze, die die Eröffnung
  * enthält (1h ab 09:00, 4h ab 12:00 UTC), gehört zur regulären Sitzung.
+ * Der Schalter «nur reguläre Sitzung» ist STRENGER (`einstiegRegulaer`): dort
+ * muss die Kerze mindestens zur Hälfte in der Sitzung liegen.
  */
 export function kerzeBeruehrtRegulaer(t, ivMs) {
     return sitzungenDerKerze(t, ivMs).includes('regulaer')
@@ -300,9 +302,18 @@ export function sitzungsRegelAnwendbar(ivMs) {
  *   art 'schluss'     Einstieg zum Kerzenschluss — der letzte Abschnitt der
  *                     Kerze muss in der Sitzung liegen (Schluss um 16:00 zählt).
  *   art 'kerze'       Limit/Stop irgendwo in der Kerze, Zeitpunkt unbekannt —
- *                     die Kerze muss die Sitzung BERÜHREN, wie im Chart
- *                     (`kerzeBeruehrtRegulaer`): was der Chart nicht hinterlegt,
- *                     ist handelbar.
+ *                     die Kerze muss MINDESTENS ZUR HÄLFTE in der Sitzung
+ *                     liegen (gezählt in halben Stunden). 1h ab 09:00: 30 von
+ *                     60 Minuten → zugelassen. 4h (Kerzen auf UTC): im Sommer
+ *                     08–12 und 12–16 New Yorker Zeit zugelassen, im Winter
+ *                     nur 11–15; 07–11 (1,5 h in der Sitzung) und 15–19 (1 h)
+ *                     sind gesperrt.
+ *                     Bis 15.11.2026 genügte es, dass die Kerze die Sitzung
+ *                     BERÜHRT (wie die Hinterlegung im Chart): auf 4h galten
+ *                     damit Kerzen als regulär, in denen bis 19:00 gefüllt
+ *                     werden kann (Review RAS-05). Der Chart hinterlegt weiter
+ *                     nach «berührt» — jede zugelassene Kerze ist dort frei,
+ *                     aber nicht jede freie Kerze ist zugelassen.
  *
  * Ab 1d ist die Frage sinnlos (`anwendbar: false`): der Schalter bleibt ohne
  * Wirkung, und der Aufrufer meldet das, statt still alles zu sperren.
@@ -321,8 +332,14 @@ export function einstiegRegulaer(kerzeT, ivMs, art = 'kerze') {
         return { anwendbar: true, regulaer: sitzung === 'regulaer', sitzung: sitzung === 'regulaer' ? null : sitzung }
     }
     const liste = sitzungenDerKerze(kerzeT, ivMs)
-    const regulaer = liste.includes('regulaer')
-    return { anwendbar: true, regulaer, sitzung: regulaer ? null : liste[0] }
+    const zahl = {}
+    for (const s of liste) zahl[s] = (zahl[s] || 0) + 1
+    const regulaer = 2 * (zahl.regulaer || 0) >= liste.length
+    if (regulaer) return { anwendbar: true, regulaer, sitzung: null }
+    // Begründung: die Sitzung, in der die Kerze ausserhalb am längsten liegt (bei Gleichstand die frühere).
+    let sitzung = null
+    for (const s of liste) if (s !== 'regulaer' && (sitzung === null || zahl[s] > zahl[sitzung])) sitzung = s
+    return { anwendbar: true, regulaer, sitzung }
 }
 
 /* ── Stichtage, an denen die Börsen ihre Regeln geändert haben ────── */

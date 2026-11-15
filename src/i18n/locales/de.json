@@ -2611,9 +2611,10 @@
       "sitzung_wochenende": "Wochenende",
       "sitzung_feiertag": "US-Feiertag",
       "jeSitzungHinweis": "Zeiten in New Yorker Zeit. Ausserhalb der regulären Sitzung ist der Future dünn; Spread und Rutsch sind dort grösser, als die Simulation annimmt.",
-      "jeSitzungNurRegulaer": "Trotz «nur reguläre US-Sitzung» kann ein Trade ausserhalb von «Regulär» stehen: Der Schalter lässt eine Kerze zu, sobald sie die reguläre Sitzung berührt (die Stundenkerze ab 09:00 reicht bis 10:00). Die Tabelle ordnet nach dem Beginn der Kerze ein, also unter «Vorbörslich»."
+      "jeSitzungNurRegulaer": "Trotz «nur reguläre US-Sitzung» kann ein Trade ausserhalb von «Regulär» stehen: Der Schalter lässt bei einem Limit oder Stop eine Kerze zu, die mindestens zur Hälfte in der regulären Sitzung liegt (die Stundenkerze ab 09:00, auf 4h im Sommer die Kerze ab 08:00 New Yorker Zeit). Die Tabelle ordnet nach dem Beginn der Kerze ein, also unter «Vorbörslich»."
     },
     "reason_instanz_inaktiv": "Instanz inzwischen neu gestartet oder pausiert — nichts eröffnet",
+    "reason_aktien_modus_aus": "Aktien-Modus ausgeschaltet — nichts eröffnet",
     "reason_no_target": "Kein brauchbares Ziel (Anker auf der falschen Seite)",
     "reason_size_too_small": "Positionsgrösse unter dem Mindestwert",
     "reason_agent_veto": "Vom KI-Agenten abgelehnt",
@@ -3048,7 +3049,7 @@
       "leverage": "Hebel",
       "cooldownMinutes": "Sperrfrist je Symbol (Minuten)",
       "nurRegulaereSitzung": "Aktien: nur reguläre US-Sitzung",
-      "nurRegulaereSitzungHint": "Nur bei Aktien-Futures. Sperrt Einstiege ausserhalb von 09:30–16:00 New Yorker Zeit an Handelstagen. Massgebend ist der Zeitpunkt des Einstiegs: ein Markt-Einstieg zur Eröffnung oder zum Schluss der Kerze muss in der Sitzung liegen; bei einem Limit in der Kerze genügt es, dass die Kerze die Sitzung berührt (wie die Hinterlegung im Chart – die Stundenkerze ab 09:00 zählt, auf 4h auch eine Kerze, die über 16:00 hinausreicht). Ab der Zeiteinheit 1d nicht anwendbar und ohne Wirkung. Der Future handelt rund um die Uhr, ist ausserhalb aber dünn. Bei Coins ohne Wirkung.",
+      "nurRegulaereSitzungHint": "Nur bei Aktien-Futures. Sperrt Einstiege ausserhalb von 09:30–16:00 New Yorker Zeit an Handelstagen. Massgebend ist der Zeitpunkt des Einstiegs: ein Markt-Einstieg zur Eröffnung oder zum Schluss der Kerze muss in der Sitzung liegen; bei einem Limit oder Stop in der Kerze ist der Zeitpunkt unbekannt – die Kerze muss dann mindestens zur Hälfte in der Sitzung liegen (die Stundenkerze ab 09:00 zählt; auf 4h im Sommer 08–12 und 12–16, im Winter nur 11–15 New Yorker Zeit). Eine zugelassene Kerze kann also bis zur Hälfte ausserhalb liegen. Ab der Zeiteinheit 1d nicht anwendbar und ohne Wirkung. Der Future handelt rund um die Uhr, ist ausserhalb aber dünn. Bei Coins ohne Wirkung.",
       "meideZahlentermine": "Aktien: Zahlentermine meiden",
       "meideZahlentermineHint": "Nur bei Aktien-Futures. Kein Einstieg von einem Tag vor bis einem Tag nach Quartalszahlen. Sind die Termine unbekannt, wirkt die Sperre nicht. Bei Coins ohne Wirkung.",
       "duplicateScope": "Eine Position je … (Symbol / Symbol+Zeiteinheit)",

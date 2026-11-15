@@ -128,7 +128,29 @@ ok(REGIME_STICHTAGE.binance > REGIME_STICHTAGE.bitget && REGIME_STICHTAGE.bituni
 
     // 4h-Kerzen der Börse liegen auf UTC: Sommer 08–12, 12–16, 16–20 New York; Winter 07–11, 11–15, 15–19
     gleich([12, 16, 20].map((h) => urteil(SO + h * STD, 4 * STD, 'kerze')).join(), 'ja,ja,nach', 'Sommer 4h (Limit): 08–12 und 12–16 regulär, 16–20 nachbörslich')
-    gleich([12, 16, 20].map((h) => urteil(WI + h * STD, 4 * STD, 'kerze')).join(), 'ja,ja,ja', 'Winter 4h (Limit): 07–11, 11–15, 15–19 berühren die Sitzung')
+    // RAS-05: «berührt» genügt nicht mehr — die Kerze muss mindestens zur Hälfte in der Sitzung liegen.
+    gleich([12, 16, 20].map((h) => urteil(WI + h * STD, 4 * STD, 'kerze')).join(), 'vor,ja,nach', 'Winter 4h (Limit): 07–11 (1,5 h in der Sitzung) und 15–19 (1 h) gesperrt, 11–15 regulär')
+    ok([12, 16, 20].every((h) => kerzeBeruehrtRegulaer(WI + h * STD, 4 * STD)), '…obwohl alle drei die Sitzung berühren (Chart-Regel)')
+    gleich(urteil(ny(SO, 8), 4 * STD, 'kerze') + urteil(ny(SO, 12), 4 * STD, 'kerze'), 'jaja', 'Sommer 4h 08–12: 2,5 von 4 Stunden in der Sitzung → zugelassen; 12–16 ganz')
+    gleich(urteil(ny(SO, 9), STD, 'kerze'), 'ja', '1h ab 09:00: genau die Hälfte (30 von 60 Minuten) → zugelassen')
+    // 2h: Sommer 08–10 (eine halbe Stunde von zwei) gesperrt, Winter 09–11 und 15–17 zugelassen (15–17 genau die Hälfte)
+    gleich(urteil(ny(SO, 8), 2 * STD, 'kerze') + ',' + urteil(ny(WI, 9), 2 * STD, 'kerze') + ',' + urteil(ny(WI, 15), 2 * STD, 'kerze') + ',' + urteil(ny(SO, 16), 2 * STD, 'kerze'),
+        'vor,ja,ja,nach', '2h: 08–10 gesperrt, 09–11 und 15–17 zugelassen, 16–18 gesperrt')
+    // Keine zugelassene Kerze liegt mehr als zur Hälfte ausserhalb, auf keiner Zeiteinheit (vier Wochen samt Zeitumstellung und Thanksgiving)
+    {
+        let schlecht = ''
+        for (const iv of [5 * 60_000, 15 * 60_000, 30 * 60_000, STD, 2 * STD, 4 * STD, 6 * STD, 12 * STD]) {
+            for (let t = utc(2026, 9, 26); t < utc(2026, 10, 30) && !schlecht; t += iv) {
+                const liste = sitzungenDerKerze(t, iv)
+                const drin = liste.filter((x) => x === 'regulaer').length
+                const u = einstiegRegulaer(t, iv, 'kerze')
+                if (u.regulaer !== (2 * drin >= liste.length) || (!u.regulaer && (u.sitzung === 'regulaer' || !u.sitzung))) schlecht = `${new Date(t).toISOString()} ${iv / 60_000}m`
+            }
+        }
+        ok(!schlecht, `Limit in der Kerze: zugelassen genau dann, wenn mindestens die Hälfte in der Sitzung liegt; die Begründung nennt nie «regulär» ${schlecht}`)
+    }
+    // Verkürzter Tag (27.11.2026, Schluss 13:00): 4h 12:00–16:00 UTC = 07–11 gesperrt, 11–15 hat nur 2 von 4 Stunden → zugelassen
+    gleich(urteil(utc(2026, 10, 27, 16), 4 * STD, 'kerze'), 'ja', 'verkürzter Tag, 4h 11–15: genau die Hälfte bis 13:00 → zugelassen')
     gleich([12, 16, 20].map((h) => urteil(SO + h * STD, 4 * STD, 'eroeffnung')).join(), 'vor,ja,nach', 'Sommer 4h zur Eröffnung: 08:00 vorbörslich, 12:00 regulär, 16:00 nachbörslich')
     gleich([12, 16, 20].map((h) => urteil(WI + h * STD, 4 * STD, 'eroeffnung')).join(), 'vor,ja,ja', 'Winter 4h zur Eröffnung: 07:00 vorbörslich, 11:00 und 15:00 regulär')
     gleich(urteil(WI + 20 * STD, 4 * STD, 'schluss'), 'nach', 'Winter 4h 15–19, Einstieg zum Schluss (19:00): nachbörslich')
