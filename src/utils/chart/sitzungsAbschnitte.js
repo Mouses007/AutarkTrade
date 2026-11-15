@@ -19,7 +19,7 @@
  *
  * Rein — kein Netz, kein DOM (Selbsttest `src/utils/__selftest-sitzungs-abschnitte.mjs`).
  */
-import { sitzungenDerKerze } from '../../../shared/aktien-sitzung.js'
+import { sitzungenDerKerze, kalenderTageNY } from '../../../shared/aktien-sitzung.js'
 
 /** Bis zu dieser Kerzenlänge wird hinterlegt; ab 1d sagt eine Sitzung nichts mehr. */
 export const SITZUNG_BIS_MS = 4 * 3_600_000
@@ -97,7 +97,8 @@ export function zahlenMarken(termine, jetzt = Date.now()) {
         const kommend = n.zeit >= jetzt
         aus.set(n.zeit, {
             zeit: n.zeit, kommend, geschaetzt: kommend && n.geschaetzt === true,
-            tage: kommend ? Math.max(0, Math.round((n.zeit - jetzt) / 86_400_000)) : null,
+            // Kalendertage nach New Yorker Datum, nicht gerundete 24-h-Blöcke (FUN-H-011).
+            tage: kommend ? Math.max(0, kalenderTageNY(n.zeit, jetzt)) : null,
         })
     }
     return [...aus.values()].sort((a, b) => a.zeit - b.zeit)

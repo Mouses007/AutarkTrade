@@ -79,6 +79,22 @@ export function nyTeile(ms) {
     }
 }
 
+/**
+ * Ganze Kalendertage von `jetzt` bis `zeit` nach New Yorker Datum (0 = heute,
+ * 1 = morgen, negativ = vorbei) — oder `null` ohne gültigen Zeitpunkt.
+ *
+ * Die EINE Zählung für «Zahlen heute / morgen / in N Tagen» (Audit 15.11.2026,
+ * FUN-H-011): Radar-Spalte, Titel-Seite, Kaufzettel und Chart-Schild zählten
+ * je anders (gerundete 24-h-Blöcke bzw. Ortszeit) und widersprachen sich um
+ * einen Tag. New York, weil der Termin ein Börsentag dort ist — «heute» heisst
+ * «an diesem US-Handelsdatum», gleich in welcher Zeitzone der Rechner steht.
+ */
+export function kalenderTageNY(zeit, jetzt = Date.now()) {
+    if (zeit == null || zeit === '' || !Number.isFinite(Number(zeit)) || !Number.isFinite(Number(jetzt))) return null
+    const tagMs = (ms) => Date.parse(`${nyTeile(Number(ms)).datum}T00:00:00Z`)
+    return Math.round((tagMs(zeit) - tagMs(jetzt)) / 86_400_000)
+}
+
 /* ── US-Börsenfeiertage (NYSE/Nasdaq) ─────────────────────────────── */
 
 const tag = (jahr, monat, t) => new Date(Date.UTC(jahr, monat - 1, t))

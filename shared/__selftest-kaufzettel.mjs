@@ -102,6 +102,10 @@ const nah = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(
     pruefe('Zahlen von heute früh noch', t(-5)?.tage === 0)
     pruefe('Zahlen von gestern nicht', t(-30) === null)
     pruefe('geschätzter Termin bleibt gekennzeichnet', t(10, { geschaetzt: true }).geschaetzt === true)
+    // FUN-H-011: gezählt wird das New Yorker Datum — 02:00 UTC ist dort noch der Vorabend (21:00).
+    const abend = Date.parse('2026-11-11T02:00:00Z'), meldung = Date.parse('2026-11-11T21:20:00Z')
+    pruefe('Vorabend in New York: die Meldung ist «morgen», gleich in welcher Ortszeit', zettelHinweise({ art: 'perp', jetzt: abend, termin: { zeit: meldung } }).zahlen?.tage === 1)
+    pruefe('am Morgen desselben New Yorker Tags: «heute»', zettelHinweise({ art: 'perp', jetzt: Date.parse('2026-11-11T07:00:00Z'), termin: { zeit: meldung } }).zahlen?.tage === 0)
     pruefe('ohne Termin kein Hinweis', zettelHinweise({ art: 'perp', jetzt: mittwoch }).zahlen === null)
 }
 // --- Text ---------------------------------------------------------------------------

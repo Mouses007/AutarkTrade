@@ -19,6 +19,8 @@
  * Rein — kein Netz, keine Datenbank.
  */
 
+import { kalenderTageNY } from './aktien-sitzung.js'
+
 export const FENSTER_VOR_MS = 24 * 3_600_000
 export const FENSTER_NACH_MS = 24 * 3_600_000
 
@@ -71,9 +73,14 @@ export function terminListe(roh) {
     return { liste, bekanntAb: liste.length ? liste[0] - QUARTAL_MS + FENSTER_NACH_MS : null }
 }
 
-/** Ganze Kalendertage bis zum nächsten Termin ab `jetzt` (UTC-Tage; 0 = heute) — oder null. */
+/**
+ * Ganze Kalendertage (New Yorker Datum) bis zum nächsten Termin ab `jetzt` —
+ * 0 = heute oder in den letzten 24 Stunden gemeldet — oder null.
+ * Bis 15.11.2026 gerundete 24-h-Blöcke: eine Meldung heute Abend (in 14 h)
+ * stand als «1 T.» (Audit FUN-H-011).
+ */
 export function tageBisZahlen(liste = [], jetzt = Date.now()) {
     const naechster = liste.find((t) => t >= jetzt - FENSTER_NACH_MS)
     if (naechster == null) return null
-    return Math.max(0, Math.round((naechster - jetzt) / 86_400_000))
+    return Math.max(0, kalenderTageNY(naechster, jetzt))
 }

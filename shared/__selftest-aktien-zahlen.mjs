@@ -36,4 +36,9 @@ ok(tageBisZahlen([T], T - 2 * TAG - 3 * H) === 2 && tageBisZahlen([T], T - 3 * H
 ok(tageBisZahlen([T], T + 12 * H) === 0 && tageBisZahlen([T], T + 2 * TAG) === null, 'am Tag danach noch 0, später kein Termin mehr')
 ok(tageBisZahlen([T - 98 * TAG, T], T - 50 * TAG) === 50 && tageBisZahlen([], T) === null, 'vergangene Termine zählen nicht')
 
+// FUN-H-011: Kalendertage nach New Yorker Datum, keine gerundeten 24-h-Blöcke.
+ok(tageBisZahlen([T], T - 14 * H) === 0, 'Meldung heute Abend (in 14 h, Lauf 02:20 New York): heute')
+ok(tageBisZahlen([T], T - 13 * H) === 0 && tageBisZahlen([T], T - 35 * H) === 1 && tageBisZahlen([T], T - 39 * H) === 1, '13 h → heute, 35 h und 39 h → morgen')
+ok(tageBisZahlen([T], T - 17 * H) === 1, 'Lauf am Vorabend 23:20 New York: morgen')
+
 console.log(`✓ Aktien-Zahlentermine: ${n} Prüfungen`)

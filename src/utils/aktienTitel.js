@@ -2,6 +2,7 @@
  * Rechenhilfen der Titel-Seite einer Aktie (`components/aktien/TitelAnsicht.vue`).
  * Rein — die Seite zeigt nur, was hier gemessen wird; Unbekanntes bleibt null.
  */
+import { kalenderTageNY } from '../../shared/aktien-sitzung.js'
 
 /** Wo steht der Kurs in einer Spanne? 0 = am Tief, 100 = am Hoch; ausserhalb geklemmt. */
 export function lageInSpanne(preis, tief, hoch) {
@@ -14,11 +15,14 @@ export function abstandPct(wert, preis) {
     return typeof wert === 'number' && wert > 0 && typeof preis === 'number' && preis > 0 ? (wert / preis - 1) * 100 : null
 }
 
-/** Ganze Kalendertage bis zu einem Zeitpunkt (0 = heute, negativ = vorbei) in Ortszeit. */
+/**
+ * Ganze Kalendertage bis zu einem Zeitpunkt (0 = heute, negativ = vorbei) nach
+ * New Yorker Datum — dieselbe Zählung wie Radar, Kaufzettel und Chart
+ * (`kalenderTageNY`, FUN-H-011; bis 15.11.2026 Ortszeit des Rechners).
+ */
 export function tageBis(zeit, jetzt = Date.now()) {
     if (!zeit) return null
-    const tag = (ms) => { const d = new Date(ms); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) }
-    return Math.round((tag(zeit) - tag(jetzt)) / 86_400_000)
+    return kalenderTageNY(zeit, jetzt)
 }
 
 /**

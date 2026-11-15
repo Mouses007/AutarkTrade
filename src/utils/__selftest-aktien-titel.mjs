@@ -16,10 +16,13 @@ ok(lageInSpanne(null, 100, 200) === null && lageInSpanne(5, 7, 7) === null, 'unb
 ok(abstandPct(300, 150) === 100 && Math.round(abstandPct(170, 162.85) * 10) === 44, 'Abstand zum Kurs')
 ok(abstandPct(null, 150) === null && abstandPct(0, 150) === null && abstandPct(300, 0) === null, 'ohne Ziel oder Kurs → null')
 
-const jetzt = new Date(2026, 10, 15, 23, 30).getTime()
-ok(tageBis(new Date(2026, 10, 17, 1, 0).getTime(), jetzt) === 2, 'übermorgen früh sind 2 Kalendertage')
-ok(tageBis(new Date(2026, 10, 15, 0, 5).getTime(), jetzt) === 0 && tageBis(new Date(2026, 10, 14, 23, 0).getTime(), jetzt) === -1, 'heute und gestern')
+// Kalendertage nach New Yorker Datum (FUN-H-011) — unabhängig von der Zeitzone des Rechners.
+const jetzt = Date.UTC(2026, 10, 16, 4, 30)                 // So 15.11., 23:30 New York
+ok(tageBis(Date.UTC(2026, 10, 17, 6, 0), jetzt) === 2, 'übermorgen früh (Di 01:00 New York) sind 2 Kalendertage')
+ok(tageBis(Date.UTC(2026, 10, 15, 5, 5), jetzt) === 0 && tageBis(Date.UTC(2026, 10, 15, 4, 0), jetzt) === -1, 'heute und gestern')
 ok(tageBis(null) === null, 'ohne Termin → null')
+// 02:00 in Zürich ist in New York noch der Vortag: die Meldung «heute» 16:20 New York ist dort «morgen».
+ok(tageBis(Date.UTC(2026, 10, 18, 21, 20), Date.UTC(2026, 10, 18, 1, 0)) === 1 && tageBis(Date.UTC(2026, 10, 18, 21, 20), Date.UTC(2026, 10, 18, 7, 0)) === 0, 'gezählt wird das New Yorker Datum, nicht die Ortszeit')
 
 const b = einstufungsBilanz([
     { aktion: 'main', ziel: 300, zielVorher: 390 },

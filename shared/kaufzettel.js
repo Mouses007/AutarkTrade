@@ -19,7 +19,7 @@
  *     Das ist eine Schätzung — der Zettel zeigt sie als änderbares Feld.
  */
 import { rechnePosition, MAX_HEBEL } from './tradeRechner.js'
-import { sitzungVon } from './aktien-sitzung.js'
+import { sitzungVon, kalenderTageNY } from './aktien-sitzung.js'
 
 export const ARTEN = ['perp', 'token-spot', 'broker-spot']
 export const MMR_AKTIEN_FUTURE = 0.025
@@ -40,12 +40,6 @@ export function wartungsmargeAusHebel(maxHebel) {
 /** Taker-Gebühr je Seite in Prozent, als Vorbelegung. Spot ist eine Annahme — das Feld bleibt änderbar. */
 export const GEBUEHR_VORGABE = { perp: 0.06, 'token-spot': 0.1, 'broker-spot': 0.1 }
 export const ZAHLEN_VORLAUF_TAGE = 2
-
-function kalenderTage(zeit, jetzt) {
-    if (!Number.isFinite(zeit)) return null
-    const tag = (ms) => { const d = new Date(ms); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) }
-    return Math.round((tag(zeit) - tag(jetzt)) / 86_400_000)
-}
 
 export const istSpot = (art) => art !== 'perp'
 
@@ -136,9 +130,10 @@ export function rechneKaufzettel(o = {}) {
  */
 export function zettelHinweise({ art, jetzt = Date.now(), termin = null } = {}) {
     const sitzung = sitzungVon(jetzt)
-    // Ganze Kalendertage in Ortszeit, wie die Titel-Seite zählt («in 2 Tagen»):
+    // Ganze Kalendertage nach New Yorker Datum, wie Titel-Seite, Radar und Chart zählen
+    // (`kalenderTageNY`, FUN-H-011 — bis 15.11.2026 Ortszeit des Rechners):
     // 0 = heute (auch wenn die Meldung schon heute früh war), höchstens zwei Tage voraus.
-    const tage = termin?.zeit ? kalenderTage(Number(termin.zeit), jetzt) : null
+    const tage = termin?.zeit ? kalenderTageNY(Number(termin.zeit), jetzt) : null
     const zahlen = tage != null && tage >= 0 && tage <= ZAHLEN_VORLAUF_TAGE
         ? { zeit: Number(termin.zeit), tage, geschaetzt: termin.geschaetzt === true }
         : null

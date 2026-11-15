@@ -4,7 +4,7 @@
  *   node shared/__selftest-aktien-sitzung.mjs
  */
 import assert from 'node:assert/strict'
-import { nyTeile, feiertage, istHandelstag, sitzungVon, handelstagVon, handelstagBeginn, regimeWechsel, sitzungsBilanz, REGIME_STICHTAGE, verkuerzteTage, istVerkuerzt,
+import { kalenderTageNY, nyTeile, feiertage, istHandelstag, sitzungVon, handelstagVon, handelstagBeginn, regimeWechsel, sitzungsBilanz, REGIME_STICHTAGE, verkuerzteTage, istVerkuerzt,
     sitzungenDerKerze, kerzeBeruehrtRegulaer, einstiegRegulaer, sitzungsRegelAnwendbar } from './aktien-sitzung.js'
 
 let n = 0
@@ -146,6 +146,19 @@ ok(REGIME_STICHTAGE.binance > REGIME_STICHTAGE.bitget && REGIME_STICHTAGE.bituni
     }
     ok(sitzungsRegelAnwendbar(12 * STD) && !sitzungsRegelAnwendbar(24 * STD) && !sitzungsRegelAnwendbar(0), 'anwendbar unter 1d')
     ok(einstiegRegulaer(ny(SO, 10), STD).regulaer && einstiegRegulaer(ny(SO, 10), STD).anwendbar, 'Vorgabe der Art: Kerze')
+}
+
+// ── Kalendertage nach New Yorker Datum (FUN-H-011) ──
+{
+    const meldung = Date.UTC(2026, 10, 18, 21, 20)                      // Mi 18.11.2026, 16:20 New York
+    gleich(kalenderTageNY(meldung, Date.UTC(2026, 10, 18, 7, 0)), 0, 'Meldung heute Abend (in 14 h): heute, nicht «1 Tag»')
+    gleich(kalenderTageNY(meldung, Date.UTC(2026, 10, 17, 6, 0)), 1, 'in 39 Stunden, aber morgen: 1, nicht 2')
+    gleich(kalenderTageNY(meldung, Date.UTC(2026, 10, 18, 4, 59)), 1, '23:59 New York am Vortag: morgen')
+    gleich(kalenderTageNY(meldung, Date.UTC(2026, 10, 18, 5, 0)), 0, 'ab Mitternacht New York: heute')
+    gleich(kalenderTageNY(meldung, Date.UTC(2026, 10, 19, 15, 0)), -1, 'am Tag danach: -1')
+    // Über die Zeitumstellung (1.11.2026) zählt der Tag mit 25 Stunden als einer.
+    gleich(kalenderTageNY(Date.UTC(2026, 10, 2, 21, 0), Date.UTC(2026, 9, 31, 14, 0)), 2, 'über die Zeitumstellung: Sa → Mo sind 2 Tage')
+    ok(kalenderTageNY(null) === null && kalenderTageNY(NaN, 0) === null && kalenderTageNY('', 0) === null, 'ohne Zeitpunkt → null')
 }
 
 // ── Auswertung ──
