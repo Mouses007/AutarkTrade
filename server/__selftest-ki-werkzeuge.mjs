@@ -25,7 +25,7 @@ console.log = () => {}           // Migrationen der Wegwerf-Datenbank melden jed
 const { initDb } = await import('./database.js')
 const knex = await initDb()
 console.log = log
-const { AGENT_TOOLS, executeTool, SCHREIBENDE_WERKZEUGE } = await import('./ai-agent-tools.js')
+const { AGENT_TOOLS, executeTool, SCHREIBENDE_WERKZEUGE, WERKZEUG_AUSFUEHRUNG } = await import('./ai-agent-tools.js')
 const { BEREICHS_WERKZEUGE, BEREICHS_WERKZEUGE_IMPL } = await import('./ki-werkzeuge/index.js')
 
 const jetzt = Date.now()
@@ -58,7 +58,54 @@ await knex('portfolio_bewegungen').insert({ quelle: 'bitpanda', zeit: jetzt, art
         p(`${t.name}: Schema ist ein Objekt`, t.parameters?.type === 'object')
     }
     for (const n of SCHREIBENDE_WERKZEUGE) p(`schreibendes Werkzeug ${n} existiert`, namen.includes(n))
-    p('Fremdtext-Werkzeuge markiert', ['query_hype_radar', 'query_hype_token', 'query_lagebericht', 'query_portfolio'].every((n) => AGENT_TOOLS.find((t) => t.name === n)?.fremdtext === true))
+    p('Fremdtext-Werkzeuge markiert', ['query_hype_radar', 'query_hype_token', 'query_lagebericht', 'query_portfolio', 'query_newcomer_radar'].every((n) => AGENT_TOOLS.find((t) => t.name === n)?.fremdtext === true))
+}
+
+{   // Kennzeichen am Quelltext (Audit 15.11.2026, SEC-S-002): wer ein Zitat baut, trägt `fremdtext: true`
+    const { readFileSync, readdirSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const pfad = await import('node:path')
+    const hier = pfad.dirname(fileURLToPath(import.meta.url))
+    const dateien = ['ai-agent-tools.js', 'strategy-tools.js', ...readdirSync(pfad.join(hier, 'ki-werkzeuge')).filter((d) => d.endsWith('.js')).map((d) => pfad.join('ki-werkzeuge', d))]
+    const ZITAT = /\b(?:zitatZeile|alsZitat|zitatBlock)\(|<<</
+    // Jede Datei in ihre obersten Erklärungen zerlegen (Zeile beginnt in Spalte 0 mit function/const/let)
+    const KOPF = /^(?:export\s+)?(?:async\s+)?(?:function\s+|const\s+|let\s+)([A-Za-z_$][\w$]*)/
+    const bloecke = new Map()          // "datei:name" → { text, datei }
+    for (const d of dateien) {
+        let name = null, zeilen = []
+        const fertig = () => { if (name) bloecke.set(`${d}:${name}`, { datei: d, name, text: zeilen.join('\n') }) }
+        for (const z of readFileSync(pfad.join(hier, d), 'utf8').split('\n')) {
+            const m = KOPF.exec(z)
+            if (m) { fertig(); name = m[1]; zeilen = [] }
+            // Kommentare zählen nicht: sie erwähnen `zitatZeile`, ohne es zu benutzen
+            if (name && !/^\s*(\/\/|\*|\/\*)/.test(z)) zeilen.push(z.replace(/\s\/\/ .*$/, ''))
+        }
+        fertig()
+    }
+    // Erreicht ein Block ein Zitat — selbst oder über Hilfsfunktionen derselben Datei (`name(z)`, `kuerzel(p)`)?
+    const bautZitat = (schluessel, gesehen = new Set()) => {
+        if (gesehen.has(schluessel)) return false
+        gesehen.add(schluessel)
+        const b = bloecke.get(schluessel)
+        if (!b) return false
+        if (ZITAT.test(b.text)) return true
+        for (const [k, anderer] of bloecke) {
+            if (anderer.datei !== b.datei || k === schluessel) continue
+            if (new RegExp(`(?<![.\\w$])${anderer.name.replace(/\$/g, '\\$')}\\(`).test(b.text) && bautZitat(k, gesehen)) return true
+        }
+        return false
+    }
+    const blockVon = (fn) => [...bloecke.keys()].filter((k) => k.endsWith(`:${fn.name}`))
+    const ohneKennzeichen = (werkzeuge) => werkzeuge.filter((t) => !t.fremdtext && blockVon(WERKZEUG_AUSFUEHRUNG[t.name]).some((k) => bautZitat(k))).map((t) => t.name)
+    const nichtGefunden = AGENT_TOOLS.filter((t) => blockVon(WERKZEUG_AUSFUEHRUNG[t.name] || {}).length !== 1).map((t) => t.name)
+    p('jedes Werkzeug: Quelltext der Ausführung gefunden (sonst prüft der Test nichts)', nichtGefunden.length === 0, nichtGefunden.join(', '))
+    const offen = ohneKennzeichen(AGENT_TOOLS)
+    p('jedes Werkzeug, das ein Zitat baut, trägt fremdtext: true', offen.length === 0, offen.join(', '))
+    const mitZitat = AGENT_TOOLS.filter((t) => blockVon(WERKZEUG_AUSFUEHRUNG[t.name]).some((k) => bautZitat(k))).map((t) => t.name).sort()
+    p('erkannt werden genau die fünf Fremdtext-Werkzeuge (auch über Hilfsfunktionen)', mitZitat.join() === ['query_hype_radar', 'query_hype_token', 'query_lagebericht', 'query_newcomer_radar', 'query_portfolio'].join(), mitZitat.join())
+    // Gegenprobe: so stand es vor dem Fix — der Newcomer-Radar ohne Kennzeichen fällt auf
+    const alt = ohneKennzeichen(AGENT_TOOLS.map((t) => (t.name === 'query_newcomer_radar' ? { ...t, fremdtext: undefined } : t)))
+    p('Gegenprobe: Newcomer-Radar ohne Kennzeichen wird gemeldet', alt.join() === 'query_newcomer_radar', alt.join())
 }
 
 {   // Hype-Radar: Token finden, Fremdtext markiert, Befundtext bleibt drin
@@ -117,6 +164,9 @@ await knex('portfolio_bewegungen').insert({ quelle: 'bitpanda', zeit: jetzt, art
     const lauf2 = { fremdtextGesehen: false }
     await executeTool('query_lagebericht', {}, knex, lauf2)
     p('Lagebericht setzt die Sperre', lauf2.fremdtextGesehen === true)
+    const laufN = { fremdtextGesehen: false }
+    await executeTool('query_newcomer_radar', {}, knex, laufN)
+    p('Newcomer-Radar setzt die Sperre (SEC-S-002)', laufN.fremdtextGesehen === true && /gesperrt/.test((await executeTool('propose_param_change', {}, knex, laufN)).error || ''))
     const lauf3 = { fremdtextGesehen: false }
     await executeTool('query_hype_token', {}, knex, lauf3)
     p('auch ein Fehlergebnis eines Fremdtext-Werkzeugs sperrt', lauf3.fremdtextGesehen === true)

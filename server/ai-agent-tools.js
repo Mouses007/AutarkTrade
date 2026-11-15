@@ -24,7 +24,7 @@
  * antworten können, auch zum Hype-Radar) gilt sie eng begrenzt gelockert:
  *
  *   1. Fremdtext geben NUR Werkzeuge zurück, die `fremdtext: true` tragen
- *      (`server/ki-werkzeuge/`: Hype-Radar, Portfolio, Lagebericht, Newcomer).
+ *      (`server/ki-werkzeuge/`: Hype-Radar, Portfolio, Lagebericht, Newcomer-Radar).
  *   2. Er ist dort auf eine Zeile gekürzt und als Zitat markiert
  *      (`zitatZeile`), und der Systemprompt trägt `ZITAT_REGEL`. Nie hinaus
  *      gehen Webseitentexte, Befund-Freitexte, Beleg-Adressen, einzelne
@@ -42,7 +42,9 @@
  *
  * Die Markierung ist keine Mauer (siehe `server/fremdtext.js`); die Mauer ist
  * Punkt 3. Wer ein schreibendes Werkzeug ergänzt, trägt es in
- * `SCHREIBENDE_WERKZEUGE` ein — `__selftest-ki-werkzeuge.mjs` prüft die Sperre.
+ * `SCHREIBENDE_WERKZEUGE` ein — `__selftest-ki-werkzeuge.mjs` prüft die Sperre
+ * und dass jedes Werkzeug, dessen Quelltext ein Zitat baut (`zitatZeile(` …),
+ * das Kennzeichen trägt.
  */
 
 import { logWarn } from './logger.js'
@@ -352,6 +354,9 @@ const WERKZEUGE = {
     ...BEREICHS_WERKZEUGE_IMPL,
 }
 
+/** Name → Ausführung, nur zum Lesen (der Selbsttest prüft daran das Kennzeichen `fremdtext`). */
+export const WERKZEUG_AUSFUEHRUNG = Object.freeze({ ...WERKZEUGE })
+
 /**
  * Execute a tool by name with given parameters.
  * @param {string} toolName
@@ -366,7 +371,7 @@ export async function executeTool(toolName, params, knex, lauf = null) {
         return { error: `Unknown tool: ${toolName}` }
     }
     if (lauf?.fremdtextGesehen && SCHREIBENDE_WERKZEUGE.has(toolName)) {
-        return { error: 'In diesem Gespräch wurde bereits Fremdtext gelesen (Token-Namen oder der Lagebericht). Danach sind Backtest und Parametervorschlag gesperrt. Der Nutzer kann die Frage in einem neuen Gespräch stellen.' }
+        return { error: 'In diesem Gespräch wurde bereits Fremdtext gelesen (Token- oder Firmennamen oder der Lagebericht). Danach sind Backtest und Parametervorschlag gesperrt. Der Nutzer kann die Frage in einem neuen Gespräch stellen.' }
     }
 
     try {
