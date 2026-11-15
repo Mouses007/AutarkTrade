@@ -343,6 +343,8 @@ export function registriereApiRouten(app) {
             await knex('settings').where('id', 1).update(updateData)
             // Aktien-Modus umgeschaltet: der Aktien-Kontext merkt den Schalter 30 s — sofort neu lesen (FUN-K-002).
             if (updateData.modusAktienAn !== undefined) (await import('./aktien/kontext.js')).vergissModus()
+            // Eben eingeschaltet: den Titel-Stamm gleich holen (im Hintergrund), nicht erst beim nächsten Takt in bis zu 30 Minuten.
+            if (Number(updateData.modusAktienAn) === 1) import('./aktien/stamm.js').then((m) => m.gleicheAb()).catch(() => {})
             const row = await knex('settings').where('id', 1).first()
             res.json(settingsAusliefern(row))
         } catch (error) {

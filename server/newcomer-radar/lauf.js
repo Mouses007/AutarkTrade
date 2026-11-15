@@ -181,11 +181,27 @@ export async function starteLauf(opt = {}) {
     return startet
 }
 
+const abgleichEcht = async () => (await import('../aktien/stamm.js')).gleicheAb()
+let abgleich = abgleichEcht
+/** Nur für Selbsttests: den Stamm-Abgleich stellen (`null` = wieder der echte). */
+export function _setzeAbgleich(fn) { abgleich = typeof fn === 'function' ? fn : abgleichEcht }
+
 async function beginneLauf(opt) {
     const knex = getKnex()
     const jetzt = Date.now()
     const gespeichert = new Map((await knex('newcomer_titel').select('instrumentId', 'kursSymbol', 'zuordnung', 'stand')).map((z) => [z.instrumentId, z]))
-    let titel = (await leseStamm(knex, { anlageklasse: 'aktien', grenze: 5000 }))
+    let stamm = await leseStamm(knex, { anlageklasse: 'aktien', grenze: 5000 })
+    if (!stamm.length) {
+        // Leerer Stamm (Aktien-Modus eben erst eingeschaltet, der Takt lief noch nicht): erst abgleichen.
+        // Bleibt er leer, sagt der Lauf das, statt «0 bewertet» zu melden.
+        try { await abgleich() } catch { /* bleibt leer */ }
+        stamm = await leseStamm(knex, { anlageklasse: 'aktien', grenze: 5000 })
+        if (!stamm.length) {
+            stand = { laeuft: false, beginn: jetzt, gesamt: 0, fertig: 0, bewertet: 0, ohneKurse: 0, fehler: 0, abbruch: 'stammLeer', ende: Date.now() }
+            return stand
+        }
+    }
+    let titel = stamm
         .filter((t) => UNTERARTEN.includes(t.unterart || 'aktie'))
         .filter((t) => opt.alle || !(Number(gespeichert.get(t.id)?.stand) > jetzt - FRISCH_MS))
     const rang = (t) => (t.unterart === 'vorboerslich' ? 0 : t.listungen.some((l) => l.handelsplatz !== 'bitpanda') ? 1 : 2)

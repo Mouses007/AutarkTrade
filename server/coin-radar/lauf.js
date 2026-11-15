@@ -103,7 +103,14 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         const quelle = (await marktdaten.fordere('ticker', { markt: 'futures' })).id
         aktienTitel = await ladeAktienUniversum(knex, quelle)
         if (!aktienTitel.size) {
-            throw new Error('Im Stamm steht kein Aktien-Future der Marktdatenquelle. Zuerst unter «Handelbare Titel» den Abgleich laufen lassen.')
+            // Leerer Stamm (Aktien-Modus eben erst eingeschaltet, der Takt lief noch nicht):
+            // den Abgleich selbst anstossen, statt den Nutzer auf eine andere Seite zu schicken.
+            melde({ schritt: 'stamm' })
+            try { await (await import('../aktien/stamm.js')).gleicheAb() } catch { /* Meldung unten */ }
+            aktienTitel = await ladeAktienUniversum(knex, quelle)
+        }
+        if (!aktienTitel.size) {
+            throw new Error('Im Stamm steht kein Aktien-Future der Marktdatenquelle, auch nach einem Abgleich nicht. Unter «Aktien» zeigt «Jetzt abgleichen», welche Börsenliste fehlt')
         }
     }
     const [handelbar, testbar] = aktien ? [null, null] : await Promise.all([holeHandelbar(), holeTestbar()])

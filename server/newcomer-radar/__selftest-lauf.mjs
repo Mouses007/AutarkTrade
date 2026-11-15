@@ -37,7 +37,7 @@ const { initDb } = await import('../database.js')
 const knex = await initDb()
 const { _setzeLeser } = await import('../quellen/freigabe.js')
 _setzeLeser(async () => true)
-const { starteLauf, laufStand, leseTitel, zaehleTitel } = await import('./lauf.js')
+const { starteLauf, laufStand, leseTitel, zaehleTitel, _setzeAbgleich } = await import('./lauf.js')
 
 // ── Stamm: drei Titel ohne Namen (keine Namenssuche), je eine aktive Listung ──
 const jetzt = Date.now()
@@ -77,6 +77,22 @@ gleich(await knex('newcomer_titel').count({ n: '*' }).first().then((z) => Number
 await knex('instrument_listungen').insert({ instrumentId: ids.AAA, handelsplatz: 'pionex', symbol: 'AAAX_USDT', art: 'token-spot', sicher: 1, aktiv: 1, ersteSichtung: jetzt, letzteSichtung: jetzt })
 const wieder = await leseTitel(knex)
 ok(wieder[0].ticker === 'AAA' && wieder[0].listungen.length === 1 && wieder[0].listungen[0].handelsplatz === 'pionex', 'eine aktive Listung genügt; gezeigt wird nur sie')
+
+// ── Leerer Stamm: der Lauf gleicht zuerst ab; bleibt der Stamm leer, sagt er das ──
+await knex('newcomer_titel').del(); await knex('instrument_listungen').del(); await knex('instrumente').del()
+let abgleiche = 0
+_setzeAbgleich(async () => { abgleiche++ })
+const leer = await starteLauf({ alle: true })
+ok(abgleiche === 1 && leer.laeuft === false && leer.abbruch === 'stammLeer' && leer.gesamt === 0, 'leerer Stamm, Abgleich bringt nichts: kein Lauf, Grund «stammLeer»')
+_setzeAbgleich(async () => {
+    abgleiche++
+    const [id] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'DDD', unterart: 'aktie', stand: jetzt, createdAt: jetzt })
+    await knex('instrument_listungen').insert({ instrumentId: id, handelsplatz: 'bitget', symbol: 'DDDUSDT', art: 'perp', quote: 'USDT', sicher: 1, aktiv: 1, ersteSichtung: jetzt, letzteSichtung: jetzt })
+})
+const gefuellt = await starteLauf({ alle: true })
+ok(abgleiche === 2 && gefuellt.gesamt === 1 && gefuellt.abbruch === null, 'leerer Stamm, Abgleich füllt ihn: der Lauf rechnet die neuen Titel')
+while (laufStand().laeuft) await new Promise((r) => setTimeout(r, 50))
+_setzeAbgleich(null)
 
 console.log = log
 await knex.destroy()
