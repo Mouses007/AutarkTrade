@@ -32,4 +32,16 @@ export function setzeAnzeigeSprache(sprache) {
 /** Kopie von `d` in der Sprache der Oberfläche — nur zum Formatieren. */
 export const anzeige = (d) => d.locale(anzeigeSprache)
 
+/**
+ * Zeitstempel aus der Datenbank (`createdAt`/`updatedAt`) als Ortszeit (BUG-R-208).
+ *
+ * SQLite liefert `knex.fn.now()` als "2026-11-15 14:14:14" — UTC OHNE Zonenangabe.
+ * `dayjs(wert)` läse das als Ortszeit, die Anzeige stünde um den UTC-Versatz daneben
+ * (1 h, im Sommer 2 h). PostgreSQL liefert ISO mit Zone und geht unverändert durch.
+ */
+const OHNE_ZONE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/
+export function dbZeit(wert) {
+    return typeof wert === 'string' && OHNE_ZONE.test(wert.trim()) ? dayjs.utc(wert.trim()).local() : dayjs(wert)
+}
+
 export default dayjs

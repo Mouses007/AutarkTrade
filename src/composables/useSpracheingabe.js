@@ -42,7 +42,20 @@ export function useSpracheingabe({ beiText, sprache = () => 'de-DE' } = {}) {
     const fehler = ref('')       // '' | 'verweigert' | sonstiger Fehlercode des Browsers
     let erkenner = null
 
+    /**
+     * Aufnahme beenden und alles verwerfen, was der Erkenner noch nachliefert (BUG-R-209).
+     * Für Senden, Gesprächswechsel und Aushängen: `stop()` liesse den Browser das
+     * Endergebnis nachreichen — der eben gesendete Text stünde wieder im Feld.
+     */
     function stopp() {
+        const alter = erkenner
+        erkenner = null       // ab jetzt gehört kein Ereignis des alten Erkenners mehr hierher
+        try { alter?.abort() } catch { /* schon beendet */ }
+        hoert.value = false
+    }
+
+    /** Mikrofon-Knopf aus: der Browser darf das Endergebnis des Gesagten noch liefern. */
+    function pause() {
         try { erkenner?.stop() } catch { /* schon beendet */ }
         hoert.value = false
     }
@@ -50,33 +63,46 @@ export function useSpracheingabe({ beiText, sprache = () => 'de-DE' } = {}) {
     function start() {
         grund.value = spracheingabeGrund()
         if (grund.value || hoert.value) return
+        // Ein noch auslaufender Erkenner (eben pausiert) wird ganz beendet: zwei gleichzeitig
+        // wären nicht mehr stoppbar, und sein verspätetes `end` gälte dem neuen.
+        try { erkenner?.abort() } catch { /* schon beendet */ }
         const Klasse = erkennerKlasse()
-        erkenner = new Klasse()
-        erkenner.lang = sprache()
-        erkenner.interimResults = true
-        erkenner.continuous = true
+        const dieser = new Klasse()
+        erkenner = dieser
+        dieser.lang = sprache()
+        dieser.interimResults = true
+        dieser.continuous = true
         fehler.value = ''
-        erkenner.onresult = (e) => {
+        // BUG-R-209: Ereignisse eines abgelösten oder verworfenen Erkenners wirken nicht mehr.
+        const meiner = () => erkenner === dieser
+        dieser.onresult = (e) => {
+            if (!meiner()) return
             let text = ''
             for (let i = 0; i < e.results.length; i++) text += e.results[i][0]?.transcript || ''
             beiText?.(text.trim())
         }
-        erkenner.onerror = (e) => {
+        dieser.onerror = (e) => {
+            if (!meiner()) return
             // `no-speech`/`aborted` sind keine Störung: es wurde nichts gesagt oder selbst beendet.
             if (e.error === 'not-allowed' || e.error === 'service-not-allowed') fehler.value = 'verweigert'
             else if (e.error !== 'no-speech' && e.error !== 'aborted') fehler.value = String(e.error || 'unbekannt')
         }
-        erkenner.onend = () => { hoert.value = false }
+        dieser.onend = () => {
+            if (!meiner()) return
+            erkenner = null
+            hoert.value = false
+        }
         try {
-            erkenner.start()
+            dieser.start()
             hoert.value = true
         } catch (e) {
             fehler.value = String(e?.name || 'unbekannt')
+            erkenner = null
             hoert.value = false
         }
     }
 
-    const schalte = () => (hoert.value ? stopp() : start())
+    const schalte = () => (hoert.value ? pause() : start())
     onBeforeUnmount(stopp)
 
     return { grund, hoert, fehler, start, stopp, schalte }

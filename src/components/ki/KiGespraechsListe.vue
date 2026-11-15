@@ -10,7 +10,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import dayjs, { anzeige } from '@/utils/journal/zeit.js'
+import { anzeige, dbZeit } from '@/utils/journal/zeit.js'
 import { logWarn } from '@/utils/logger.js'
 import { Symbol, Knopf } from '@/components/basis'
 
@@ -92,7 +92,8 @@ async function archiviereGewaehlte() {
 }
 
 function datum(wert) {
-    return wert ? anzeige(dayjs(wert)).format('DD.MM.YYYY HH:mm') : ''
+    // BUG-R-208: SQLite liefert UTC ohne Zonenangabe
+    return wert ? anzeige(dbZeit(wert)).format('DD.MM.YYYY HH:mm') : ''
 }
 
 onMounted(lade)
