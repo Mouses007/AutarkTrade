@@ -63,7 +63,7 @@ const zuletztGesendet = new Map()   // botId → Zeit
 const zuletztGeprueft = new Map()   // botId → Zeit
 const laeuft = new Set()            // botId — Sperre, synchron gesetzt
 const pruefungen = new Map()        // tokenHash → { zeit, pruefung } (für das Protokoll)
-const mindestCache = new Map()      // Plan ohne Einsatz → { min, zeit }
+const mindestCache = new Map()      // Plan ohne Einsatz → { min (gerundet, zum Anzeigen), genau (gemessen, zum Vergleichen), zeit }
 let mindestLaeuft = false
 
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex')
@@ -327,7 +327,7 @@ export function setupBotSteuerungRoutes(app) {
             const einsatz = Number(eingabe.einsatz)
             const schluesselPlan = JSON.stringify(['coin', 'coinM', 'spot', 'richtung', 'hebel', 'unten', 'oben', 'anzahl', 'art'].map((f) => String(eingabe[f] ?? '')))
             const gemerkt = mindestCache.get(schluesselPlan)
-            if (gemerkt && Date.now() - gemerkt.zeit < MIN_CACHE_MS) return res.json({ ok: true, min: gemerkt.min, reichtAus: einsatz >= gemerkt.min })
+            if (gemerkt && Date.now() - gemerkt.zeit < MIN_CACHE_MS) return res.json({ ok: true, min: gemerkt.min, reichtAus: einsatz >= (gemerkt.genau ?? gemerkt.min) })
             if (mindestLaeuft) return res.status(429).json({ ok: false, code: 'zuSchnell' })
             mindestLaeuft = true
             try {
@@ -341,16 +341,18 @@ export function setupBotSteuerungRoutes(app) {
                 if (pruefungBestanden(erste)) return res.json({ ok: true, min: null, reichtAus: true })
                 // Spot: Pionex nennt den Mindesteinsatz selbst, kein Herantasten nötig
                 if (bot.typ === 'spot_grid' && minAusPruefung(erste)) {
-                    const min = rundeEinsatzAuf(minAusPruefung(erste))
-                    mindestCache.set(schluesselPlan, { min, zeit: Date.now() })
-                    return res.json({ ok: true, min, reichtAus: einsatz >= min })
+                    // Verglichen wird mit dem genauen Wert, nicht mit dem aufgerundeten (FUN-R-102)
+                    const genau = minAusPruefung(erste)
+                    const min = rundeEinsatzAuf(genau)
+                    mindestCache.set(schluesselPlan, { min, genau, zeit: Date.now() })
+                    return res.json({ ok: true, min, reichtAus: einsatz >= genau })
                 }
                 if (pruefGrund(erste) !== 'einsatzZuKlein') return res.json({ ok: true, min: null, reichtAus: null, text: erste?.message || erste?.data?.reason || '' })
                 const schaetzung = Number(req.body?.schaetzung)
                 const m = await mindestEinsatzFuer(k, bot, eingabe, stellen, { lo: einsatz, start: schaetzung > einsatz ? schaetzung : einsatz * 2 })
                 // Suche ohne Ergebnis: nicht „zu klein" behaupten, sondern unbekannt
                 if (m.min == null) return res.json({ ok: true, min: null, reichtAus: null, text: `Mindesteinsatz nicht ermittelt (${m.fehler || 'unbekannt'})` })
-                mindestCache.set(schluesselPlan, { min: m.min, zeit: Date.now() })
+                mindestCache.set(schluesselPlan, { min: m.min, genau: m.genau ?? m.min, zeit: Date.now() })
                 for (const [s2, w] of mindestCache) if (Date.now() - w.zeit > MIN_CACHE_MS) mindestCache.delete(s2)
                 res.json({ ok: true, min: m.min, reichtAus: false })
             } finally { mindestLaeuft = false }

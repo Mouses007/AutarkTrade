@@ -325,11 +325,20 @@ export function pruefGrund(antwort) {
     return null
 }
 
-/** Rundet einen Einsatz auf eine handliche Zahl nach OBEN (nie unter das Gemessene). */
+/**
+ * Rundet einen Einsatz auf eine handliche Zahl nach OBEN (nie unter das Gemessene).
+ *
+ * Unter 1 auf zwei gültige Stellen: Coin-M-Einsätze sind Bruchteile einer Coin
+ * (0.02 SOL). Das feste Raster 0.1 machte daraus 0.1 — ein bis über 100-fach
+ * zu hohes «Minimum» (Audit FUN-R-102). Ab 1 bleibt das Raster wie bisher
+ * (0.1 unter 10, 1 unter 100, 5 unter 1000, darüber zwei gültige Stellen).
+ */
 export function rundeEinsatzAuf(x) {
     if (!(x > 0)) return null
-    const schritt = x < 10 ? 0.1 : x < 100 ? 1 : x < 1000 ? 5 : 10 ** (Math.floor(Math.log10(x)) - 1)
-    return Number((Math.ceil(x / schritt - 1e-9) * schritt).toFixed(2))
+    const exp = Math.floor(Math.log10(x))
+    const schritt = x < 1 ? 10 ** (exp - 1) : x < 10 ? 0.1 : x < 100 ? 1 : x < 1000 ? 5 : 10 ** (exp - 1)
+    const stellen = x < 1 ? Math.max(2, 1 - exp) : 2
+    return Number((Math.ceil(x / schritt - 1e-9) * schritt).toFixed(stellen))
 }
 
 /**

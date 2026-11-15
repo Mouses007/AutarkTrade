@@ -143,6 +143,25 @@ console.log('Mindesteinsatz')
 p('Grund „less than min investment" erkannt (Text, wie Pionex ihn sendet)', pruefGrund({ result: false, message: 'Pionex API: [BOT_INVALID_ARGUMENT] less than min investment' }) === 'einsatzZuKlein')
 p('anderer Grund → null, bestanden → null', pruefGrund({ result: false, message: 'Pionex API: [BOT_INVALID_ARGUMENT] nein' }) === null && pruefGrund({ result: true, data: { checkResult: true } }) === null)
 p('Aufrunden nie unter den Wert', rundeEinsatzAuf(37.31) === 38 && rundeEinsatzAuf(4.12) === 4.2 && rundeEinsatzAuf(38) === 38 && rundeEinsatzAuf(412) === 415 && rundeEinsatzAuf(0) === null)
+// Audit FUN-R-102: Coin-M-Einsätze sind Bruchteile einer Coin — das Raster 0.1 machte aus 0.02 ein «Minimum» von 0.1
+p('Coin-M: 0.02 bleibt 0.02, kleine Beträge auf zwei gültige Stellen', rundeEinsatzAuf(0.02) === 0.02 && rundeEinsatzAuf(0.0213) === 0.022 && rundeEinsatzAuf(0.004) === 0.004 && rundeEinsatzAuf(0.00123) === 0.0013 && rundeEinsatzAuf(0.099) === 0.099 && rundeEinsatzAuf(0.0991) === 0.1,
+    [0.02, 0.0213, 0.004, 0.00123, 0.099, 0.0991].map(rundeEinsatzAuf).join())
+p('USDT-Raster ab 1 unverändert', rundeEinsatzAuf(0.8) === 0.8 && rundeEinsatzAuf(1) === 1 && rundeEinsatzAuf(9.99) === 10 && rundeEinsatzAuf(99.2) === 100 && rundeEinsatzAuf(999.9) === 1000 && rundeEinsatzAuf(1234.5) === 1300 && rundeEinsatzAuf(100000) === 100000,
+    [0.8, 1, 9.99, 99.2, 999.9, 1234.5, 100000].map(rundeEinsatzAuf).join())
+{
+    let schlecht = ''
+    for (let i = 0; i < 4000; i++) {
+        const x = 10 ** (-5 + 10 * ((i * 0.6180339887) % 1))
+        const r = rundeEinsatzAuf(x)
+        if (!(r >= x * (1 - 1e-8)) || !(r <= x * 1.1 + (x >= 1 && x < 10 ? 0.1 : x >= 100 && x < 1000 ? 5 : 0))) { schlecht = `${x} → ${r}`; break }
+    }
+    p('Aufrunden: nie unter dem Wert, höchstens rund 10 % darüber (0.00001 … 100000)', !schlecht, schlecht)
+}
+for (const echt of [0.02, 0.0037, 0.31]) {
+    let n = 0
+    const r = await sucheMindestEinsatz(async (x) => { n++; return x >= echt ? 'ok' : 'zuKlein' }, { start: echt / 2, lo: echt / 4 })
+    p(`Coin-M-Suche findet ${echt} (≥ echt, ≤ +16 %, genauer Wert dabei)`, r.min >= echt && r.min <= echt * 1.16 && r.genau >= echt && r.genau <= r.min, JSON.stringify(r) + ' n=' + n)
+}
 for (const echt of [0.8, 7, 37.3, 260, 4100]) {
     let n = 0
     const r = await sucheMindestEinsatz(async (x) => { n++; return x >= echt ? 'ok' : 'zuKlein' }, { start: 10 })

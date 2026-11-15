@@ -208,6 +208,17 @@ try {
     const m6 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '72', einsatz: '5' } })).d
     p('Pionex bremst dauernd: unbekannt statt „zu klein"', m6.ok && m6.reichtAus !== false && m6.min === null, JSON.stringify(m6))
     pionex.bremse = 0
+    // Audit FUN-R-102: Coin-M-Minimum 0.02 SOL wurde als 0.1 gemeldet, und aus dem Speicher kam danach «reicht nicht»
+    pionex.minEinsatz = 0.02; pionex.pruefungen = 0
+    const c1 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '90', einsatz: '0.005' } })).d
+    p('Coin-M: Minimum 0.02 wird nicht auf 0.1 aufgerundet', c1.reichtAus === false && c1.min >= 0.02 && c1.min <= 0.024, JSON.stringify(c1))
+    pionex.pruefungen = 0
+    const c2 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '90', einsatz: '0.05' } })).d
+    p('Coin-M: 0.05 reicht (aus dem Speicher, ohne Abfrage)', c2.reichtAus === true && c2.min === c1.min && pionex.pruefungen === 0, JSON.stringify(c2))
+    const c3 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '90', einsatz: '0.01' } })).d
+    p('Coin-M: 0.01 reicht nicht (aus dem Speicher)', c3.reichtAus === false && pionex.pruefungen === 0, JSON.stringify(c3))
+    const c4 = (await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: { ...plan, anzahl: '91', einsatz: '0.005' } })).d
+    p('Coin-M: Prüfung im Dialog nennt das kleine Minimum', c4.minEinsatz >= 0.02 && c4.minEinsatz <= 0.024, String(c4.minEinsatz))
     pionex.minEinsatz = 0
 
     console.log('Protokoll')
