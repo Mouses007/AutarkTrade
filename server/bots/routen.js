@@ -130,23 +130,26 @@ function zeitrahmenFuer(ms) {
 }
 
 async function marktFuer(bot) {
-    const c = marktCache.get(bot.id)
-    if (c && Date.now() - c.zeit < MARKT_MS) return c.daten
-    const ende = bot.beendet || Date.now()
-    const start = bot.erstellt || ende - 30 * 86_400_000
-    const [tf, schritt] = zeitrahmenFuer(ende - start)
-    const limit = Math.min(1000, Math.ceil((ende - start) / schritt) + 2)
-    const kerzen = await holeKerzen(bot.symbol, tf, { markt: 'futures', start, limit })
-    const tag = await holeKerzen(bot.symbol, '1d', { markt: 'futures', ende, limit: 30 })
-    const atr = atrTag(tag)
-    const daten = {
-        zeitrahmen: tf,
-        kerzen: kerzen.map((k) => [k.t, k.o, k.h, k.l, k.c]),
-        atrTag: atr,
-        kennzahlen: kennzahlen(bot, { kurs: bot.kurs, atrTag: atr, kerzen }),
+    // Im Cache liegen nur die Kerzen. Die Kennzahlen hängen am Bot (Liquidation,
+    // Band, Kurs) und werden je Abruf frisch gerechnet — sonst stand nach
+    // «Extra-Marge hinzufügen» noch minutenlang der alte Liquidationsabstand da.
+    let c = marktCache.get(bot.id)
+    if (!c || Date.now() - c.zeit >= MARKT_MS) {
+        const ende = bot.beendet || Date.now()
+        const start = bot.erstellt || ende - 30 * 86_400_000
+        const [tf, schritt] = zeitrahmenFuer(ende - start)
+        const limit = Math.min(1000, Math.ceil((ende - start) / schritt) + 2)
+        const kerzen = await holeKerzen(bot.symbol, tf, { markt: 'futures', start, limit })
+        const tag = await holeKerzen(bot.symbol, '1d', { markt: 'futures', ende, limit: 30 })
+        c = { zeit: Date.now(), tf, kerzen, atr: atrTag(tag) }
+        marktCache.set(bot.id, c)
     }
-    marktCache.set(bot.id, { zeit: Date.now(), daten })
-    return daten
+    return {
+        zeitrahmen: c.tf,
+        kerzen: c.kerzen.map((k) => [k.t, k.o, k.h, k.l, k.c]),
+        atrTag: c.atr,
+        kennzahlen: kennzahlen(bot, { kurs: bot.kurs, atrTag: c.atr, kerzen: c.kerzen }),
+    }
 }
 
 // ── Simulation: feine Kerzen der ganzen Laufzeit ─────────────────────────

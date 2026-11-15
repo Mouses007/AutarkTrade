@@ -130,6 +130,10 @@ onBeforeUnmount(() => {
     verlaufChart?.dispose(); verlaufChart = null
 })
 watch(() => props.bot.id, () => { markt.value = null; chart?.clear(); verlaufChart?.clear(); ladeMarkt(); ladeVerlauf() })
+// Derselbe Bot mit neuen Werten (nach einer Aktion oder «Aktualisieren»): Kennzahlen
+// und Chart-Linien hängen an Liquidation, Band, Stops und Kurs — neu holen und zeichnen.
+const botStand = computed(() => JSON.stringify([props.bot.liquidation, props.bot.grid?.unten, props.bot.grid?.oben, props.bot.grid?.anzahl, props.bot.stops, props.bot.position?.einstieg, props.bot.kurs, props.bot.einsatz]))
+watch(botStand, (neu, alt) => { if (alt && neu !== alt && markt.value) ladeMarkt() })
 
 const roh = ref(null)
 async function ladeRoh(e) {
