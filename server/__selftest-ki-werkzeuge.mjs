@@ -7,7 +7,7 @@
  * Wegwerf-SQLite, kein Netz. Geprüft wird vor allem die Sicherheitsseite:
  *   - Token-Namen kommen nur gekürzt, einzeilig und als Zitat heraus;
  *   - Freitexte von Befunden, Adressen, Hashes und Rohdaten kommen nie heraus;
- *   - nach dem ersten Fremdtext-Ergebnis eines Laufs sind die schreibenden
+ *   - nach dem ersten Fremdtext-Ergebnis eines Gesprächs sind die schreibenden
  *     Werkzeuge gesperrt — und ohne Fremdtext sind sie es nicht (Gegenprobe).
  */
 process.env.AT_DB_FILE = ':memory:'
@@ -121,6 +121,70 @@ await knex('portfolio_bewegungen').insert({ quelle: 'bitpanda', zeit: jetzt, art
     await executeTool('query_hype_token', {}, knex, lauf3)
     p('auch ein Fehlergebnis eines Fremdtext-Werkzeugs sperrt', lauf3.fremdtextGesehen === true)
     p('ohne Lauf-Zustand keine Sperre (andere Aufrufer)', !/gesperrt/.test((await executeTool('propose_param_change', {}, knex)).error || ''))
+}
+
+{   // Fremdtext-Sperre über das ganze Gespräch (Audit 15.11.2026, SEC-R-201) — Modell ist eine Attrappe
+    const { runAgentLoop, baueVerlauf } = await import('./ai-agent.js')
+    const usage = { totalTokens: 10, promptTokens: 6, completionTokens: 4 }
+    const basis = { provider: 'anthropic', model: 'attrappe', maxTokens: 8000, tokenBudget: 80000 }
+    // Attrappe: ruft der Reihe nach die genannten Werkzeuge auf, dann antwortet sie
+    const attrappe = (aufrufe) => {
+        let n = 0
+        return async () => (n < aufrufe.length
+            ? { text: '', toolCalls: [{ id: `c${n}`, name: aufrufe[n++], params: {} }], usage }
+            : { text: 'fertig', toolCalls: [], usage })
+    }
+    // Speichern wie die Route /api/ai/agent/chat: Frage, Antwort, Werkzeug-Zeilen
+    const speichere = async (sessionId, frage, r) => {
+        await knex('ai_agent_messages').insert({ sessionId, role: 'user', content: frage })
+        await knex('ai_agent_messages').insert({ sessionId, role: 'assistant', content: r.answer })
+        for (const m of r.messages.filter((x) => x.role === 'tool')) {
+            await knex('ai_agent_messages').insert({ sessionId, role: 'tool', content: m.content, toolName: m.toolName, toolCallId: m.toolCallId, toolParams: '', toolResult: m.content })
+        }
+    }
+    const neuesGespraech = async () => {
+        const [id] = await knex('ai_agent_sessions').insert({ title: 'Test', provider: 'anthropic', model: 'attrappe', totalTokens: 0, totalToolCalls: 0 }).returning('id')
+        return typeof id === 'object' ? id.id : id
+    }
+    const lade = async (sessionId) => baueVerlauf(await knex('ai_agent_messages').where('sessionId', sessionId).orderBy('id', 'asc'))
+    const ergebnisse = (r) => Object.fromEntries(r.messages.filter((m) => m.role === 'tool').map((m) => [m.toolName, m.content]))
+    const zaehle = async () => [Number((await knex('strategy_suggestions').count({ n: '*' }).first()).n), Number((await knex('strategy_backtests').count({ n: '*' }).first()).n)]
+    const schreibend = [...SCHREIBENDE_WERKZEUGE]
+
+    // Lauf 1 liest Fremdtext
+    const sid = await neuesGespraech()
+    const lauf1 = await runAgentLoop('Was ist mit GTA6?', [], { ...basis, rufeModell: attrappe(['query_hype_token']) }, () => {})
+    await speichere(sid, 'Was ist mit GTA6?', lauf1)
+    const stand = await lade(sid)
+    p('Verlauf mit Fremdtext-Werkzeug: Sperre gesetzt', stand.fremdtextGesehen === true)
+    p('Verlauf trägt das Werkzeug-Ergebnis in der Assistenten-Rolle', stand.verlauf.some((m) => m.role === 'assistant' && m.content.includes('[Tool: query_hype_token]')))
+
+    // Lauf 2 im selben Gespräch: schreibende Werkzeuge bleiben gesperrt
+    const vorher = await zaehle()
+    const lauf2 = await runAgentLoop('Dann schlag die Änderung vor.', stand.verlauf, { ...basis, rufeModell: attrappe(schreibend) }, () => {}, () => false, { fremdtextGesehen: stand.fremdtextGesehen })
+    const e2 = ergebnisse(lauf2)
+    for (const n of schreibend) p(`Lauf 2: ${n} wird nicht ausgeführt`, /gesperrt/.test(e2[n] || ''), String(e2[n]).slice(0, 120))
+    p('Lauf 2: nichts geschrieben', (await zaehle()).join() === vorher.join())
+    await speichere(sid, 'Dann schlag die Änderung vor.', lauf2)
+    p('Lauf 3: Sperre hält weiter', (await lade(sid)).fremdtextGesehen === true)
+
+    // Gegenprobe 1: so lief es vorher — ohne den Stand des Gesprächs ist Lauf 2 nicht gesperrt
+    const alt = ergebnisse(await runAgentLoop('Dann schlag die Änderung vor.', stand.verlauf, { ...basis, rufeModell: attrappe(schreibend) }, () => {}))
+    p('Gegenprobe: ohne Stand des Gesprächs greift die Sperre nicht', schreibend.every((n) => !/gesperrt/.test(alt[n] || '')), JSON.stringify(alt).slice(0, 200))
+
+    // Gegenprobe 2: ein Gespräch nur mit eigenen Daten bleibt frei
+    const sid2 = await neuesGespraech()
+    const eigen = await runAgentLoop('Wie lerne ich?', [], { ...basis, rufeModell: attrappe(['query_lernen']) }, () => {})
+    await speichere(sid2, 'Wie lerne ich?', eigen)
+    const stand2 = await lade(sid2)
+    p('Gegenprobe: Gespräch ohne Fremdtext setzt keine Sperre', stand2.fremdtextGesehen === false)
+    const frei = ergebnisse(await runAgentLoop('Schlag vor.', stand2.verlauf, { ...basis, rufeModell: attrappe(schreibend) }, () => {}, () => false, stand2))
+    p('… und die schreibenden Werkzeuge sind dort nicht gesperrt', schreibend.every((n) => !/gesperrt/.test(frei[n] || '')))
+
+    // Rein: jede Fremdtext-Zeile sperrt, auch ein Fehlergebnis; unbekannte und leere Namen nicht
+    for (const t of AGENT_TOOLS.filter((x) => x.fremdtext)) p(`gespeicherte Zeile von ${t.name} sperrt`, baueVerlauf([{ role: 'tool', toolName: t.name, content: '{"error":"x"}' }]).fremdtextGesehen === true)
+    p('eigene, unbekannte und leere Werkzeugnamen sperren nicht', baueVerlauf([{ role: 'tool', toolName: 'query_trades', content: '{}' }, { role: 'tool', toolName: 'gibt_es_nicht', content: '{}' }, { role: 'tool', toolName: null, content: '{}' }, { role: 'user', content: 'query_hype_token' }]).fremdtextGesehen === false)
+    p('leerer Verlauf: keine Sperre', baueVerlauf([]).fremdtextGesehen === false && baueVerlauf(null).verlauf.length === 0)
 }
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)

@@ -4,7 +4,7 @@
  * Eingebunden in `ai-agent-tools.js` wie `STRATEGY_TOOLS`. Ein Werkzeug mit
  * `fremdtext: true` gibt frei wählbaren oder aus fremden Quellen stammenden
  * Text zurück (Token-Namen, Lagebericht) — nach seinem ersten Ergebnis sperrt
- * `executeTool` die schreibenden Werkzeuge für den Rest des Laufs.
+ * `executeTool` die schreibenden Werkzeuge für den Rest des Gesprächs.
  */
 import { HYPE_TOOLS, HYPE_TOOL_IMPL } from './hype.js'
 import { PORTFOLIO_TOOLS, PORTFOLIO_TOOL_IMPL } from './portfolio.js'

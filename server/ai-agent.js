@@ -9,7 +9,7 @@
 import { getKnex } from './database.js'
 import { decrypt } from './crypto.js'
 import { logWarn, logError } from './logger.js'
-import { AGENT_TOOLS, executeTool } from './ai-agent-tools.js'
+import { AGENT_TOOLS, executeTool, istFremdtextWerkzeug } from './ai-agent-tools.js'
 import { seitenKontext } from './app-hilfe.js'
 import { resetBacktestKontingent } from './strategy-tools.js'
 import { assertAllowedOllamaUrl, waehleAnbieter } from './ollama-api.js'
@@ -661,12 +661,54 @@ function buildGeminiMessages(history) {
  * @param {Function} sendSSE - Function to send SSE events
  * @returns {Promise<object>} { answer, totalTokens, promptTokens, completionTokens, totalToolCalls, messages }
  */
-export async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, istAbgebrochen = () => false) {
+/**
+ * Gesprächsverlauf aus den gespeicherten Zeilen (`ai_agent_messages`) — rein.
+ * Werkzeug-Ergebnisse werden als Text vor die nächste Assistenten-Antwort gesetzt
+ * (die anbieterspezifischen tool_use/tool_result-Paare lassen sich aus der
+ * Datenbank nicht verlässlich wiederherstellen).
+ *
+ * `fremdtextGesehen` (Audit 15.11.2026, SEC-R-201): stammt eine gespeicherte
+ * Werkzeug-Zeile von einem Fremdtext-Werkzeug, liegt dieser Fremdtext der
+ * Folgefrage wieder vor — die Sperre der schreibenden Werkzeuge muss also für
+ * das ganze Gespräch gelten, nicht nur für den Lauf, der ihn gelesen hat.
+ * Massgebend ist der Werkzeugname, nicht der Inhalt: auch ein Fehlergebnis
+ * sperrt (wie in `executeTool`), und ein Werkzeug, das das Kennzeichen erst
+ * später bekam, sperrt rückwirkend.
+ * @returns {{ verlauf: Array<{role: string, content: string}>, fremdtextGesehen: boolean }}
+ */
+export function baueVerlauf(zeilen) {
+    const verlauf = []
+    let fremdtextGesehen = false
+    let offen = []
+    for (const msg of zeilen || []) {
+        if (msg.role === 'user') {
+            verlauf.push({ role: 'user', content: msg.content || '' })
+        } else if (msg.role === 'tool') {
+            if (istFremdtextWerkzeug(msg.toolName)) fremdtextGesehen = true
+            offen.push(`[Tool: ${msg.toolName}] ${(msg.content || '').substring(0, 500)}`)
+        } else if (msg.role === 'assistant') {
+            let content = msg.content || ''
+            if (offen.length > 0) {
+                content = `(Vorherige Tool-Ergebnisse:\n${offen.join('\n')})\n\n${content}`
+                offen = []
+            }
+            verlauf.push({ role: 'assistant', content })
+        }
+    }
+    if (offen.length > 0) verlauf.push({ role: 'assistant', content: `(Tool-Ergebnisse: ${offen.join('\n')})` })
+    return { verlauf, fremdtextGesehen }
+}
+
+/**
+ * @param {{fremdtextGesehen?: boolean}} [vorher] Stand des Gesprächs vor diesem Lauf (`baueVerlauf`)
+ */
+export async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, istAbgebrochen = () => false, vorher = {}) {
     const knex = getKnex()
     // Für den Selbsttest lässt sich der Modellaufruf ersetzen.
     const rufeModell = config.rufeModell || callLLMWithTools
-    // Zustand EINES Laufs für die Werkzeuge (Fremdtext-Sperre, siehe ai-agent-tools.js).
-    const lauf = { fremdtextGesehen: false }
+    // Zustand für die Werkzeuge (Fremdtext-Sperre, siehe ai-agent-tools.js). Enthält das
+    // Gespräch schon Fremdtext aus einem früheren Lauf, beginnt dieser Lauf gesperrt.
+    const lauf = { fremdtextGesehen: vorher?.fremdtextGesehen === true }
     const history = [...conversationHistory]
     history.push({ role: 'user', content: userMessage })
 
@@ -904,6 +946,7 @@ export function setupAgentRoutes(app) {
             // Load or create session
             let session
             let conversationHistory = []
+            let fremdtextGesehen = false
 
             if (sessionId) {
                 session = await knex('ai_agent_sessions').where('id', sessionId).first()
@@ -912,34 +955,10 @@ export function setupAgentRoutes(app) {
                     const prevMessages = await knex('ai_agent_messages')
                         .where('sessionId', sessionId)
                         .orderBy('createdAt', 'asc')
-                    // Reconstruct conversation: collapse tool messages into assistant context
-                    // (Provider-specific tool_use/tool_result pairs can't be reliably
-                    //  reconstructed from DB, so we summarize tool calls as text)
-                    let pendingToolSummaries = []
-                    for (const msg of prevMessages) {
-                        if (msg.role === 'user') {
-                            conversationHistory.push({ role: 'user', content: msg.content || '' })
-                        } else if (msg.role === 'tool') {
-                            // Collect tool results as text summaries
-                            const preview = (msg.content || '').substring(0, 500)
-                            pendingToolSummaries.push(`[Tool: ${msg.toolName}] ${preview}`)
-                        } else if (msg.role === 'assistant') {
-                            // If there are pending tool summaries, prepend them as context
-                            let content = msg.content || ''
-                            if (pendingToolSummaries.length > 0) {
-                                const toolContext = pendingToolSummaries.join('\n')
-                                content = `(Vorherige Tool-Ergebnisse:\n${toolContext})\n\n${content}`
-                                pendingToolSummaries = []
-                            }
-                            conversationHistory.push({ role: 'assistant', content })
-                        }
-                    }
-                    // Flush any remaining tool summaries
-                    if (pendingToolSummaries.length > 0) {
-                        const toolContext = pendingToolSummaries.join('\n')
-                        conversationHistory.push({ role: 'assistant', content: `(Tool-Ergebnisse: ${toolContext})` })
-                        pendingToolSummaries = []
-                    }
+                    // Verlauf wieder aufbauen; enthält er Fremdtext, bleibt die Sperre bestehen (SEC-R-201)
+                    const stand = baueVerlauf(prevMessages)
+                    conversationHistory = stand.verlauf
+                    fremdtextGesehen = stand.fremdtextGesehen
                 }
             }
 
@@ -967,7 +986,7 @@ export function setupAgentRoutes(app) {
             })
 
             // Run agent loop
-            const result = await runAgentLoop(message, conversationHistory, config, sendSSE, istAbgebrochen)
+            const result = await runAgentLoop(message, conversationHistory, config, sendSSE, istAbgebrochen, { fremdtextGesehen })
 
             // Save assistant answer
             if (result.answer) {

@@ -8,7 +8,7 @@
  * angreiferkontrolliert. Diese Werkzeuge geben sie deshalb nur gekürzt,
  * einzeilig und als Zitat markiert heraus (`zitatZeile`), tragen
  * `fremdtext: true`, und `executeTool` sperrt nach ihrem ersten Ergebnis die
- * schreibenden Werkzeuge für den Rest des Laufs. Was NIE hinausgeht:
+ * schreibenden Werkzeuge für den Rest des Gesprächs. Was NIE hinausgeht:
  * Webseitentexte, die Freitexte der Befunde (sie enthalten Seitentitel und
  * Hostnamen), Beleg-Adressen und der Wortlaut der KI-Berichte. Befunde
  * erscheinen nur als ihr Schlüssel.

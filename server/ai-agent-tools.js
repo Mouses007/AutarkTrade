@@ -34,6 +34,11 @@
  *      schreibenden Werkzeuge (`SCHREIBENDE_WERKZEUGE`) für den Rest des Laufs
  *      ab. Eine Injektion hat damit weiterhin keinen Codepfad, der etwas
  *      verändert — nur einen Entscheidungspfad über die gelesene Antwort.
+ *      Die Sperre gilt für das ganze GESPRÄCH (Audit 15.11.2026, SEC-R-201):
+ *      die Folgefrage bekommt die gespeicherten Werkzeug-Ergebnisse wieder
+ *      vorgelegt, also setzt `baueVerlauf` (ai-agent.js) die Sperre, sobald
+ *      eine gespeicherte Werkzeug-Zeile von einem Fremdtext-Werkzeug stammt
+ *      (`istFremdtextWerkzeug`). Ein neues Gespräch ist wieder frei.
  *
  * Die Markierung ist keine Mauer (siehe `server/fremdtext.js`); die Mauer ist
  * Punkt 3. Wer ein schreibendes Werkzeug ergänzt, trägt es in
@@ -317,6 +322,8 @@ export const AGENT_TOOLS = [
  */
 export const SCHREIBENDE_WERKZEUGE = new Set(['run_backtest', 'propose_param_change'])
 const FREMDTEXT_WERKZEUGE = new Set(AGENT_TOOLS.filter((t) => t.fremdtext).map((t) => t.name))
+/** Trägt das Werkzeug `fremdtext: true`? Auch für gespeicherte Werkzeug-Zeilen eines Gesprächs. */
+export const istFremdtextWerkzeug = (name) => FREMDTEXT_WERKZEUGE.has(String(name || ''))
 
 const WERKZEUGE = {
     query_trades: toolQueryTrades,
@@ -350,7 +357,7 @@ const WERKZEUGE = {
  * @param {string} toolName
  * @param {object} params
  * @param {import('knex').Knex} knex
- * @param {{fremdtextGesehen: boolean}} [lauf] Zustand EINES Agentenlaufs; ohne ihn gibt es keine Sperre
+ * @param {{fremdtextGesehen: boolean}} [lauf] Zustand des Agentenlaufs (beginnt gesperrt, wenn das Gespräch schon Fremdtext enthält); ohne ihn gibt es keine Sperre
  * @returns {Promise<object>} Tool result
  */
 export async function executeTool(toolName, params, knex, lauf = null) {
@@ -359,7 +366,7 @@ export async function executeTool(toolName, params, knex, lauf = null) {
         return { error: `Unknown tool: ${toolName}` }
     }
     if (lauf?.fremdtextGesehen && SCHREIBENDE_WERKZEUGE.has(toolName)) {
-        return { error: 'In diesem Lauf wurde bereits Fremdtext gelesen (Token-Namen oder der Lagebericht). Danach sind Backtest und Parametervorschlag gesperrt. Der Nutzer kann die Frage in einem neuen Lauf stellen.' }
+        return { error: 'In diesem Gespräch wurde bereits Fremdtext gelesen (Token-Namen oder der Lagebericht). Danach sind Backtest und Parametervorschlag gesperrt. Der Nutzer kann die Frage in einem neuen Gespräch stellen.' }
     }
 
     try {

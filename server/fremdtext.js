@@ -27,7 +27,7 @@
  * ihn wenige, mit `fremdtext: true` markierte Werkzeuge gekürzt und als Zitat
  * zurück (`zitatZeile`: Token-Namen des Hype-Radars, der gespeicherte
  * Lagebericht) — und nach dem ersten solchen Ergebnis sperrt `executeTool`
- * die schreibenden Werkzeuge für den Rest des Laufs. Eine Injektion hat damit
+ * die schreibenden Werkzeuge für den Rest des Gesprächs. Eine Injektion hat damit
  * weiterhin keinen Codepfad, der etwas verändert, nur einen Entscheidungspfad
  * über die gelesene Antwort. Feeds, einzelne Beiträge und Webinhalte liefert
  * kein Werkzeug; wer ein `query_news` über Beiträge ergänzt, öffnet genau das.
