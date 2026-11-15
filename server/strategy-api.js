@@ -24,6 +24,7 @@ import { regelnAlsSaetze } from './strategies/rule-text.js'
 import { VORLAGEN } from './strategies/rule-templates.js'
 import { isValidTimeframe, timeframeMs, getLastPrice, getHistoricalCandles, getFundingHistory } from './market-data.js'
 import { zuPosition } from './execution/paper.js'
+import { bereinigeFunding } from './aktien/splits.js'
 import { fundingAusVerlauf, zwischenstandPosition, summiereJeInstanz } from './execution/zwischenstand.js'
 import {
     runBacktest, berechneStatistik, MAX_BACKTEST_CANDLES, schaetzeKerzen,
@@ -1343,12 +1344,13 @@ export function setupStrategyRoutes(app) {
                         const verlauf = await zwischenFunding(row.symbol, pos.entryTime).catch(() => null)
                         funding = verlauf === null
                             ? null
-                            : fundingAusVerlauf(verlauf, {
+                            // Über einen Split steht der Mark-Preis im alten Massstab, die Menge im neuen.
+                            : fundingAusVerlauf(pos.splits?.length ? bereinigeFunding(verlauf, pos.splits) : verlauf, {
                                 qty: pos.qty, direction: pos.direction,
                                 entryTime: pos.entryTime, bis: jetzt, ersatzPreis: pos.entryPrice,
                             })
                     }
-                    stand = zwischenstandPosition(pos, { preis, jetzt, costs: kostenAus(risk), funding })
+                    stand = zwischenstandPosition(pos, { preis, jetzt, costs: kostenAus(risk, { aktie: instRow?.anlageklasse === 'aktien' }), funding })
                 } catch (e) {
                     fehler = 'Kurs nicht abrufbar'
                 }
@@ -1435,7 +1437,7 @@ export function setupStrategyRoutes(app) {
 
             const r = await schliessePositionManuell({
                 instance, positionRow: row, price: preis, time: Date.now(),
-                costs: kostenAus(instance.risk),
+                costs: kostenAus(instance.risk, { aktie: instRow.anlageklasse === 'aktien' }),
             })
             if (!r.ok) {
                 return res.status(409).json({ error: `Position konnte nicht geschlossen werden: ${r.reason}` })

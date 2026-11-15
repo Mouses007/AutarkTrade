@@ -2568,6 +2568,7 @@
     "reason_zu_spaet_erkannt": "Detected too late — the trigger candle had already passed",
     "reason_ausserhalb_sitzung": "Outside the regular US session",
     "reason_zahlentermin": "Earnings date — entry around earnings blocked",
+    "reason_split": "Stock split — the setup dates from before the split and was closed",
     "aktieSuchen": "Search stock",
     "aktien": {
       "zahlenUnbekannt_quelleAus": "Earnings dates unknown: Yahoo Finance is switched off (Settings › Data sources). Which trades fell around earnings cannot be told.",
