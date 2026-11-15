@@ -23,13 +23,15 @@
  *   1. Bitpandas eigene Bewertung der Position (`currency_balance`) — der
  *      Kurs des Produkts, das dort wirklich liegt.
  *   2. Sonst der Aktien-Future des Titels aus dem Stamm (Kurs der
- *      Marktdatenquelle in USDT, als Näherung gekennzeichnet).
+ *      Marktdatenquelle in USDT, als Näherung gekennzeichnet) — nur, wenn
+ *      Stamm UND Name belegen, dass es dieselbe Firma ist (`ersatzkursErlaubt`).
  *   3. Sonst kein Kurs. NIE `${asset}USDT`.
  *
  * Nicht Teil dieses Moduls: Dividenden, Steuerbericht, ESTV-Kursliste.
  */
 import * as marktdaten from '../marktdaten/index.js'
 import { ausBitpanda } from '../aktien/einordnung.js'
+import { nameAehnlich, kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
 
 export const KLASSEN = ['aktie', 'etf']
 
@@ -192,22 +194,95 @@ export function aktienZeilenKurs(b, stammKurse) {
 }
 
 /**
+ * Bitpandas Name je Aktien-/ETF-Kürzel aus der öffentlichen Asset-Liste. Rein.
+ *
+ * Über das KÜRZEL, nicht über die Kennung (ob `asset_id` der privaten API die
+ * `pid` der Liste ist, ist nicht belegt). Führt Bitpanda ein Kürzel für mehrere
+ * Aktien/ETFs, ist der Name nicht eindeutig und fehlt.
+ * @param {object[]|null} liste  `attributes` der Einträge von `/v3/assets`
+ * @returns {Map<string, string>}  KÜRZEL → Name
+ */
+export function namenAusListe(liste) {
+    const alle = new Map()
+    for (const a of liste || []) {
+        const l = ausBitpanda(a)
+        if (!KLASSEN.includes(l.unterart) || !l.basis) continue
+        const n = alle.get(l.basis) || []
+        n.push(l.name)
+        alle.set(l.basis, n)
+    }
+    const aus = new Map()
+    for (const [kuerzel, namen] of alle) if (namen.length === 1 && namen[0]) aus.set(kuerzel, namen[0])
+    return aus
+}
+
+/** Namen der Bitpanda-Aktien aus dem Stand des letzten Abrufs (`stand.aktienNamen`): KÜRZEL → Name. */
+export function bitpandaAktienNamen(quellenStand) {
+    const aus = new Map()
+    try {
+        const n = JSON.parse((quellenStand || []).find((q) => q.quelle === 'bitpanda')?.stand || '{}').aktienNamen
+        for (const [s, name] of Object.entries(n && typeof n === 'object' ? n : {})) if (name) aus.set(s.toUpperCase(), String(name))
+    } catch { /* ohne Stand keine Namen */ }
+    return aus
+}
+
+/**
+ * Darf der Aktien-Future eines Stamm-Titels als Ersatzkurs einer Bitpanda-Aktie dienen? Rein.
+ *
+ * FACH-P-006: Der Stamm bündelt nach Ticker. Bitpanda `AI` ist Air Liquide,
+ * der Future `AIUSDT` C3.ai; `AA` Anglo American statt Alcoa, `MC` LVMH. Der
+ * Ticker allein belegt also nichts. Verlangt wird alles zusammen:
+ *   - der Titel trägt im Stamm eine aktive Bitpanda-Listung,
+ *   - Bitpandas Name der gehaltenen Aktie passt zum Namen des Titels,
+ *   - der Newcomer-Lauf hat diesen Namen bei der Kursquelle unter genau dem
+ *     Symbol gefunden, das der Ticker der Krypto-Börsen meint (`AI`, nicht
+ *     `AI.PA`) — dort hängt der Future.
+ * Fehlt eines (Aktien-Modus aus, Lauf noch nie gelaufen, Name unbekannt): kein Ersatzkurs.
+ *
+ * @param {{titel: {ticker: string, name?: string|null, region?: string|null}, bitpandaListung: boolean,
+ *          kursSymbol?: string|null, bitpandaName?: string|null}} o
+ */
+export function ersatzkursErlaubt({ titel, bitpandaListung, kursSymbol = null, bitpandaName = null } = {}) {
+    if (!titel?.ticker || !bitpandaListung || !titel.name || !bitpandaName || !kursSymbol) return false
+    if (!kursSymbolKandidaten(titel.ticker, titel.region).includes(String(kursSymbol).toUpperCase())) return false
+    return nameAehnlich(titel.name, bitpandaName, titel.ticker)
+}
+
+/**
  * Kurse der Aktien-Futures zu einer Liste von Tickern, über den Stamm:
  * Ticker → Future-Symbol der Marktdatenquelle → letzter Preis in USDT.
- * Nur für Zeilen, die Bitpanda nicht selbst bewertet. Fehlt etwas, fehlt der Eintrag.
+ * Nur für Zeilen, die Bitpanda nicht selbst bewertet, und nur, wenn Stamm und
+ * Name passen (`ersatzkursErlaubt`). Fehlt etwas, fehlt der Eintrag.
+ * @param {Map<string, string>} [namen]  Bitpandas Name je Kürzel (`bitpandaAktienNamen`)
+ * @param {{holePreise?: Function}} [o]  nur der Selbsttest reicht die Preise herein
  */
-export async function stammKurseUsd(knex, tickers) {
+export async function stammKurseUsd(knex, tickers, namen = new Map(), { holePreise = () => marktdaten.preise({ markt: 'futures' }) } = {}) {
     const aus = new Map()
-    const liste = [...new Set((tickers || []).map((t) => String(t).toUpperCase()))]
+    const liste = [...new Set((tickers || []).map((t) => String(t).toUpperCase()))].filter((t) => namen.get(t))
     if (!liste.length) return aus
     try {
+        const titel = await knex('instrumente').where('anlageklasse', 'aktien').whereIn('ticker', liste).select('id', 'ticker', 'name', 'region')
+        if (!titel.length) return aus
+        const ids = titel.map((t) => t.id)
         const quelle = (await marktdaten.fordere('ticker', { markt: 'futures' })).id
-        const zeilen = await knex('instrument_listungen as l').join('instrumente as i', 'i.id', 'l.instrumentId')
-            .where({ 'l.art': 'perp', 'l.aktiv': 1, 'l.handelsplatz': quelle, 'i.anlageklasse': 'aktien' }).whereIn('i.ticker', liste)
-            .select('i.ticker', 'l.symbol')
-        if (!zeilen.length) return aus
-        const preise = await marktdaten.preise({ markt: 'futures' })
-        for (const z of zeilen) {
+        const listungen = await knex('instrument_listungen').whereIn('instrumentId', ids).where('aktiv', 1).select('instrumentId', 'handelsplatz', 'symbol', 'art')
+        const gemerkt = (await knex.schema.hasTable('newcomer_titel'))
+            ? new Map((await knex('newcomer_titel').whereIn('instrumentId', ids).select('instrumentId', 'kursSymbol')).map((z) => [z.instrumentId, z.kursSymbol]))
+            : new Map()
+        const erlaubt = []
+        for (const t of titel) {
+            const eigene = listungen.filter((l) => l.instrumentId === t.id)
+            const future = eigene.find((l) => l.art === 'perp' && l.handelsplatz === quelle)
+            if (!future) continue
+            const ok = ersatzkursErlaubt({
+                titel: t, bitpandaListung: eigene.some((l) => l.handelsplatz === 'bitpanda'),
+                kursSymbol: gemerkt.get(t.id), bitpandaName: namen.get(String(t.ticker).toUpperCase()),
+            })
+            if (ok) erlaubt.push({ ticker: t.ticker, symbol: future.symbol })
+        }
+        if (!erlaubt.length) return aus
+        const preise = await holePreise()
+        for (const z of erlaubt) {
             const p = preise.get(String(z.symbol).toUpperCase())
             if (Number.isFinite(p) && p > 0) aus.set(z.ticker, { usd: p, quelle: `Aktien-Future ${z.symbol} (≈)` })
         }
@@ -231,14 +306,77 @@ export async function bitpandaAktienKuerzel(knex) {
     return new Set((await bitpandaAktienArten(knex)).keys())
 }
 
+/** Zusatz am Schlüssel einer Aktien-Position bzw. eines Aktien-Loses: `LDO|aktie` neben dem Coin `LDO` (FUN-P-004). */
+export const AKTIEN_ANHANG = '|aktie'
+
+/**
+ * Was die Bewegung selbst über die Art ihrer Seiten weiss: KÜRZEL → `aktie` | `etf` | `''` (belegt keine Aktie). Rein.
+ *
+ * BUG-P-005: `ausBitpandaOperationen` hält die Art je Seite in `roh.klassen`
+ * fest. Gelesen wird `b.klassen` (von `ladeBewegungsKlassen` nachgetragen)
+ * oder `b.roh` (Text aus der DB oder Objekt). Zeilen von vor dieser Fassung
+ * tragen nichts → null, dann zählt wie bisher der Stand der Quelle.
+ * @returns {Record<string, string>|null}
+ */
+export function bewegungsKlassen(b) {
+    if (b?.klassen && typeof b.klassen === 'object') return b.klassen
+    let roh = b?.roh
+    if (typeof roh === 'string') {
+        if (!roh.includes('"klassen"')) return null
+        try { roh = JSON.parse(roh) } catch { return null }
+    }
+    return roh?.klassen && typeof roh.klassen === 'object' ? roh.klassen : null
+}
+
+/**
+ * `klassen` an Bewegungen nachtragen, die ohne `roh` geladen wurden (Steuerbericht, Einstand).
+ * Liest nur Bitpanda-Zeilen, die eine Art tragen; ohne Aktien am Konto (`arten` leer) gar nichts.
+ * @param {Map<string, string>} arten  aus `bitpandaAktienArten`
+ */
+export async function ladeBewegungsKlassen(knex, bewegungen, arten) {
+    if (!arten?.size) return bewegungen
+    try {
+        const zeilen = await knex('portfolio_bewegungen').where('quelle', 'bitpanda').where('roh', 'like', '%"klassen"%').select('id', 'roh')
+        const nachId = new Map(zeilen.map((z) => [z.id, bewegungsKlassen(z)]))
+        for (const b of bewegungen) if (nachId.get(b.id)) b.klassen = nachId.get(b.id)
+    } catch { /* ohne Rohfeld zählt der Stand der Quelle */ }
+    return bewegungen
+}
+
 /**
  * Art einer Seite nach QUELLE und Kürzel — nie nach dem Kürzel allein: `SUI`
  * ist bei Bitpanda die Aktie Sun Communities, bei einer anderen Quelle der Coin.
+ *
+ * Mit der Bewegung als drittem Argument zählt zuerst, was sie selbst festhält
+ * (`bewegungsKlassen`, BUG-P-005): Bitpanda führt `LDO` als Aktie Leonardo UND
+ * als Coin Lido — der Staking-Ertrag des Coins ist keine Aktie, nur weil das
+ * Konto je eine gleichen Kürzels hatte. Sagt die Bewegung nichts (alte Zeile),
+ * gilt der Stand der Quelle.
  * @param {Map<string, string>} arten  aus `bitpandaAktienArten`
- * @returns {(quelle: string, asset: string) => 'aktie'|'etf'|null}
+ * @returns {(quelle: string, asset: string, bewegung?: object) => 'aktie'|'etf'|null}
  */
 export function aktienKlasseVon(arten) {
-    return (quelle, asset) => (quelle === 'bitpanda' && asset ? arten?.get(String(asset).toUpperCase()) || null : null)
+    return (quelle, asset, bewegung = null) => {
+        if (quelle !== 'bitpanda' || !asset) return null
+        const a = String(asset).toUpperCase()
+        const eigen = bewegung ? bewegungsKlassen(bewegung) : null
+        if (eigen && a in eigen) return KLASSEN.includes(eigen[a]) ? eigen[a] : null
+        return arten?.get(a) || null
+    }
+}
+
+/**
+ * Token-Identität (`token-id.js`), in der eine Aktien-Seite ihren eigenen Topf
+ * `KÜRZEL|aktie` bekommt — getrennte FIFO-Lose für Aktie und gleichnamigen
+ * Coin (FUN-P-004). Ohne Aktien-Seiten liefert sie dasselbe wie `ident`. Rein.
+ * @param {ReturnType<import('./token-id.js').tokenIdentitaet>} ident
+ * @param {(quelle: string, asset: string, bewegung?: object) => string|null} klasse  siehe `aktienKlasseVon`
+ */
+export function identMitAktien(ident, klasse) {
+    return {
+        ...ident,
+        seiten: (b) => ident.seiten(b).map((s) => (s.asset && klasse(b.quelle, s.asset, b) ? { ...s, id: String(s.asset).toUpperCase() + AKTIEN_ANHANG } : s)),
+    }
 }
 
 /**
@@ -265,14 +403,14 @@ export function ohneAktienSeiten(bewegungen, klasse) {
         else if (Number(zeit) < e.ersteZeit) e.ersteZeit = Number(zeit)
     }
     for (const b of bewegungen || []) {
-        const kA = b.asset ? klasse(b.quelle, b.asset) : null
-        const kG = b.gegenAsset ? klasse(b.quelle, b.gegenAsset) : null
+        const kA = b.asset ? klasse(b.quelle, b.asset, b) : null
+        const kG = b.gegenAsset ? klasse(b.quelle, b.gegenAsset, b) : null
         if (!kA && !kG) { aus.push(b); continue }
         if (kA) merke(b.asset, kA, b.zeit)
         if (kG) merke(b.gegenAsset, kG, b.zeit)
         if (b.id != null) betroffen.add(b.id)
         // Gebühr in Aktien-Stücken gehört zur Aktie; eine Gebühr in Geld oder Coin bleibt.
-        const gebuehr = b.gebuehrAsset && !klasse(b.quelle, b.gebuehrAsset) ? {} : { gebuehrAsset: null, gebuehrMenge: null }
+        const gebuehr = b.gebuehrAsset && !klasse(b.quelle, b.gebuehrAsset, b) ? {} : { gebuehrAsset: null, gebuehrMenge: null }
         let rest = null
         if (kA && b.gegenAsset && !kG) rest = { asset: b.gegenAsset, menge: b.gegenMenge, kontrakt: null }
         else if (kG && b.asset && !kA) rest = { asset: b.asset, menge: b.menge }

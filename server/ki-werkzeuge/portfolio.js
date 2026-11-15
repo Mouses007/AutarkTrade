@@ -50,7 +50,8 @@ export async function toolQueryPortfolio(knex, params = {}) {
             anzahlGezeigt: Math.min(limit, posten.length),
             hinweis: HINWEIS + ' „Einstand teilweise" heisst: für einen Teil des Bestands fehlt der Kaufpreis.',
             zeilen: posten.slice(0, limit).map((p) => [
-                kuerzel(p), `Menge ${zahl(p.menge, 6)}`, p.ohneKurs ? 'ohne Kurs' : `Wert ${chf(p.chf)}`,
+                // Aktie und gleichnamiger Coin sind zwei Zeilen (FUN-P-004) — die Art gehört dazu.
+                kuerzel(p) + (p.klasse === 'etf' ? ' (ETF)' : p.klasse ? ' (Aktie)' : ''), `Menge ${zahl(p.menge, 6)}`, p.ohneKurs ? 'ohne Kurs' : `Wert ${chf(p.chf)}`,
                 p.anteil != null ? `Anteil ${zahl(p.anteil * 100, 1)} %` : null,
                 p.kaufkurs != null ? `Kaufkurs ${kurzBetrag(p.kaufkurs)}` : null,
                 p.einstandChf != null ? `Einstand ${chf(p.einstandChf)}${p.einstandTeilweise ? ' (teilweise)' : ''}` : null,

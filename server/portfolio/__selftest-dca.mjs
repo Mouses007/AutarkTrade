@@ -220,6 +220,9 @@ console.log('\nSparplan auf eine Aktie (SUI = Sun Communities bei Bitpanda) nimm
     const ab = dcaAktienBestand([{ quelle: 'bitget', posten: [{ schluessel: 'SUI', menge: 40, chf: 120, klasse: null }] },
         { quelle: 'bitpanda', posten: [{ schluessel: 'SUI', menge: 1.5, chf: 165, klasse: 'aktie' }, { schluessel: 'BTC', menge: 1, chf: 60000, klasse: null }, { schluessel: 'T', menge: 2, chf: null, klasse: 'aktie' }] }])
     check('Aktien-Bestand nur aus Bitpandas Aktien-Zeilen', ab.size === 2 && nah(ab.get('SUI').kursChf, 110) && ab.get('T').kursChf === null && ab.get('T').chf === null)
+    // FUN-P-004: die Übersicht führt die Aktie als eigene Zeile `SUI|aktie` neben dem Coin `SUI` desselben Orts.
+    const ab2 = dcaAktienBestand([{ quelle: 'bitpanda', posten: [{ schluessel: 'SUI|aktie', menge: 1.5, chf: 165, klasse: 'aktie' }, { schluessel: 'SUI', menge: 40, chf: 120, klasse: null }] }])
+    check('Aktien-Zeile mit Schlüssel SUI|aktie: Kürzel SUI, der Coin daneben zählt nicht mit', ab2.size === 1 && nah(ab2.get('SUI').menge, 1.5) && nah(ab2.get('SUI').kursChf, 110))
     const beideU = dcaUebersicht([...aktie, ...coin], {
         jetzt: JETZT, klasseVon,
         kursChfVon: (a, k) => (k ? ab.get(a)?.kursChf ?? null : SUI_COIN),

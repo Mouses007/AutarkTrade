@@ -21,7 +21,7 @@ import { istKanon, gegenKontraktVon } from './token-id.js'
 import { berechneUebersicht } from './uebersicht.js'
 import { wachtAus, meldenswert, meldungFuer, bestandsAenderungen } from './wacht.js'
 import { spamPruefer } from './spam.js'
-import { bitpandaAktienKuerzel } from './aktien-art.js'
+import { bitpandaAktienArten, aktienKlasseVon } from './aktien-art.js'
 import { stelleZu } from '../hype-radar/zustellung.js'
 import { leseEinstellungen } from '../hype-radar/einstellungen.js'
 import { melde } from '../benachrichtigungen.js'
@@ -208,8 +208,10 @@ async function bewerteBewegungen(max = 400) {
     let n = 0
     // Aktien und ETFs bei Bitpanda: nie über das Kürzel bewerten — `NVDAUSDT`
     // im Spot gibt es nicht, und ein gleichnamiger Coin wäre der falsche Kurs.
-    const aktien = await bitpandaAktienKuerzel(k)
-    const istAktie = (b, asset) => b.quelle === 'bitpanda' && aktien.has(String(asset).toUpperCase())
+    // Die Art steht an der Bewegung (`roh.klassen`), sonst gilt der Stand der Quelle —
+    // ein Staking-Ertrag des Coins LDO ist keine Aktie, nur weil es Leonardo gab (BUG-P-005).
+    const klasse = aktienKlasseVon(await bitpandaAktienArten(k))
+    const istAktie = (b, asset) => !!klasse(b.quelle, asset, b)
     for (const b of offen) {
         const datum = new Date(Number(b.zeit)).toISOString().slice(0, 10)
         const usdChf = await fxAm(datum, 'CHF')

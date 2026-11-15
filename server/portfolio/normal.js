@@ -275,30 +275,51 @@ export function ausBitpandaPortfolio(portfolio, symbole, { usdJeEur = null, klas
 /**
  * @param {Array} ops
  * @param {Map<string,string>} symbole  asset_id bzw. currency_id → Symbol
+ * @param {(id: string) => string|undefined} [artVon]  Art zur Asset-Kennung: `aktie` | `etf`, `''` = belegt
+ *        keine Aktie, `undefined` = unbekannt. BUG-P-005: Die Art wird je Seite in `roh.klassen`
+ *        festgehalten (KÜRZEL → Art) — Bitpanda führt `LDO` als Aktie UND als Coin, und über das
+ *        Kürzel der ganzen Quelle galt der Staking-Ertrag des Coins als Aktie ohne Kurs.
  */
-export function ausBitpandaOperationen(ops, symbole) {
+export function ausBitpandaOperationen(ops, symbole, artVon = null) {
     const sym = (id) => (id && symbole?.get(id)) || null
     const aus = []
     for (const op of ops || []) {
         const typ = String(op.operation_type || '').toLowerCase()
         const delta = new Map()
+        const arten = new Map()      // Kürzel → Menge der Arten, die seine Kennungen in dieser Operation tragen
+        const merkeArt = (s, id) => {
+            if (!artVon || !id) return
+            const m = arten.get(s) || new Set()
+            m.add(artVon(id))
+            arten.set(s, m)
+        }
         let zeit = 0, unbekannt = false
         for (const t of op.transactions || []) {
             const id = t.asset_id || t.currency_id || t.asset_amount?.asset_id || t.asset_amount?.currency_id
             const s = sym(id)
             if (!s) { unbekannt = true; continue }
+            merkeArt(s, t.asset_id || t.asset_amount?.asset_id)
             const betrag = zahl(t.asset_amount?.value) || 0
             delta.set(s, (delta.get(s) || 0) + (t.flow === 'INCOMING' ? betrag : -betrag))
             const gebuehr = zahl(t.fee_amount?.value) || 0
             if (gebuehr) {
                 const fs = sym(t.fee_amount.asset_id || t.fee_amount.currency_id) || s
                 delta.set(fs, (delta.get(fs) || 0) - gebuehr)
+                if (fs !== s) merkeArt(fs, t.fee_amount.asset_id)
             }
             zeit = Math.max(zeit, Date.parse(t.credited_at) || 0)
         }
         const teile = [...delta.entries()].filter(([, v]) => Math.abs(v) > 1e-12)
         if (!teile.length) continue
         const roh = { operation_type: op.operation_type, unbekanntesAsset: unbekannt || undefined }
+        // Nur Eindeutiges festhalten: trägt ein Kürzel in EINER Operation zwei Arten (Aktie und Coin
+        // sind im Netto je Kürzel schon verschmolzen) oder ist die Art unbekannt, bleibt es offen.
+        const klassen = {}
+        for (const [s] of teile) {
+            const m = arten.get(s)
+            if (m?.size === 1 && [...m][0] !== undefined) klassen[gross(s)] = [...m][0]
+        }
+        if (Object.keys(klassen).length) roh.klassen = klassen
         // Sparplan-Lastschrift: operation_type `savings_plan`, die Transaktion
         // selbst sagt `deposit` — die Transaktion weiss es genauer.
         const tTypen = new Set((op.transactions || []).map((t) => t.transaction_type).filter(Boolean))

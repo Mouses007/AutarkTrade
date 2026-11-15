@@ -24,7 +24,7 @@ import { boersenWahl, laufStand, BOERSEN } from './abruf.js'
 import { WALLET_TYPEN, EVM_NETZE, KETTEN } from '../../shared/portfolio-adresse.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
 import { tokenIdentitaet, ladeGegenKontrakte } from './token-id.js'
-import { aktienZeilenKurs, stammKurseUsd } from './aktien-art.js'
+import { aktienZeilenKurs, stammKurseUsd, bitpandaAktienNamen, bitpandaAktienArten, aktienKlasseVon, ladeBewegungsKlassen, identMitAktien, AKTIEN_ANHANG } from './aktien-art.js'
 
 const BOERSEN_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', bitpanda: 'Bitpanda' }
 
@@ -41,13 +41,21 @@ const FIFO_SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAss
  * Einstand je Identität (heute) aus allen Bewegungen, ohne Spam. Schlüssel wie
  * `token-id.js`: `ASSET` bzw. `ASSET|kontrakt` für einen fremden Vertrag —
  * `ident.id(asset, kontrakt)` findet den Eintrag eines Postens.
+ *
+ * Aktien und ETFs bei Bitpanda haben ihren eigenen Topf `KÜRZEL|aktie`
+ * (FUN-P-004): bis dahin teilten sich die Aktie LDO (Leonardo) und der Coin
+ * LDO (Lido) die FIFO-Lose, Ø-Kaufkurs und unrealisierter Gewinn stimmten
+ * für keines von beiden. Ohne Aktien am Konto ändert sich nichts.
  * @returns {Promise<{ einstand: Map, ident }>}
  */
 export async function einstandHeute(istSpam = () => null) {
     const k = getKnex()
     const bew = (await ladeGegenKontrakte(k, await k('portfolio_bewegungen').select(FIFO_SPALTEN))).filter((b) => !istSpam(b.asset, b.kontrakt))
     const ident = tokenIdentitaet(bew)
-    return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident }).lose), ident }
+    const arten = await bitpandaAktienArten(k)
+    if (!arten.size) return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident }).lose), ident }
+    await ladeBewegungsKlassen(k, bew, arten)
+    return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident: identMitAktien(ident, aktienKlasseVon(arten)) }).lose), ident }
 }
 
 /** Quellen, deren „genutzt bis“ vor `zeit` liegt. */
@@ -86,6 +94,25 @@ export function einstandFuer(e, p) {
         unrealisiertChf: p.ohneKurs ? null : p.chf - einstandChf,
         lose: e.lose.slice(-20),     // die jüngsten 20 Lose für die aufgeklappte Zeile
     }
+}
+
+/** Schlüssel der Bewegungen (Abgleich): Kürzel bzw. Kürzel|Vertrag. */
+const saldoKey = (b) => (b.kontrakt ? `${b.asset}|${b.kontrakt}` : b.asset)
+
+/**
+ * Schlüssel der Position einer Bestandszeile. Eine Aktie/ein ETF ist eine eigene
+ * Zeile `KÜRZEL|aktie` neben dem gleichnamigen Coin (FUN-P-004) — Bitpanda führt
+ * 53 Kürzel doppelt (LDO, SUI, W, T …), und in EINER Zeile stimmten Menge,
+ * Ø-Kaufkurs und unrealisierter Gewinn für keines von beiden.
+ */
+export function postenSchluessel(b) {
+    return b.klasse ? `${b.asset}${AKTIEN_ANHANG}` : saldoKey(b)
+}
+
+/** Schlüssel des Einstands (`einstandHeute`) zu einer Position. */
+export function einstandSchluessel(p, ident) {
+    const kuerzel = p.schluessel.split('|')[0]      // `schluessel` trägt das gespeicherte Kürzel (p.asset kann der Anzeigename sein)
+    return p.klasse ? kuerzel.toUpperCase() + AKTIEN_ANHANG : ident.id(kuerzel, p.kontrakt, p.kette)
 }
 
 /**
@@ -128,9 +155,9 @@ async function rechneUebersicht({ ohneVerlauf }) {
     const { kurse, fx, marktFehler } = await kurseFuer(posten)
     // Ersatzkurs über den Titel-Stamm nur für Aktien, die Bitpanda nicht selbst bewertet.
     const ohneBewertung = bestaende.filter((b) => b.klasse && !(Number(b.kursUsd) > 0)).map((b) => b.asset)
-    const stammKurse = ohneBewertung.length ? await stammKurseUsd(k, ohneBewertung) : new Map()
+    const stammKurse = ohneBewertung.length ? await stammKurseUsd(k, ohneBewertung, bitpandaAktienNamen(quellenStand)) : new Map()
 
-    const keyVon = (b) => (b.kontrakt ? `${b.asset}|${b.kontrakt}` : b.asset)
+    const keyVon = postenSchluessel
     const quellKurs = new Map()
     for (const b of bestaende) {
         // Die Bewertung einer Aktie gilt nur für diese Aktie, nie für einen gleichnamigen Coin an anderem Ort.
@@ -144,7 +171,8 @@ async function rechneUebersicht({ ohneVerlauf }) {
     for (const b of bestaende) {
         const key = keyVon(b)
         // Totalverlust: gehört nicht mehr ins Portfolio, sondern auf die eigene Seite.
-        if (tot.has(String(b.asset).toUpperCase())) continue
+        // Gemeint ist der Coin — die gleichnamige Aktie bleibt stehen (FUN-P-004).
+        if (!b.klasse && tot.has(String(b.asset).toUpperCase())) continue
         const spam = b.klasse ? null : istSpam(b.asset, b.kontrakt)
         // Spam hat keinen Wert, auch wenn ein Fantasie-Pool einen Preis nennt.
         let kurs = b.klasse ? aktienZeilenKurs(b, stammKurse)
@@ -170,10 +198,8 @@ async function rechneUebersicht({ ohneVerlauf }) {
             menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, spam: spamGrund, orte: [],
             klasse: b.klasse || null,
         }
-        // Liegt dasselbe Kürzel als Coin UND als Aktie vor (bewusste Grenze: eine
-        // Zeile je Kürzel), zählt die Zeile als bewertet, sobald ein Teil es ist.
-        if (b.klasse) p.klasse = b.klasse
-        if (p.klasse && kurs.usd != null) p.ohneKurs = false
+        // Aktien werden je Zeile bewertet: die Position zählt als bewertet, sobald ein Teil es ist.
+        if (b.klasse && kurs.usd != null) p.ohneKurs = false
         p.menge += b.menge
         if (usd != null) { p.usd += usd; p.chf += chf }
         p.orte.push({ quelle: b.quelle, ort: b.ort, ortName: b.name && b.name !== 'ohneSymbol' ? b.name : kettenName(b.ort), menge: b.menge, chf })
@@ -187,8 +213,7 @@ async function rechneUebersicht({ ohneVerlauf }) {
     const gesamtChf = gesamtUsd * fx.chf
     // Kaufkurs: FIFO über alle Bewegungen, Ø der noch gehaltenen Lose (CHF).
     const { einstand, ident } = await einstandHeute(istSpam)
-    // `schluessel` trägt das gespeicherte Kürzel (p.asset kann der Anzeigename sein).
-    const einstandVon = (p) => einstand.get(ident.id(p.schluessel.split('|')[0], p.kontrakt, p.kette))
+    const einstandVon = (p) => einstand.get(einstandSchluessel(p, ident))
     const postenListe = [...jeAsset.values()]
         .map((p) => ({ ...p, ...einstandFuer(einstandVon(p), p), anteil: gesamtChf > 0 ? p.chf / gesamtChf : 0, staub: !p.ohneKurs && p.chf < staubChf }))
         .sort((a, b) => (b.chf || 0) - (a.chf || 0) || a.asset.localeCompare(b.asset))
@@ -209,7 +234,8 @@ async function rechneUebersicht({ ohneVerlauf }) {
         try { vollstaendig = !!JSON.parse(st?.stand || '{}').vollstaendig } catch { /* */ }
         const soll = saldiere(bew)
         const ist = new Map()
-        for (const b of bestaende) if (b.quelle === quelle && b.ort !== 'bots') ist.set(keyVon(b), (ist.get(keyVon(b)) || 0) + b.menge)
+        // Die Bewegungen kennen nur das Kürzel: Aktie und gleichnamiger Coin werden hier zusammen abgeglichen.
+        for (const b of bestaende) if (b.quelle === quelle && b.ort !== 'bots') ist.set(saldoKey(b), (ist.get(saldoKey(b)) || 0) + b.menge)
         const abw = []
         for (const key of new Set([...soll.keys(), ...ist.keys()])) {
             const s = soll.get(key) || 0, i = ist.get(key) || 0

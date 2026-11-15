@@ -10,6 +10,7 @@
 import { getKnex } from '../database.js'
 import { totalverluste } from './totalverlust.js'
 import { einstandHeute, bestaendeOhneDoppelte } from './uebersicht.js'
+import { AKTIEN_ANHANG } from './aktien-art.js'
 import { spamPruefer } from './spam.js'
 
 /** Reine Statistik über die Zeilen (für den Selbsttest getrennt). */
@@ -36,7 +37,8 @@ export async function totalverlustUebersicht() {
     const { einstand } = await einstandHeute(istSpam)
     const bestand = new Map()
     for (const b of await bestaendeOhneDoppelte()) {
-        const a = String(b.asset).toUpperCase()
+        // Aktien führen ihren Einstand unter `KÜRZEL|aktie` (FUN-P-004) — der Coin gleichen Kürzels ist ein anderer Posten.
+        const a = String(b.asset).toUpperCase() + (b.klasse ? AKTIEN_ANHANG : '')
         bestand.set(a, (bestand.get(a) || 0) + Number(b.menge))
     }
     // Letzte bekannte Bewertung: die jüngste Bewegung mit CHF-Wert.

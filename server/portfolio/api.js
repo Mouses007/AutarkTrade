@@ -108,7 +108,7 @@ async function dcaKaeufe(k) {
 /** Art eines DCA-Kaufs (`aktie` | `etf` | null) — nach Quelle und Kürzel, siehe `aktien-art.js`. */
 async function dcaKlasseVon(k) {
     const klasse = aktienKlasseVon(await bitpandaAktienArten(k))
-    return (z) => klasse(z.quelle, z.asset)
+    return (z) => klasse(z.quelle, z.asset, z)      // die Bewegung weiss es genauer als das Kürzel (BUG-P-005)
 }
 
 /** Umstellungen eingestellter Coins (Bitpanda `merger_crypto`): AGIX → FET, BEST → VSN, MIOTA → IOTA. */
@@ -150,7 +150,6 @@ export async function dcaAnsicht({ nurLaufende = false } = {}) {
     const kurs = new Map()
     for (const a of new Set(kaeufe.filter((z) => !klasseVon(z)).map((z) => heutigerCoin(z.asset, umstellungen).asset))) {
         const p = posten.get(a)
-        // Eine Zeile, in der auch eine Aktie liegt, trägt womöglich deren Kurs — dann der Coin-Tageskurs.
         if (p && !p.klasse && !p.ohneKurs && p.usdKurs != null) { kurs.set(a, p.usdKurs * u.fx.chf); continue }
         // Nicht mehr gehalten: Tageskerze von heute (ein Abruf je Coin, danach im Kurs-Cache).
         const t = await tagesKursUsd(a, new Date().toISOString().slice(0, 10)).catch(() => null)
@@ -160,18 +159,11 @@ export async function dcaAnsicht({ nurLaufende = false } = {}) {
         umstellungen, quelleName: ortName, nurLaufende, klasseVon,
         kursChfVon: (a, klasse) => (klasse ? aktien.get(a)?.kursChf : kurs.get(a)) ?? null,
         bestandVon: (a, klasse) => {
-            const ak = aktien.get(a)
+            // Aktie und gleichnamiger Coin sind in der Übersicht zwei Zeilen (FUN-P-004).
+            const ak = klasse ? aktien.get(a) : null
             if (klasse) return ak ? { menge: ak.menge, chf: ak.chf, orte: [{ name: ortName('bitpanda'), menge: ak.menge, chf: ak.chf }] } : null
             const p = posten.get(a)
             if (!p) return null
-            if (ak) {
-                // Dieselbe Zeile führt Aktie und Coin (eine Zeile je Kürzel): der Aktien-Teil gehört nicht zum Coin.
-                const m = p.menge - ak.menge
-                if (!(m > Math.abs(p.menge) * 1e-6)) return null
-                const orte = p.orte.filter((o) => o.quelle !== 'bitpanda' && Math.abs(o.menge) > m * 1e-6).sort((x, y) => y.menge - x.menge)
-                const kc = kurs.get(a)
-                return { menge: m, chf: kc != null ? m * kc : null, orte: orte.map((o) => ({ name: ortName(o.quelle), menge: o.menge, chf: kc != null ? o.menge * kc : null })) }
-            }
             const orte = p.orte.filter((o) => Math.abs(o.menge) > p.menge * 1e-6).sort((a, b) => b.menge - a.menge)
             return { menge: p.menge, chf: p.ohneKurs ? null : p.chf, orte: orte.map((o) => ({ name: ortName(o.quelle), menge: o.menge, chf: o.chf })) }
         },

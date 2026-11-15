@@ -131,7 +131,7 @@ const ortName = (quelle) => {
     const w = wallets.value.find((x) => x.id === q.walletId)
     return w ? `${w.name} · ${q.name}` : q.name
 }
-const postenSichtbar = (liste) => liste.filter((p) => !p.spam && (staubZeigen.value || (p.ohneKurs ? !p.schluessel.includes('|') : (p.chf ?? 0) >= (u.value?.staubChf ?? 1))))
+const postenSichtbar = (liste) => liste.filter((p) => !p.spam && (staubZeigen.value || (p.ohneKurs ? (!!p.klasse || !p.schluessel.includes('|')) : (p.chf ?? 0) >= (u.value?.staubChf ?? 1))))
 const sortiert = (liste) => [...liste].sort((a, b) => (b.chf || 0) - (a.chf || 0))
 
 function abgleichText(a) {
@@ -267,7 +267,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span v-else>{{ p.kursQuelle }}</span>
                             <span v-if="p.kontrakt" class="pf-kontrakt" :title="p.kontrakt">{{ p.kontrakt.slice(0, 8) }}…</span>
                             <router-link :to="{ path: '/portfolio/bewegungen', query: { asset: p.asset } }">{{ t('portfolio.bewegungenZu', { a: p.asset }) }} →</router-link>
-                            <button type="button" class="pf-totalverlust" :title="t('portfolio.totalverlustInfoUebersicht', { j: vorjahr })" @click="setzeTotalverlust(p.asset, true, vorjahr)">
+                            <button v-if="!p.klasse" type="button" class="pf-totalverlust" :title="t('portfolio.totalverlustInfoUebersicht', { j: vorjahr })" @click="setzeTotalverlust(p.asset, true, vorjahr)">
                                 {{ t('portfolio.totalverlustMarkieren') }}
                             </button>
                             <button v-if="p.kontrakt && p.ohneKurs" type="button" class="pf-totalverlust" :title="t('portfolio.spamInfo')" @click="setzeSpam(p.schluessel.split('|')[0], true, p.kontrakt)">

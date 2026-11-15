@@ -108,7 +108,7 @@ export function dcaAktienBestand(quellen) {
     const aus = new Map()
     for (const p of (quellen || []).find((q) => q.quelle === 'bitpanda')?.posten || []) {
         if (!p.klasse) continue
-        const a = String(p.schluessel).toUpperCase()
+        const a = String(p.schluessel).split('|')[0].toUpperCase()      // Aktien-Zeilen heissen `KÜRZEL|aktie` (FUN-P-004)
         const e = aus.get(a) || { menge: 0, chf: 0, kursChf: null }
         e.menge += Number(p.menge) || 0
         e.chf = e.chf == null || p.chf == null ? null : e.chf + p.chf

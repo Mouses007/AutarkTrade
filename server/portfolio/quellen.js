@@ -22,7 +22,7 @@ import { getDecryptedConfig as bitunixConfig, bitunixRequest, BITUNIX_SPOT_URL }
 import { getDecryptedPionexConfig, getBotOrders } from '../pionex-api.js'
 import { pionexRequest } from '../pionex-transport.js'
 import { ausBitgetSteuer, ausBitunixOrders, ausPionexFills, ausBitpandaOperationen, ausBitpandaPortfolio, ausEvm, ausBtc, saldiere } from './normal.js'
-import { ladeBitpandaStamm, kennungenAusListe, gemerkteKlassen, trageKlassenNach, bestimmeKlasse } from './aktien-art.js'
+import { ladeBitpandaStamm, kennungenAusListe, gemerkteKlassen, trageKlassenNach, bestimmeKlasse, namenAusListe } from './aktien-art.js'
 import { bitpandaListeGemerkt } from '../aktien/bitpanda-liste.js'
 import { leseXpub, leseAdresse, erkenneAbleitung } from './btc.js'
 
@@ -288,7 +288,8 @@ export async function holeBitpanda(seit, alterStand = {}) {
     // Eintrag, wird die ID neu gefragt.
     const klassen = gemerkteKlassen(alterStand)
     const stamm = await ladeBitpandaStamm(getKnex())
-    const liste = kennungenAusListe(await bitpandaListeGemerkt())
+    const roheListe = await bitpandaListeGemerkt()
+    const liste = kennungenAusListe(roheListe)
     const ids = new Set(portfolio.map((p) => p.asset_id).filter(Boolean))
     for (const o of ops) for (const t of o.transactions || []) if (t.asset_id) ids.add(t.asset_id)
     await trageKlassenNach(ids, {
@@ -311,11 +312,21 @@ export async function holeBitpanda(seit, alterStand = {}) {
         const k = klasseVon(id)
         if (k && symbole.get(id)) aktien[String(symbole.get(id)).toUpperCase()] = k
     }
+    // Bitpandas Name je Aktien-Kürzel: nur damit darf die Übersicht einen Aktien-Future
+    // als Ersatzkurs nehmen (FACH-P-006). Fällt die Liste aus, bleiben die alten Namen.
+    const listenNamen = namenAusListe(roheListe)
+    const aktienNamen = {}
+    for (const s of Object.keys(aktien)) {
+        const n = roheListe ? listenNamen.get(s) : alterStand.aktienNamen?.[s]
+        if (n) aktienNamen[s] = n
+    }
+    // Art je Bewegung festhalten (BUG-P-005): '' nur, wenn «keine Aktie» belegt ist.
+    const artVon = (id) => klasseVon(id) || (klassen.has(id) ? '' : undefined)
     return {
         // Die Historie reicht ab Kontoeröffnung (gemessen: 2019); Folgeläufe
         // holen ab der jüngsten Bewegung nach — der Bestand bleibt nachrechenbar.
-        bestand, bewegungen: ausBitpandaOperationen(ops, symbole), vollstaendig: true,
-        stand: { symbole: Object.fromEntries(symbole), klassen: Object.fromEntries(klassen), klassenBelegt: true, aktien },
+        bestand, bewegungen: ausBitpandaOperationen(ops, symbole, artVon), vollstaendig: true,
+        stand: { symbole: Object.fromEntries(symbole), klassen: Object.fromEntries(klassen), klassenBelegt: true, aktien, aktienNamen },
         hinweis: seit ? null : `Bitpanda: ${ops.length} Operationen gelesen.`,
     }
 }

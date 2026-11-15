@@ -41,7 +41,7 @@ import { spamPruefer } from './spam.js'
 import { STABIL, FIAT } from './normal.js'
 import { uebergaben } from './uebergabe.js'
 import { futuresSteuerjahr } from './futures-steuer.js'
-import { bitpandaAktienArten, aktienKlasseVon, ohneAktienSeiten, aktienHinweis } from './aktien-art.js'
+import { bitpandaAktienArten, aktienKlasseVon, ohneAktienSeiten, aktienHinweis, ladeBewegungsKlassen } from './aktien-art.js'
 
 const SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
     'transferMit', 'einordnung', 'chfWert', 'sicherheit', 'kontrakt', 'kette']
@@ -216,11 +216,18 @@ export async function berechneSteuerjahr(jahr) {
     const istSpam = await spamPruefer()
     const roh = (await k('portfolio_bewegungen').select(SPALTEN)).map((b) => ({ ...b, zeit: Number(b.zeit) }))
     // Aktien/ETFs bei Bitpanda heraus (nach Quelle UND Kürzel), die Geldseite bleibt.
-    const aktienKlasse = aktienKlasseVon(await bitpandaAktienArten(k))
+    // Die Art steht an der Bewegung (BUG-P-005), sonst gilt der Stand der Quelle.
+    const aktienArten = await bitpandaAktienArten(k)
+    const aktienKlasse = aktienKlasseVon(aktienArten)
+    await ladeBewegungsKlassen(k, roh, aktienArten)
     const ohne = ohneAktienSeiten((await ladeGegenKontrakte(k, roh)).filter((b) => !istSpam(b.asset, b.kontrakt)), aktienKlasse)
     const bew = ohne.bewegungen
-    // Im Bestand zählt die Art der Zeile selbst (`klasse`), sonst der Stand der Quelle.
-    const istAktienZeile = (z) => !!z.klasse || !!aktienKlasse(z.quelle, z.asset)
+    // Im Bestand zählt die Art der Zeile selbst (`klasse`), sonst der Stand der Quelle —
+    // ausser der Bestand führt das Kürzel schon als Aktie: dann ist die Zeile daneben der Coin (BUG-P-005).
+    const artImBestand = new Set(aktienArten.size
+        ? (await k('portfolio_bestaende').whereNotNull('klasse').select('quelle', 'asset', 'klasse')).filter((z) => z.klasse).map((z) => `${z.quelle}|${String(z.asset).toUpperCase()}`)
+        : [])
+    const istAktienZeile = (z) => !!z.klasse || (!artImBestand.has(`${z.quelle}|${String(z.asset).toUpperCase()}`) && !!aktienKlasse(z.quelle, z.asset))
     // Identität je Token (Kürzel oder Kürzel|Vertrag) — einmal aus ALLEN Bewegungen,
     // denn der Transfer-Beleg kann an einer unvollständigen Quelle hängen.
     const ident = tokenIdentitaet(bew)
