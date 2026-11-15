@@ -54,7 +54,7 @@ globalThis.__botTest = {
             pionex.reduzierPruefungen = (pionex.reduzierPruefungen || 0) + 1
             const max = pionex.maxReduce || 200
             if (body.reduceNum > max) return { result: true, data: { checkResult: false, reason: 'REDUCE_TOO_MUCH', maxReduceNum: max } }
-            return { result: true, data: { checkResult: true, maxReduceNum: max, reduceAmount: String(body.reduceNum * 0.01), reducePnl: '1.25', reduceGridprofit: '0.4', reduceInvestment: '3', reduceFee: '0.01', estimateLiquidationPriceDown: '0.6', estimateLiquidationPriceDownAfter: '0.55' } }
+            return { result: true, data: { checkResult: true, maxReduceNum: max, reduceAmount: String(body.reduceNum * 0.01), reducePnl: '1.25', reduceGridprofit: '0.4', reduceInvestment: String(body.reduceNum * 0.1), reduceFee: '0.01', estimateLiquidationPriceDown: '0.6', estimateLiquidationPriceDownAfter: '0.55' } }
         }
         if (/Check$|checkParams$/.test(pfad)) return { result: true, data: { checkResult: true } }
         pionex.sendungen++
@@ -179,6 +179,16 @@ try {
     const r2 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '25' } })).d
     const rAnders = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion: 'reduzieren', eingabe: { reduceNum: '60' }, token: r2.token, haken: true, hakenText: haken })
     p('andere Menge als geprüft → abgewiesen, nichts gesendet', rAnders.status >= 400 && pionex.sendungen === vorR + 1)
+    {
+        const b5 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '5' } })).d
+        p('Betrag 5 von 20 (ganze Position) → reduceNum 50, tatsächlich 25 %', b5.bestanden && b5.eingabe?.reduceNum === '50' && Math.abs(b5.anteil?.tatsaechlich - 25) < 1e-9 && b5.anteil?.gewuenscht === null, JSON.stringify(b5))
+        p('Stückzahl = Position × Anteil (oder unbekannt)', b5.reduzieren?.stueck === null || Math.abs(b5.reduzieren.stueck - Number(bot.position?.menge) * 0.25) < 1e-9, JSON.stringify(b5.reduzieren))
+        const zuGross = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '30' } })
+        p('Betrag über der ganzen Position → 400 betragZuGross mit Höchstwert', zuGross.status === 400 && zuGross.d.code === 'betragZuGross' && zuGross.d.max === 20, JSON.stringify(zuGross.d))
+        const zuKlein = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '0.01' } })
+        p('Betrag unter einem halben Schritt → 400 betragZuKlein', zuKlein.status === 400 && zuKlein.d.code === 'betragZuKlein', JSON.stringify(zuKlein.d))
+        p('Betrag 0 oder leer → 400 betrag', (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '' } })).d.code === 'betrag')
+    }
     p('Anteil 0 oder über 100 → 400', (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '150' } })).status === 400)
     // Audit FUN-R-105: tatsächlicher Anteil zurück, Rundung auf 0 abgelehnt
     p('25 % von 200: tatsächlicher Anteil 25 %', rp.anteil?.gewuenscht === 25 && rp.anteil?.tatsaechlich === 25, JSON.stringify(rp.anteil))

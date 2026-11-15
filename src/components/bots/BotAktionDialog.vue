@@ -42,11 +42,26 @@ const haken = ref(false)
 const laedt = ref(false)
 const fehler = ref('')
 // Spot-Grid hat keinen Hebel
-const felderFuer = computed(() => (FELDER[props.aktion] || []).filter((f) => !(f === 'hebel' && props.bot.typ === 'spot_grid')))
+// Reduzieren: Eingabe wahlweise in % der Position oder als Betrag; die Wahl bleibt gemerkt
+const EINHEIT_SCHLUESSEL = 'at.bots.reduzierenEinheit'
+const einheit = ref((() => { try { return localStorage.getItem(EINHEIT_SCHLUESSEL) === 'betrag' ? 'betrag' : 'anteil' } catch { return 'anteil' } })())
+function waehleEinheit(e) {
+    if (einheit.value === e) return
+    einheit.value = e
+    try { localStorage.setItem(EINHEIT_SCHLUESSEL, e) } catch { /* privater Modus */ }
+    delete eingabe.value.anteil; delete eingabe.value.betrag
+    pruefung.value = null; ergebnis.value = null; haken.value = false; fehler.value = ''
+}
+const felderFuer = computed(() => {
+    if (props.aktion === 'reduzieren') return [einheit.value === 'betrag' ? 'betrag' : 'anteil']
+    return (FELDER[props.aktion] || []).filter((f) => !(f === 'hebel' && props.bot.typ === 'spot_grid'))
+})
 const offen = computed({ get: () => props.modelValue, set: (v) => emit('update:modelValue', v) })
 const mc = computed(() => props.bot.marginCoin)
 
 function zuruecksetzen() {
+    // ein KI-Vorschlag bringt den Anteil in % mit
+    if (props.aktion === 'reduzieren' && props.vorgabe?.anteil != null) einheit.value = 'anteil'
     const e = {}
     for (const f of felderFuer.value) e[f] = props.vorgabe?.[f] != null ? String(props.vorgabe[f]) : ''
     if (props.aktion === 'stops') { e.stopLossWeg = false; e.takeProfitWeg = false }
@@ -63,7 +78,7 @@ const platzhalter = computed(() => ({
     stopLoss: props.bot.stops?.stopLoss?.wert != null ? preis(props.bot.stops.stopLoss.wert) : t('bots.feld.keiner'),
     takeProfit: props.bot.stops?.takeProfit?.wert != null ? preis(props.bot.stops.takeProfit.wert) : t('bots.feld.keiner'),
 }))
-const feldName = (f) => ({ unten: t('bots.sim.unten'), oben: t('bots.sim.oben'), anzahl: t('bots.feld.grids'), hebel: t('bots.feld.hebel'), einsatz: `${t('bots.feld.einsatz')} (${mc.value})`, betrag: `${t('bots.st.betrag')} (${mc.value})`, anteil: t('bots.st.anteil'), stopLoss: t('bots.feld.stopLoss'), takeProfit: t('bots.feld.takeProfit') }[f])
+const feldName = (f) => ({ unten: t('bots.sim.unten'), oben: t('bots.sim.oben'), anzahl: t('bots.feld.grids'), hebel: t('bots.feld.hebel'), einsatz: `${t('bots.feld.einsatz')} (${mc.value})`, betrag: props.aktion === 'reduzieren' ? `${t('bots.st.redBetrag')} (${mc.value})` : `${t('bots.st.betrag')} (${mc.value})`, anteil: t('bots.st.anteil'), stopLoss: t('bots.feld.stopLoss'), takeProfit: t('bots.feld.takeProfit') }[f])
 
 /** Eingabe für den Server: Stops „leer" heisst entfernen nur, wenn das Feld angefasst wurde. */
 function eingabeFuerServer() {
@@ -75,6 +90,7 @@ function eingabeFuerServer() {
         if (k === 'stopLossWeg' || k === 'takeProfitWeg') continue
         if (v !== '') e[k] = v
     }
+    if (props.aktion === 'reduzieren') e.einheit = einheit.value
     return props.feste ? { ...e, ...props.feste } : e
 }
 const meldung = (e) => {
@@ -85,7 +101,7 @@ const meldung = (e) => {
 // FUN-R-105: Pionex reduziert nur in ganzen Schritten — weicht der tatsächliche Anteil vom gewünschten ab, sagen
 const anteilAbweichung = computed(() => {
     const a = pruefung.value?.anteil
-    if (!a) return null
+    if (!a || a.gewuenscht == null) return null
     const gewuenscht = zahl(a.gewuenscht, 1), tatsaechlich = zahl(a.tatsaechlich, 1)
     return gewuenscht === tatsaechlich ? null : { gewuenscht, tatsaechlich }
 })
@@ -133,7 +149,9 @@ const vergleich = computed(() => {
     if (p.reduzieren) {
         const r = p.reduzieren
         const zeig = (titel, wert, f) => { if (wert != null) z.push({ titel, vorher: '', nachher: f(wert), pionex: true }) }
-        zeig(t('bots.st.redMenge'), r.menge, (x) => zahl(x, 6))
+        const teil = p.anteil?.tatsaechlich
+        zeig(t('bots.st.redStueck'), r.stueck, (x) => `${zahl(x, 4)} ${props.bot.coin || ''}${teil != null ? ` (${zahl(teil, 1)} %)` : ''}`.trim())
+        zeig(t('bots.st.redMenge'), r.menge, (x) => betrag(x, mc.value))
         zeig(t('bots.st.redPnl'), r.pnl, (x) => betrag(x, mc.value, { vorzeichen: true }))
         zeig(t('bots.st.redGrid'), r.gridGewinn, (x) => betrag(x, mc.value, { vorzeichen: true }))
         zeig(t('bots.st.redEinsatz'), r.einsatz, (x) => betrag(x, mc.value))
@@ -168,6 +186,11 @@ const istZeilen = computed(() => {
         <div class="dlg">
             <p class="leise">{{ t(`bots.st.aktionText.${bot.plan ? 'planStarten' : aktion}`) }}</p>
 
+            <div v-if="aktion === 'reduzieren'" class="einheit" role="group" :aria-label="t('bots.st.redEinheit')">
+                <span class="leise">{{ t('bots.st.redEinheit') }}</span>
+                <button type="button" class="pille" :class="{ aktiv: einheit === 'anteil' }" :aria-pressed="einheit === 'anteil'" @click="waehleEinheit('anteil')">%</button>
+                <button type="button" class="pille" :class="{ aktiv: einheit === 'betrag' }" :aria-pressed="einheit === 'betrag'" @click="waehleEinheit('betrag')">{{ mc }}</button>
+            </div>
             <div v-if="felderFuer.length" class="felder">
                 <label v-for="f in felderFuer" :key="f"><span>{{ feldName(f) }}</span>
                     <input v-model="eingabe[f]" class="at-feld" inputmode="decimal" :placeholder="platzhalter[f]">
@@ -264,4 +287,7 @@ const istZeilen = computed(() => {
 .haken input { margin-top: 3px; }
 .grund { margin: 0 0 var(--abstand-2); }
 .klein { font-size: 0.75rem; margin: var(--abstand-2) 0 0; }
+.einheit { display: flex; align-items: center; gap: var(--abstand-2); }
+.einheit .pille { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px; padding: 2px 12px; cursor: pointer; font: inherit; font-size: 0.85rem; }
+.einheit .pille.aktiv { border-color: var(--accent); background: var(--accent-flaeche); color: var(--accent); }
 </style>

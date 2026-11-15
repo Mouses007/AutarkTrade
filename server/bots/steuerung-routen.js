@@ -381,20 +381,40 @@ export function setupBotSteuerungRoutes(app) {
             const stellen = await stellenFuer(bot)
             // Reduzieren: Anteil in % → reduceNum. Erst eine Prüfung mit 1 Schritt, die Pionex' Höchstmenge
             // (maxReduceNum) nennt; die umgerechnete Eingabe geht an den Browser zurück und wird so gesendet.
+            let stueck
             if (aktion === 'reduzieren' && eingabe.reduceNum == null) {
-                const anteil = Number(String(eingabe.anteil ?? '').replace(',', '.'))
-                if (!(anteil > 0 && anteil <= 100)) return res.status(400).json({ ok: false, code: 'anteil' })
+                const zahlAus = (v) => Number(String(v ?? '').replace(',', '.'))
+                // Eingabe wahlweise als Anteil in % oder als frei werdende Investition in der Margin-Münze
+                const inBetrag = eingabe.einheit === 'betrag'
+                const anteil = inBetrag ? null : zahlAus(eingabe.anteil)
+                const wunsch = inBetrag ? zahlAus(eingabe.betrag) : null
+                if (inBetrag ? !(wunsch > 0) : !(anteil > 0 && anteil <= 100)) return res.status(400).json({ ok: false, code: inBetrag ? 'betrag' : 'anteil' })
                 const probe = baueAktion(bot, aktion, { ...eingabe, reduceNum: 1 }, { stellen })
                 if (probe.fehler) return res.status(400).json({ ok: false, code: probe.fehler })
                 const vor = await frage(k, probe.pruefen.pfad, probe.pruefen.body)
                 const max = reduzierAusPruefung(vor?.data)?.max
                 if (!(max >= 1)) return res.json({ ok: true, aktion, bestanden: false, grund: null, pruefung: { result: vor?.result ?? false, message: vor?.message || 'Pionex nennt keine Höchstmenge zum Reduzieren', code: null, data: vor?.data || null }, nachher: {}, warnungen: [], token: null, testbetrieb: istTestbetrieb() })
-                // Audit FUN-R-105: Pionex kennt nur ganze Schritte. Früher wurde stillschweigend auf mindestens
-                // einen Schritt aufgerundet (Höchstmenge 3, 10 % → 33 %). Rundet der Anteil auf 0, wird abgelehnt;
-                // sonst geht der tatsächliche Anteil an den Dialog zurück.
-                const schritte = Math.min(max, Math.round(max * anteil / 100))
-                if (schritte < 1) return res.status(400).json({ ok: false, code: 'anteilZuKlein', schritt: Number((100 / max).toFixed(1)) })
-                anteilInfo = { gewuenscht: anteil, tatsaechlich: schritte / max * 100 }
+                let schritte
+                if (inBetrag) {
+                    // Was die ganze Position an Investition freigäbe, sagt nur Pionex: Prüfung mit der Höchstmenge.
+                    const ganz = baueAktion(bot, aktion, { ...eingabe, reduceNum: max }, { stellen })
+                    const voll = ganz.fehler ? null : reduzierAusPruefung((await frage(k, ganz.pruefen.pfad, ganz.pruefen.body))?.data)?.einsatz
+                    if (!(voll > 0)) return res.status(400).json({ ok: false, code: 'betragUnbekannt' })
+                    const jeSchritt = voll / max
+                    if (wunsch > voll * 1.0001) return res.status(400).json({ ok: false, code: 'betragZuGross', max: Number(voll.toFixed(2)) })
+                    schritte = Math.min(max, Math.round(wunsch / jeSchritt))
+                    if (schritte < 1) return res.status(400).json({ ok: false, code: 'betragZuKlein', schritt: Number(jeSchritt.toPrecision(3)) })
+                } else {
+                    // Audit FUN-R-105: Pionex kennt nur ganze Schritte. Früher wurde stillschweigend auf mindestens
+                    // einen Schritt aufgerundet (Höchstmenge 3, 10 % → 33 %). Rundet der Anteil auf 0, wird abgelehnt;
+                    // sonst geht der tatsächliche Anteil an den Dialog zurück.
+                    schritte = Math.min(max, Math.round(max * anteil / 100))
+                    if (schritte < 1) return res.status(400).json({ ok: false, code: 'anteilZuKlein', schritt: Number((100 / max).toFixed(1)) })
+                }
+                anteilInfo = { gewuenscht: inBetrag ? null : anteil, tatsaechlich: schritte / max * 100 }
+                // Verkaufte Stückzahl: derselbe Anteil der Position, die der Bot gerade hält
+                const menge = Number(bot.position?.menge)
+                stueck = Number.isFinite(menge) && menge > 0 ? menge * schritte / max : null
                 eingabe = { ...eingabe, reduceNum: String(schritte) }
             }
             const a = baueAktion(bot, aktion, eingabe, { stellen })
@@ -417,7 +437,7 @@ export function setupBotSteuerungRoutes(app) {
                 ok: true, aktion, bestanden, ohnePruefung: !a.pruefen, grund, minEinsatz,
                 pruefung: pruefung ? { result: pruefung.result, message: pruefung.message || null, code: pruefung.code || null, data: pruefung.data || null } : null,
                 liq: pruefung?.data ? liqAusPruefung(bot, pruefung.data) : null,
-                reduzieren: aktion === 'reduzieren' ? reduzierAusPruefung(pruefung?.data) : undefined,
+                reduzieren: aktion === 'reduzieren' ? { ...reduzierAusPruefung(pruefung?.data), stueck: stueck ?? null } : undefined,
                 eingabe: aktion === 'reduzieren' ? eingabe : undefined,
                 anteil: anteilInfo,
                 vorher: bot.plan ? null : einstellungVon(bot), nachher: a.nachher, warnungen: a.warnungen,
