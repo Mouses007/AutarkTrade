@@ -9,11 +9,12 @@
  *
  * Ein Wechsel von Symbol oder Zeiteinheit beginnt ein neues Gespräch — der
  * Verlauf bezöge sich sonst auf einen anderen Chart. Die Gespräche stehen
- * auch im Archiv der KI-Agent-Seite.
+ * auch im Verlauf der KI-Coach-Leiste.
  */
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { sanitizeKiHtml } from '../../utils/sanitize'
+import { kiMarkdown } from '../../utils/kiMarkdown.js'
+import { useKiGespraech } from '../../composables/useKiGespraech.js'
 import { Knopf, Kreisel } from '../basis'
 
 const props = defineProps({
@@ -22,122 +23,37 @@ const props = defineProps({
 })
 const { t } = useI18n()
 
-const nachrichten = ref([])      // [{ rolle: 'nutzer'|'ki', text }]
-const schritte = ref([])         // Werkzeugaufrufe des laufenden Laufs
-const eingabe = ref('')
-const laeuft = ref(false)
-const fehler = ref('')
 const liste = ref(null)
-let sitzung = null
-let abbruch = null
 
-const chartVon = () => `${props.panel.symbol}|${props.panel.interval}|${props.panel.markt}`
-let fuerChart = chartVon()
-
-watch(chartVon, (neu) => {
-    if (neu === fuerChart) return
-    fuerChart = neu
-    abbruch?.abort()
-    sitzung = null
-    nachrichten.value = []
-    schritte.value = []
-    fehler.value = ''
-})
-
-function markdown(md) {
-    if (!md) return ''
-    let html = md
-        .replace(/^### (.+)$/gm, '<b>$1</b>')
-        .replace(/^## (.+)$/gm, '<b>$1</b>')
-        .replace(/^# (.+)$/gm, '<b>$1</b>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-        .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
-    html = html.split('\n\n').map((p) => {
-        const s = p.trim()
-        if (!s) return ''
-        return s.startsWith('<ul') || s.startsWith('<b>') ? s : `<p>${s}</p>`
-    }).filter(Boolean).join('\n')
-    return sanitizeKiHtml(html)
-}
-
-async function nachUnten() {
-    await nextTick()
-    if (liste.value) liste.value.scrollTop = liste.value.scrollHeight
-}
-
-async function sende() {
-    const text = eingabe.value.trim()
-    if (!text || laeuft.value) return
-    eingabe.value = ''
-    fehler.value = ''
-    schritte.value = []
-    nachrichten.value.push({ rolle: 'nutzer', text })
-    nachUnten()
-    laeuft.value = true
-    const meinChart = chartVon()
-    abbruch = new AbortController()
-    try {
-        let bis = null
-        try { bis = props.sichtbarBis?.() || null } catch { bis = null }
-        const antwort = await fetch('/api/ai/agent/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: abbruch.signal,
-            body: JSON.stringify({
-                sessionId: sitzung, message: text, seitenId: 'chart',
-                chart: { symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt, bis: bis && bis < Date.now() - 60_000 ? bis : null },
-            }),
-        })
-        // 429: ein anderer Agent-Lauf (KI-Agent-Seite, zweites Fenster) ist noch nicht fertig.
-        if (!antwort.ok) {
-            const j = await antwort.json().catch(() => ({}))
-            fehler.value = antwort.status === 429 ? t('chart.ki.chatBelegt') : (j.error || `HTTP ${antwort.status}`)
-            return
-        }
-        const leser = antwort.body.getReader()
-        const dekoder = new TextDecoder()
-        let puffer = ''
-        for (;;) {
-            const { done, value } = await leser.read()
-            if (done) break
-            puffer += dekoder.decode(value, { stream: true })
-            const zeilen = puffer.split('\n')
-            puffer = zeilen.pop()
-            for (const z of zeilen) {
-                if (!z.startsWith('data: ')) continue
-                let e
-                try { e = JSON.parse(z.slice(6)) } catch { continue }
-                if (meinChart !== chartVon()) return
-                if (e.type === 'session') sitzung = e.sessionId
-                else if (e.type === 'tool_call') schritte.value.push(e.name)
-                else if (e.type === 'answer') { nachrichten.value.push({ rolle: 'ki', text: e.content }); nachUnten() }
-                else if (e.type === 'error') fehler.value = e.content
-            }
-        }
-    } catch (e) {
-        if (e.name !== 'AbortError') fehler.value = e.message
-    } finally {
-        laeuft.value = false
-        abbruch = null
-        schritte.value = []
+// Der offene Chart reist mit jeder Frage mit; der rechte Rand nur, wenn der
+// Nutzer zurückgeblättert hat (sonst gilt „bis jetzt").
+function chartKontext() {
+    let bis = null
+    try { bis = props.sichtbarBis?.() || null } catch { bis = null }
+    return {
+        seitenId: 'chart',
+        chart: { symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt, bis: bis && bis < Date.now() - 60_000 ? bis : null },
     }
 }
 
-function neu() {
-    abbruch?.abort()
-    sitzung = null
-    nachrichten.value = []
-    fehler.value = ''
-}
+const { nachrichten, schritte, eingabe, laeuft, fehler, sende, neu, abbrechen } = useKiGespraech({ kontext: chartKontext, t })
+
+const chartVon = () => `${props.panel.symbol}|${props.panel.interval}|${props.panel.markt}`
+// Anderer Chart, anderes Gespräch: der Verlauf bezöge sich sonst auf den alten.
+watch(chartVon, () => neu())
+
+const werkzeuge = () => schritte.value.filter((s) => s.type === 'tool_call').map((s) => s.name)
+
+watch([() => nachrichten.value.length, laeuft], async () => {
+    await nextTick()
+    if (liste.value) liste.value.scrollTop = liste.value.scrollHeight
+})
 
 function taste(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sende() }
 }
 
-onBeforeUnmount(() => abbruch?.abort())
+onBeforeUnmount(() => abbrechen())
 
 const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
 </script>
@@ -152,16 +68,16 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
             <div v-if="!nachrichten.length && !laeuft" class="leer">
                 <div>{{ t('chart.ki.chatLeer') }}</div>
                 <Knopf v-for="v in VORSCHLAEGE" :key="v" klein class="vorschlag"
-                    @click="eingabe = t('chart.ki.' + v); sende()">{{ t('chart.ki.' + v) }}</Knopf>
+                    @click="sende(t('chart.ki.' + v))">{{ t('chart.ki.' + v) }}</Knopf>
             </div>
-            <div v-for="(n, i) in nachrichten" :key="i" class="blase" :class="n.rolle"
-                :data-ki-generiert="n.rolle === 'ki' ? 'true' : null">
-                <div v-if="n.rolle === 'ki'" v-html="markdown(n.text)"></div>
-                <div v-else>{{ n.text }}</div>
-            </div>
+            <template v-for="(n, i) in nachrichten" :key="i">
+                <div v-if="n.role === 'assistant'" class="blase ki" data-ki-generiert="true"
+                    v-html="kiMarkdown(n.content, { kompakt: true })"></div>
+                <div v-else-if="n.role === 'user'" class="blase nutzer">{{ n.content }}</div>
+            </template>
             <div v-if="laeuft" class="blase ki laeuft">
                 <Kreisel />
-                <span v-for="(s, i) in schritte" :key="i" class="werkzeug">{{ s }}</span>
+                <span v-for="(s, i) in werkzeuge()" :key="i" class="werkzeug">{{ s }}</span>
             </div>
             <div v-if="fehler" class="fehler">{{ fehler }}</div>
         </div>
@@ -169,7 +85,7 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
             <textarea v-model="eingabe" class="at-feld klein" rows="2" :placeholder="t('chart.ki.chatPlatzhalter')"
                 :disabled="laeuft" @keydown="taste"></textarea>
             <Knopf art="haupt" klein nur-symbol symbol="nachricht" :disabled="laeuft || !eingabe.trim()" :titel="t('chart.ki.chatSenden')"
-                @click="sende" />
+                @click="sende()" />
         </div>
     </div>
 </template>
