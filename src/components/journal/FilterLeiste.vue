@@ -17,6 +17,8 @@ import {
     selectedMonthPreset, gewaehlterZeitraum, plOderZufriedenheitEntwurf, betragArt, betragGross, tagAuswahl,
 } from '../../stores/journal/filter.js'
 import { verfuegbareTags } from '../../stores/journal/tagebuch.js'
+import { gewaehlteAnlageklasse } from '../../stores/journal/anlageklasse.js'
+import { aktienAn } from '../../stores/markt.js'
 import { formDatum, formMonat, formGrossAnfang } from '../../utils/journal/format.js'
 import { starteKalender, starteDashboard, starteTagesansicht, useMountAuswertung, pruefeSichtbarkeit } from '../../utils/journal/ablauf.js'
 import { schliesseMobilMenue } from '../../utils/journal/app.js'
@@ -30,14 +32,15 @@ const OHNE_TAG = 't000t'
 // tagesansicht, bilder). Ein alter Name hier blendet den Filter still aus — darum
 // prüft src/utils/__selftest-seitenkennungen.mjs jeden Schlüssel gegen das Menü.
 const ZEILEN = {
-    journalUebersicht: ['zeitraum', 'bruttoNetto', 'richtung', 'zeitrahmen', 'kennzahl', 'tags'],
-    kalender: ['monat', 'bruttoNetto', 'plZufriedenheit'],
-    tagesansicht: ['monat', 'bruttoNetto', 'richtung', 'tags'],
+    journalUebersicht: ['zeitraum', 'bruttoNetto', 'richtung', 'anlageklasse', 'zeitrahmen', 'kennzahl', 'tags'],
+    kalender: ['monat', 'bruttoNetto', 'anlageklasse', 'plZufriedenheit'],
+    tagesansicht: ['monat', 'bruttoNetto', 'richtung', 'anlageklasse', 'tags'],
     bilder: ['bruttoNetto', 'richtung', 'tags'],
-    auswertung: ['zeitraum', 'richtung', 'tags'],
+    auswertung: ['zeitraum', 'richtung', 'anlageklasse', 'tags'],
 }
 const zeilen = computed(() => ZEILEN[seitenId.value] || [])
-const zeigt = (zeile) => zeilen.value.includes(zeile)
+// «Anlageklasse» gibt es nur mit eingeschaltetem Aktien-Teil (und dann wirkt der Filter auch erst).
+const zeigt = (zeile) => zeilen.value.includes(zeile) && (zeile !== 'anlageklasse' || aktienAn.value)
 
 const offen = ref(false)
 const positionenOffen = ref(false)
@@ -133,6 +136,7 @@ async function speichern() {
     betragArt.value = gewaehltBruttoNetto.value
     betragGross.value = gewaehltBruttoNetto.value ? formGrossAnfang(gewaehltBruttoNetto.value) : gewaehltBruttoNetto.value
     speichere('at.journal.richtungen', gewaehlteRichtungen.value)
+    speichere('at.journal.anlageklasse', gewaehlteAnlageklasse.value)
     speichere('at.journal.zeitrahmen', gewaehlterZeitrahmen.value)
     speichere('at.journal.kennzahl', gewaehlteKennzahl.value)
     if (seitenId.value === 'tagesansicht' || seitenId.value === 'kalender') {
@@ -230,6 +234,18 @@ onMounted(() => {
                     </div>
                 </div>
                 <span class="filterInfo"><InfoTipp schluessel="filters.richtung" /></span>
+            </div>
+
+            <!-- Anlageklasse (nur mit Aktien-Teil) -->
+            <div v-if="zeigt('anlageklasse')" class="filterZeile">
+                <div class="filterSteuer">
+                    <select v-model="gewaehlteAnlageklasse" class="at-feld klein" :aria-label="t('journalAnlage.titel')">
+                        <option value="">{{ t('journalAnlage.alle') }}</option>
+                        <option value="krypto">{{ t('journalAnlage.krypto') }}</option>
+                        <option value="aktien">{{ t('journalAnlage.aktien') }}</option>
+                    </select>
+                </div>
+                <span class="filterInfo"><InfoTipp schluessel="journalAnlage.info" /></span>
             </div>
 
             <!-- Balken je Zeitraum -->

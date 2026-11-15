@@ -168,6 +168,13 @@
     "endBeforeStart": "End date cannot be before start date",
     "monthLabel": "Month"
   },
+  "journalAnlage": {
+    "titel": "Asset class",
+    "alle": "Crypto and stocks",
+    "krypto": "Crypto only",
+    "aktien": "Stocks only",
+    "info": "Separates trades on stock futures and stock tokens from coins. Stocks behave differently (exchange hours, earnings), so a separate evaluation is worthwhile. Older trades are recognised via the list of titles; anything not listed there counts as crypto."
+  },
   "options": {
     "daily": "Daily",
     "weekly": "Weekly",

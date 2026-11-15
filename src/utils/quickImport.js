@@ -9,6 +9,8 @@ import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { logWarn } from './logger.js'
 import { istGewinn } from '../../shared/gewinn.js'
 import i18n from '../i18n'
+import { holeAktienSymbole } from '../stores/journal/anlageklasse.js'
+import { istAktienSymbol } from '../../shared/anlageklasse.js'
 
 /**
  * Quick API Import: Fetches trades from exchange API since last import,
@@ -106,6 +108,10 @@ export async function useQuickApiImport(explicitBroker) {
     // 4. Convert new positions to trade objects grouped by day
     const tradesByDay = {}
     const executionsByDay = {}
+    // Anlageklasse aus dem Titel-Stamm (Aktien-Futures sehen sonst aus wie
+    // Coins). `null` = Stamm unbekannt → der Trade bekommt KEINE Angabe und
+    // wird beim Lesen eingeordnet (`shared/anlageklasse.js`).
+    const aktienSymbole = await holeAktienSymbole({ neu: true })
 
     newPositions.forEach((pos, i) => {
         let tradeObj
@@ -117,6 +123,8 @@ export async function useQuickApiImport(explicitBroker) {
         } else {
             tradeObj = createBitunixTradeObj(pos, i)
         }
+
+        if (aktienSymbole) tradeObj.anlageklasse = istAktienSymbol(aktienSymbole, broker, tradeObj.symbol) ? 'aktien' : 'krypto'
 
         const dateUnix = tradeObj.td
         if (!tradesByDay[dateUnix]) tradesByDay[dateUnix] = []

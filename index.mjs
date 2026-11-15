@@ -58,6 +58,7 @@ import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engin
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
 import { setupPortfolioRoutes } from './server/portfolio/api.js'
 import { setupAktienRoutes } from './server/aktien/api.js'
+import { setupAktienJournalRoutes } from './server/aktien/journal-klasse.js'
 import { starteStammTakt } from './server/aktien/stamm.js'
 import { setupNewcomerRoutes } from './server/newcomer-radar/api.js'
 import { starteNewcomerTakt } from './server/newcomer-radar/lauf.js'
@@ -301,6 +302,7 @@ async function starteServer() {
     setupRanglisteRoutes(app);
     setupPortfolioRoutes(app);
     setupAktienRoutes(app);
+    setupAktienJournalRoutes(app);
     setupNewcomerRoutes(app);
     // Eigene Regelstrategien aus der DB in die Registry holen — sie sind ab
     // jetzt von eingebauten nicht mehr zu unterscheiden.

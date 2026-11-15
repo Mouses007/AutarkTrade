@@ -13,6 +13,7 @@ import { dbFind, dbFirst, dbDelete, dbDeleteWhere } from '../db.js'
 import { refreshAccountBalance } from '../../stores/accountBalance.js'
 import { seitenId, tradeZeitzone, abfrageGrenze, journalHatDaten, tagesSeite, tagesAbfrageGrenze, listeZuEnde, markierterEintrag } from '../../stores/app/rahmen.js'
 import { gewaehlterBereich, gewaehlteRichtungen, gewaehlteKonten, tagAuswahl, gewaehlteBoerse, selectedTradeCategory, tageZurueck } from '../../stores/journal/filter.js'
+import { wirksameAnlageklasse, holeAktienSymbole } from '../../stores/journal/anlageklasse.js'
 import { journalTage, gefilterteTageAlle, gefilterteTradesFlach, imports } from '../../stores/journal/auswertung.js'
 import { pAndL, blotter } from '../../stores/journal/import.js'
 import { tags, zufriedenheitTage, zufriedenheitTrades, excursions, verfuegbareTags } from '../../stores/journal/tagebuch.js'
@@ -110,7 +111,11 @@ export async function filtereTrades(_param) {
         if (zeilen.length > 0) journalHatDaten.value = true
 
         const gewaehlt = tagAuswahl.value
+        // Ohne Filter «Anlageklasse» kein Abruf: der Kern läuft dann wie vor dem Aktien-Teil.
+        const anlageklasse = wirksameAnlageklasse()
         const passt = erstelleFilter({
+            anlageklasse,
+            aktienSymbole: anlageklasse ? await holeAktienSymbole() : null,
             boerse: gewaehlteBoerse.value,
             kategorie: selectedTradeCategory.value,
             bereich: gewaehlterBereich.value,

@@ -543,6 +543,54 @@ for (const [name, iso, zone] of [['maerz', '2026-03', 'Europe/Zurich'], ['oktobe
     ergebnis.kalender[name] = kompakt(sauber({ kalenderDaten: st.kalenderDaten, miniKalenderDaten: st.miniKalenderDaten }))
 }
 
+// --- 6. Anlageklasse (Aktien im Journal, 15.11.2026) --------------------------
+// Bewusst NACH allem anderen: die Teile 1–5 laufen ohne Titel-Stamm und ohne
+// Filter und müssen dabei bleiben, wie sie waren. Hier antwortet der Stamm:
+//   - ein Import mit Stamm vermerkt die Klasse am Trade (NVDA/TSLA = aktien),
+//   - alte Trades ohne Angabe ordnet der Filter über den Stamm ein (im Test
+//     gilt SOLUSDT bei Bitget als Aktie),
+//   - ohne erreichbaren Stamm zählt nur der Vermerk am Trade.
+const STAMM = { ok: true, symbole: { bitunix: ['NVDAUSDT', 'TSLAUSDT'], bitget: ['SOLUSDT'], pionex: [] } }
+{
+    const tag = ms('2026-04-08T00:00:00Z')
+    const fest = (i, symbol) => bitunixPosition(900 + i, { symbol, ctime: String(tag + i * 3600_000), mtime: String(tag + i * 3600_000 + 1800_000) })
+    globalThis.__journalNetz = {
+        '/api/bitunix/quick-import': { ok: true, positions: [fest(0, 'NVDAUSDT'), fest(1, 'BTCUSDT'), fest(2, 'TSLAUSDT'), fest(3, 'NVDAUSDT')] },
+        '/api/aktien/journal-symbole': STAMM,
+    }
+    await quick.useQuickApiImport('bitunix')
+}
+appEinstellungen.value = { ...appEinstellungen.value, modusAktienAn: 1 }
+const klassen = await import('../stores/journal/anlageklasse.js')
+async function nachKlasse(klasse, stamm) {
+    stelleEin({})
+    klassen.gewaehlteAnlageklasse.value = klasse
+    globalThis.__journalNetz = stamm ? { '/api/aktien/journal-symbole': stamm } : {}
+    // Der Nachschlag wird zehn Minuten gemerkt — für «Stamm nicht erreichbar» verwerfen.
+    klassen.vergissAktienSymbole()
+    await Promise.all([tage.ladeExkursionen(), tage.ladeZufriedenheit(), tage.ladeTags()])
+    await tage.ladeVerfuegbareTags()
+    await kern.filtereTrades()
+    await kern.summiereTrades()
+    const t = sauber(st.totals)
+    return {
+        trades: st.gefilterteTradesFlach.map(x => `${x.broker}:${x.symbol}:${x.id}`).sort(),
+        totals: { trades: t.trades, netProceeds: t.netProceeds, grossProceeds: t.grossProceeds, fees: t.fees },
+    }
+}
+ergebnis.anlageklasse = {
+    importiert: globalThis.__journalDaten.trades.flatMap(z => z.trades).filter(t => 'anlageklasse' in t)
+        .map(t => ({ id: t.id, symbol: t.symbol, anlageklasse: t.anlageklasse })).sort((a, b) => a.id.localeCompare(b.id)),
+    alle: await nachKlasse('', STAMM),
+    aktien: await nachKlasse('aktien', STAMM),
+    krypto: await nachKlasse('krypto', STAMM),
+    aktienOhneStamm: await nachKlasse('aktien', null),
+}
+// Schalter aus → der gespeicherte Filterwert wirkt nicht.
+appEinstellungen.value = { ...appEinstellungen.value, modusAktienAn: 0 }
+ergebnis.anlageklasse.schalterAus = await nachKlasse('aktien', STAMM)
+klassen.gewaehlteAnlageklasse.value = ''
+
 console.log = stilleLog
 
 // ---------------------------------------------------------------------------
@@ -572,6 +620,16 @@ pruefe('Agent-Trade fehlt in „alles"', !JSON.stringify(ergebnis.dashboard.alle
 pruefe('Agent-Trade erscheint nur unter „agent"', JSON.stringify(ergebnis.dashboard.nurAgent.journalTage).includes('_a_1'))
 pruefe('Diagramme wurden gezeichnet', Object.keys(ergebnis.dashboard.alles.diagramme.net).length >= 15, Object.keys(ergebnis.dashboard.alles.diagramme.net).join(', '))
 pruefe('Kalender hat Monatsdaten', Object.keys(ergebnis.kalender.maerz.kalenderDaten).length > 0)
+{
+    const a = ergebnis.anlageklasse
+    pruefe('Import mit Stamm vermerkt die Anlageklasse', a.importiert.length === 4 && a.importiert.filter(t => t.anlageklasse === 'aktien').length === 3,
+        JSON.stringify(a.importiert.map(t => [t.symbol, t.anlageklasse])))
+    pruefe('Aktien + Krypto = alle', a.aktien.totals.trades + a.krypto.totals.trades === a.alle.totals.trades && a.aktien.totals.trades > 3,
+        `${a.aktien.totals.trades} + ${a.krypto.totals.trades} ≠ ${a.alle.totals.trades}`)
+    pruefe('Alte Trades werden über den Stamm eingeordnet', a.aktien.trades.some(t => t.startsWith('bitget:SOLUSDT:')) && !a.aktien.trades.some(t => t.startsWith('bitunix:SOLUSDT:')))
+    pruefe('Ohne Stamm zählt nur der Vermerk am Trade', a.aktienOhneStamm.totals.trades === 3, `${a.aktienOhneStamm.totals.trades} Trades`)
+    pruefe('Aktien-Teil aus → Filter wirkt nicht', a.schalterAus.totals.trades === a.alle.totals.trades)
+}
 
 if (SCHREIBEN) {
     mkdirSync(dirname(GOLDEN), { recursive: true })
@@ -589,6 +647,7 @@ if (SCHREIBEN) {
             ...Object.keys(SZENARIEN).map(n => [`Dashboard „${n}"`, `dashboard.${n}`]),
             ['Tagesansicht', 'tagesansicht'],
             ...['maerz', 'oktober', 'maerzUSA'].map(n => [`Kalender „${n}"`, `kalender.${n}`]),
+            ['Anlageklasse: Import-Vermerk und Filter', 'anlageklasse'],
         ]
         const hole = (o, pfad) => pfad.split('.').reduce((x, k) => x?.[k], o)
         for (const [name, pfad] of teile) {

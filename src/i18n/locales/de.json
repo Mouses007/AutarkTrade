@@ -168,6 +168,13 @@
     "endBeforeStart": "Enddatum kann nicht vor dem Startdatum liegen",
     "monthLabel": "Monat"
   },
+  "journalAnlage": {
+    "titel": "Anlageklasse",
+    "alle": "Krypto und Aktien",
+    "krypto": "Nur Krypto",
+    "aktien": "Nur Aktien",
+    "info": "Trennt Trades auf Aktien-Futures und Aktien-Token von Coins. Aktien verhalten sich anders (Börsenzeiten, Quartalszahlen), darum lohnt sich die getrennte Auswertung. Ältere Trades werden über die Titel-Liste erkannt; was dort nicht steht, zählt als Krypto."
+  },
   "options": {
     "daily": "Täglich",
     "weekly": "Wöchentlich",

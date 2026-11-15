@@ -7,6 +7,8 @@
  * lesen (Spezifikation journal-kern.md §3.5, §4.1).
  */
 
+import { klasseVonTrade } from '../../../shared/anlageklasse.js'
+
 /** Pseudo-Tag „ohne Tag" in der Auswahl. */
 export const OHNE_TAG = 't000t'
 
@@ -54,9 +56,13 @@ const istBot = (t) => !!t.botType
 
 /**
  * Baut die Prüffunktion aus der aktuellen Auswahl.
+ *
+ * `anlageklasse` ('' = alle | 'krypto' | 'aktien') gilt für JEDEN Trade, auch
+ * Bots und Agent; `aktienSymbole` ist der Nachschlag des Titel-Stamms
+ * (`shared/anlageklasse.js`), ohne ihn zählt nur die Angabe am Trade.
  * @returns {(trade: object, n: object) => boolean}
  */
-export function erstelleFilter({ boerse, kategorie, bereich, richtungen, konten, gewaehlteTags }) {
+export function erstelleFilter({ boerse, kategorie, bereich, richtungen, konten, gewaehlteTags, anlageklasse = '', aktienSymbole = null }) {
     const kat = kategorie || 'all'
     const alles = Number(bereich?.start) === 0 && Number(bereich?.end) === 0
     const ohneKonten = !(konten && konten.length)
@@ -69,6 +75,7 @@ export function erstelleFilter({ boerse, kategorie, bereich, richtungen, konten,
 
     return function passtFilter(t, n) {
         if (boerse && t.broker !== boerse) return false
+        if (anlageklasse && klasseVonTrade(t, aktienSymbole) !== anlageklasse) return false
 
         if (kat === 'agent') {
             if (!istAgent(t)) return false
