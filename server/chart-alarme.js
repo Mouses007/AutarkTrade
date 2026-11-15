@@ -273,7 +273,8 @@ async function bestimmeKlasse({ symbol, markt, watchlistIds, art }, knex) {
     if (Array.isArray(ids) && ids.length) {
         watchlistKlassen = (await knex('chart_watchlists').whereIn('id', ids).select('anlageklasse')).map((w) => w.anlageklasse)
     } else if (symbol && markt !== 'spot') {
-        symbolKlasse = (await anlageklasseVon([symbol])).klasse
+        // Der Alarm kennt die Börse seines Panels nicht — jede Chart-Börse zählt (BUG-K-001).
+        symbolKlasse = (await anlageklasseVon([symbol], { boerse: 'jede' })).klasse
     }
     const erg = alarmKlasse({ markt, symbolKlasse, watchlistKlassen })
     if (erg.klasse && !artImMarkt(art, erg.klasse)) return { fehler: `Alarm-Art ${art} gibt es für Aktien nicht` }

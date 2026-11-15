@@ -79,7 +79,7 @@ export async function ladeVorrat(basis, { stufen = [] } = {}) {
         // mittendrin einen anderen Stand bekommen (Kursquelle fällt aus →
         // Splits «unbekannt» → die zweite Hälfte rechnet unbereinigt).
         // `basis.aktie` (auch `null` = Coin) geht vor.
-        aktie: basis.aktie !== undefined ? basis.aktie : await aktienKontext(basis.symbol),
+        aktie: basis.aktie !== undefined ? basis.aktie : await aktienKontext(basis.symbol, { market }),
     }
     try { vorrat.marketMeta = await getSymbolMeta(basis.symbol, { market }) } catch { vorrat.marketMeta = null }
     if (market === 'futures') {
@@ -597,7 +597,7 @@ export async function ausstiegsPruefung(basis, { variante = null } = {}) {
     // split-bereinigten Kerzen und Mark-Preisen — das Raster unten muss
     // dieselben sehen, sonst spielt es Trades im neuen Massstab auf Kerzen im
     // alten nach.
-    const aktie = basis.aktie !== undefined ? basis.aktie : await aktienKontext(basis.symbol)
+    const aktie = basis.aktie !== undefined ? basis.aktie : await aktienKontext(basis.symbol, { market })
     const lauf = await runBacktest({ ...basis, candles, marketMeta, fundingVerlauf, aktie })
     let rasterKerzen = candles
     if (aktie?.splits) {

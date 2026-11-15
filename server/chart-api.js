@@ -426,7 +426,8 @@ const splitWissen = new Map()   // quelle|symbol|interval → Map(Split-Zeit →
 async function mitSplits(quelle, symbol, interval, kerzen) {
     if (!Array.isArray(kerzen) || !kerzen.length || quelle === 'binance-spot') return { kerzen, splits: 0 }
     let aktie = null
-    try { aktie = await aktienKontext(symbol) } catch { aktie = null }
+    // Die Börse des Panels, nicht die Marktdatenquelle: nur ihre Listung sagt, ob DIESE Kerzen eine Aktie sind (BUG-K-001).
+    try { aktie = await aktienKontext(symbol, { boerse: quelle === 'binance-futures' ? 'binance' : quelle }) } catch { aktie = null }
     if (!aktie?.splits?.length) return { kerzen, splits: 0 }
     const schluessel = `${quelle}|${symbol}|${interval}`
     if (!splitWissen.has(schluessel)) splitWissen.set(schluessel, new Map())

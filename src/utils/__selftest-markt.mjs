@@ -1,5 +1,6 @@
 /** Selbsttest: Markt-Umschalter Krypto ↔ Aktien (config/markt.js) und seine Menü-Einträge. */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { istAktienAn, marktAus, seiteImMarkt, modusImMarkt, zielImMarkt } from '../config/markt.js'
 import { PAGES, MODES, modeHome, pagesForMode, pageById } from '../config/menu.js'
 
@@ -87,5 +88,11 @@ for (const s of PAGES) for (const [markt, pfad] of Object.entries(s.gegenstueck 
 for (const m of MODES) for (const [markt, pfad] of Object.entries(m.ersatzJeMarkt || {})) {
     gleich(PAGES.find((x) => x.path === pfad)?.markt, markt, `${m.id}: Ersatz ${pfad} gehört zu ${markt}`)
 }
+
+// ── Werkszustand ohne Aktien-Bedienelemente (Audit 15.11.2026, FUN-K-003) ──
+const lies = (pfad) => readFileSync(new URL(pfad, import.meta.url), 'utf8')
+gleich(/if \(p\.nurAktien && !aktienAn\.value\) continue/.test(lies('../components/StrategyParamForm.vue')), true, 'Parameter-Formular blendet nurAktien-Felder ohne Aktien-Modus aus')
+gleich(/<Edgar v-if="aktienAn" \/>/.test(lies('../views/einstellungen/EinstellungenDatenquellen.vue')), true, 'EDGAR-Abschnitt nur mit Aktien-Modus')
+gleich((lies('../../server/strategies/index.js').match(/nurAktien: true/g) || []).length, 3, 'drei Risikofelder tragen nurAktien')
 
 console.log(`✓ Markt-Umschalter: ${n} Prüfungen`)

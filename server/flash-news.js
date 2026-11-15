@@ -170,7 +170,7 @@ export function setupFlashNewsRoutes(app) {
         try {
             // Flash-News sucht nach einem Krypto-Coin (X-Suche und Web-Frage sind so gestellt). Für ein
             // Aktien-Future käme bezahlter Unsinn zurück — die Recherche zu Aktien steht auf der Titel-Seite.
-            if ((await anlageklasseVon([symbol])).klasse === 'aktien') {
+            if ((await anlageklasseVon([symbol], { boerse: 'jede' })).klasse === 'aktien') {
                 return res.status(400).json({ error: `${symbol} ist ein Aktien-Future — Flash-News sucht Krypto-Meldungen. Für Aktien: Titel-Seite, «Was den Kurs bewegt hat».`, grund: 'aktie' })
             }
             res.json(await erzeugeFlashNews({ symbol, stunden }))

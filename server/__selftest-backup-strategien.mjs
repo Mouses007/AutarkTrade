@@ -179,6 +179,16 @@ for (const st of ['closing', 'pending']) {
         JSON.stringify({ s: z.s, setupId: pos.setupId, status: fremd?.status }))
 }
 
+// ── SEC-S-005: fremde `anlageklasse` aus der Datei wird Krypto ────────────
+{
+    const fremd = structuredClone(backup)
+    fremd.tables.strategy_instances[0].anlageklasse = 'forex'
+    const imp = await leise(() => rufe('post', '/api/db-import', fremd))
+    const klassen = (await knex('strategy_instances').select('anlageklasse')).map((z) => z.anlageklasse)
+    pruefe('Import: Instanz mit fremder anlageklasse steht als Krypto in der Datenbank',
+        imp.s === 200 && klassen.length > 0 && klassen.every((k) => k === 'krypto' || k === 'aktien'), JSON.stringify({ s: imp.s, klassen }))
+}
+
 // ── Älterer strategienStand im Backup wird sofort nachmigriert ───────────
 {
     const altStand = structuredClone(backup)

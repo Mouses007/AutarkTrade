@@ -36,7 +36,7 @@ import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliess
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
 import { neustartInstanz } from './strategie-neustart.js'
 import { anlageklasseVon } from './aktien/kontext.js'
-import { marktFilter, laeufeImMarkt, nurInstanzenImMarkt, marktSperre } from './strategie-markt.js'
+import { marktFilter, laeufeImMarkt, nurInstanzenImMarkt, nurMarkt, marktSperre } from './strategie-markt.js'
 import { normMarkt } from './migrationen/aktien.js'
 import { sendeWennAus } from './quellen/aus.js'
 import { setupAus, positionAus, tradeAus, aussortiertAus } from '../shared/strategieChart.js'
@@ -282,6 +282,26 @@ function pruefeInstanzEingabe(body, vorhanden = null) {
     }
 }
 
+/** JSON-Text mit sortierten Schlüsseln — zwei Werte-Sätze gelten als gleich, wenn nur die Reihenfolge abweicht. */
+function kanonisch(wert) {
+    if (Array.isArray(wert)) return `[${wert.map(kanonisch).join(',')}]`
+    if (wert && typeof wert === 'object') {
+        return `{${Object.keys(wert).sort().map((k) => `${JSON.stringify(k)}:${kanonisch(wert[k])}`).join(',')}}`
+    }
+    return JSON.stringify(wert) ?? 'null'
+}
+
+/**
+ * Sind die neuen Werte (JSON-Text aus `pruefeInstanzEingabe`) dieselben wie die
+ * gespeicherten, nachdem diese durch dasselbe Schema gegangen sind (Vorgaben
+ * eingesetzt, Unbekanntes entfernt)? Gespeichertes, das die Prüfung nicht
+ * besteht, gilt als geändert — die neue Fassung ist dann die erste gültige.
+ */
+function gleicheWerte(neuText, gespeichert) {
+    if (gespeichert.errors?.length) return false
+    return kanonisch(parseJson(neuText, {})) === kanonisch(gespeichert.values)
+}
+
 /**
  * Version in die Parameter-Historie schreiben. `onConflict`-frei gehalten:
  * der Unique-Index fängt Doppelläufe ab, ein Konflikt ist dann kein Fehler.
@@ -322,10 +342,9 @@ export function setupStrategyRoutes(app) {
             // `?markt=krypto|aktien` zeigt nur die Instanzen dieses Markts; ohne
             // Angabe alle (Bibliothek und Regel-Editor lesen alle und teilen selbst:
             // eine Regeländerung trifft die Instanzen BEIDER Märkte).
-            let abfrage = knex('strategy_instances')
-            if (req.query.markt === 'aktien') abfrage = abfrage.where('anlageklasse', 'aktien')
-            else if (req.query.markt === 'krypto') abfrage = abfrage.where((q) => q.where('anlageklasse', 'krypto').orWhereNull('anlageklasse'))
-            const rows = await abfrage.orderBy('id', 'desc')
+            // Über `nurMarkt` wie alle anderen Listen: eine Zeile mit fremder `anlageklasse`
+            // (Import, DB-Zugriff) gilt als Krypto und steht nicht mehr in KEINER Liste (SEC-S-005).
+            const rows = await nurMarkt(knex('strategy_instances'), marktFilter(req.query.markt)).orderBy('id', 'desc')
             // Kennzahlen je Instanz gleich mitliefern — die Übersicht soll ohne
             // n weitere Abrufe auskommen.
             const kz = await kennzahlenJeInstanz(knex)
@@ -351,7 +370,7 @@ export function setupStrategyRoutes(app) {
             if (geprueft.fehler) return res.status(400).json({ error: geprueft.fehler.join('; ') })
 
             // Markt der Instanz aus ihren Symbolen: lauter Aktien-Futures oder keiner.
-            const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols))
+            const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols), { market: geprueft.werte.market })
             if (markt.gemischt) return res.status(400).json({ error: GEMISCHT_FEHLER(markt.aktien) })
             // Strategie nur für Krypto (FACH-H-001): keine Instanz auf Aktien-Futures.
             const sperre = marktSperre(strategie, markt.klasse)
@@ -465,10 +484,13 @@ export function setupStrategyRoutes(app) {
 
             // Jede Parameteränderung erhöht die Version. Nur so lassen sich
             // Ergebnisse später einem konkreten Parametersatz zuordnen (A/B).
-            const paramsGeaendert = geprueft.werte.params !== vorhanden.params
-                || geprueft.werte.risk !== vorhanden.risk
+            // Verglichen wird NACH Normalisierung (FUN-K-004): der blosse Textvergleich
+            // meldete beim ersten Speichern jeder Alt-Instanz eine Änderung, sobald
+            // das Schema eine neue Vorgabe bekommen hatte.
+            const paramsGeaendert = !gleicheWerte(geprueft.werte.params, validateParams(geprueft.werte.strategyId, parseJson(vorhanden.params, {})))
+                || !gleicheWerte(geprueft.werte.risk, validateRisk(parseJson(vorhanden.risk, {})))
             // Ändern sich die Symbole, kann sich der Markt ändern — gemischt bleibt verboten.
-            const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols))
+            const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols), { market: geprueft.werte.market })
             if (markt.gemischt) return res.status(400).json({ error: GEMISCHT_FEHLER(markt.aktien) })
             // Strategie nur für Krypto (FACH-H-001): Aktien-Symbole lassen sich
             // nicht mehr eintragen. Eine Instanz, die schon vorher auf Aktien
@@ -710,9 +732,9 @@ export function setupStrategyRoutes(app) {
      * Symbolen? Dann `{code, error}` für die Antwort, sonst null. Strategien
      * ohne das Kennzeichen fragen den Stamm gar nicht erst.
      */
-    async function sperreFuerSymbole(strategie, symbole) {
+    async function sperreFuerSymbole(strategie, symbole, market) {
         if (!strategie?.nurKrypto) return null
-        const markt = await anlageklasseVon(symbole)
+        const markt = await anlageklasseVon(symbole, { market })
         return marktSperre(strategie, markt.aktien.length > 0)
     }
 
@@ -725,7 +747,7 @@ export function setupStrategyRoutes(app) {
         }
         const symbol = String(b.symbol || '').toUpperCase()
         if (!SYMBOL_RE.test(symbol)) return { fehler: 'Ungültiges Symbol' }
-        const sperre = await sperreFuerSymbole(strategie, [symbol])
+        const sperre = await sperreFuerSymbole(strategie, [symbol], b.market)
         if (sperre) return { fehler: sperre.error, code: sperre.code }
         const htfFehler = htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
         if (htfFehler) return { fehler: htfFehler }
@@ -920,7 +942,7 @@ export function setupStrategyRoutes(app) {
                 return res.status(400).json({ error: `${strategie.name} unterstützt ${b.timeframe} nicht` })
             }
 
-            const sperre = await sperreFuerSymbole(strategie, [symbol])
+            const sperre = await sperreFuerSymbole(strategie, [symbol], b.market)
             if (sperre) return res.status(400).json(sperre)
 
             const htfFehler = entwurf ? null : htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
@@ -1045,7 +1067,7 @@ export function setupStrategyRoutes(app) {
             // Jeder Lauf holt Kerzen und rechnet sie durch; ohne Deckel wartet
             // der Nutzer minutenlang auf eine Antwort, die längst abgebrochen ist.
             if (symbole.length > 6) return res.status(400).json({ error: 'Höchstens 6 Symbole je Durchlauf' })
-            const sperre = await sperreFuerSymbole(strategie, symbole)
+            const sperre = await sperreFuerSymbole(strategie, symbole, b.market)
             if (sperre) return res.status(400).json(sperre)
             const htfFehler = htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
             if (htfFehler) return res.status(400).json({ error: htfFehler })

@@ -240,7 +240,7 @@ export async function runBacktest(opts) {
     // sie unbereinigt (`server/aktien/splits.js`). `null` = Krypto, alles wie
     // bisher. Robustheit und Messskripte reichen `opts.aktie` durch, damit
     // nicht jeder Teillauf neu fragt.
-    const aktie = opts.aktie !== undefined ? opts.aktie : await aktienKontext(symbol)
+    const aktie = opts.aktie !== undefined ? opts.aktie : await aktienKontext(symbol, { market })
     // Strategie nur für Krypto (FACH-H-001): auf einem Aktien-Future nicht
     // rechnen — auch nicht über Rangliste, Robustheit oder das KI-Werkzeug,
     // die an den Routen-Prüfungen vorbei hierher kommen.

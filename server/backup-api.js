@@ -6,6 +6,7 @@ import { BEHALTEN_BEIM_IMPORT, BOERSEN_GEHEIMNISSE, PORTFOLIO_GEHEIMNISSE } from
 import { loadAuthConfig } from './auth.js'
 import { migriereKiAufgaben } from './migrationen/einstellungen-ordnung.js'
 import { migriereStrategien } from './migrationen/strategien.js'
+import { normMarkt } from './migrationen/aktien.js'
 
 /*
  * Sensible Felder, die im Export unkenntlich gemacht werden.
@@ -429,6 +430,9 @@ export function setupBackupRoutes(app) {
                                     clean[col] = row[col]
                                 }
                             }
+                            // Fremde `anlageklasse` aus der Datei wird Krypto (SEC-S-005): die Engine liesse die
+                            // Instanz sonst laufen, während sie in keiner Markt-Liste stünde.
+                            if (table === 'strategy_instances' && clean.anlageklasse !== undefined) clean.anlageklasse = normMarkt(clean.anlageklasse)
                             return clean
                         })
 

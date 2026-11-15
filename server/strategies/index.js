@@ -48,11 +48,11 @@ export const RISK_PARAMS = [
     // Entschieden wird nach dem Füllzeitpunkt (`einstiegRegulaer`, dieselbe
     // Regel wie die Hinterlegung im Chart); ab 1d nicht anwendbar und ohne
     // Wirkung — der Backtest meldet es (`stats.aktien.nurRegulaerWirkt`).
-    { key: 'nurRegulaereSitzung', type: 'boolean', default: false, group: 'limits' },
+    { key: 'nurRegulaereSitzung', type: 'boolean', default: false, group: 'limits', nurAktien: true },
     // Nur Aktien-Futures: keine Einstiege von einem Tag vor bis einem Tag nach
     // einem Zahlentermin (`shared/aktien-zahlen.js`). Bei Coins ohne Wirkung;
     // sind die Termine unbekannt, wirkt die Sperre nicht und das Ergebnis sagt es.
-    { key: 'meideZahlentermine', type: 'boolean', default: false, group: 'limits' },
+    { key: 'meideZahlentermine', type: 'boolean', default: false, group: 'limits', nurAktien: true },
     // Fährt eine Instanz mehrere Zeiteinheiten, konkurrieren sie um dasselbe
     // Symbol: `symbol` (Standard, sicher) lässt nur EINE Position je Coin zu —
     // die schnellste Zeiteinheit gewinnt und die langsameren kommen kaum zum
@@ -82,7 +82,7 @@ export const RISK_PARAMS = [
     // eine eigene Annahme. Bei Coins ohne Wirkung (`kostenAus`, `rutschAufschlag`).
     {
         key: 'slippageAusserhalbBps', type: 'number', default: 0, min: 0, max: 200, step: 0.01, group: 'costs',
-        labelKey: 'aktienEngine.rutschAusserhalb', hintKey: 'aktienEngine.rutschAusserhalbHint',
+        labelKey: 'aktienEngine.rutschAusserhalb', hintKey: 'aktienEngine.rutschAusserhalbHint', nurAktien: true,
     },
     // Ordersorte des Einstiegs. Alle heutigen Strategien steigen auf einem
     // vorher berechneten Kursniveau ein (`setup.entry`), also als Limit — auch

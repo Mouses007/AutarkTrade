@@ -30,7 +30,7 @@ const KEIN_TITEL_MS = 30_000
 const SPLITS_MS = 12 * 60 * 60_000
 /** So oft höchstens darf ein Aufrufer die Splits eines Symbols am Speicher vorbei holen (`splitsFrisch`). */
 const FRISCH_MS = 10 * 60_000
-const kontextCache = new Map()   // symbol → { zeit, wert }
+const kontextCache = new Map()   // börse|symbol → { zeit, wert } (börse leer = Marktdatenquelle, `jede` = irgendeine)
 const frischGeholt = new Map()   // symbol → Zeit des letzten Abrufs am Speicher vorbei
 const splitsCache = new Map()    // kursSymbol → { zeit, splits, grund }
 
@@ -48,17 +48,72 @@ async function ladeSplits(kursSymbol) {
     return wert
 }
 
-/** Der Titel des Stamms hinter einem Future-Symbol — nur Datenbank, kein Netz. `null` = kein Aktien-Future. */
-async function stammZeile(symbol) {
+/*
+ * Aktien-Modus (FUN-K-002): solange `settings.modusAktienAn` aus ist, gibt es
+ * serverseitig keine Aktien-Futures — jedes Symbol ist ein Coin, und für Splits
+ * und Termine geht kein Abruf hinaus. Vorher blieb die Aktien-Behandlung an,
+ * sobald der Stamm einmal gefüllt war. 30 s im Speicher wie die
+ * Marktdatenquelle und der Schalter «Quellen ohne Freigabe»; nach dem
+ * Speichern des Schalters `vergissModus()`.
+ */
+const MODUS_MS = 30_000
+let modusGemerkt = { an: undefined, ts: 0 }
+const modusAusDb = async () => (await getKnex()('settings').select('modusAktienAn').where('id', 1).first())?.modusAktienAn
+let modusLeser = modusAusDb
+const modusAusWert = (w) => w === true || Number(w) === 1
+
+/** Ist der Aktien-Modus eingeschaltet? Nicht lesbar (keine Datenbank, Spalte fehlt) = aus. */
+export async function aktienModusAn() {
+    if (modusGemerkt.an !== undefined && Date.now() - modusGemerkt.ts < MODUS_MS) return modusGemerkt.an
+    let an = false
+    try { an = modusAusWert(await modusLeser()) } catch { an = false }
+    modusGemerkt = { an, ts: Date.now() }
+    return an
+}
+
+/** Nach dem Speichern von `modusAktienAn`: Schalter und gemerkte Auskünfte gelten sofort neu. */
+export function vergissModus() {
+    modusGemerkt = { an: undefined, ts: 0 }
+    kontextCache.clear()
+}
+
+/** Nur für Selbsttests: Schalter ohne Datenbank stellen (`null` = wieder aus der Datenbank lesen). */
+export function _setzeModusLeser(fn) {
+    modusLeser = typeof fn === 'function' ? fn : modusAusDb
+    modusGemerkt = { an: undefined, ts: 0 }
+}
+
+const istSpot = (market) => String(market || '').toLowerCase() === 'spot'
+
+/** `boerse`-Angabe eines Aufrufers: eine Chart-Börse, `jede` oder leer (= Marktdatenquelle). */
+const JEDE = 'jede'
+const woVon = (boerse) => (boerse === JEDE || CHART_BOERSEN.includes(boerse) ? boerse : '')
+
+/**
+ * Der Titel des Stamms hinter einem Future-Symbol — nur Datenbank, kein Netz. `null` = kein Aktien-Future.
+ *
+ * BUG-K-001: Dasselbe Symbol kann an zwei Börsen Verschiedenes heissen (`ACNUSDT`: bei Bitget ein
+ * Spot-Coin, bei Bitunix der Accenture-Future). Es zählt deshalb die Listung der Börse, von der die
+ * Kerzen kommen: ohne Angabe die Marktdatenquelle (Backtest, Papierbetrieb, Radar), mit `boerse`
+ * genau diese (Chart-Panel mit eigener Quelle). Den früheren Rückfall auf irgendeine Börse gibt es
+ * nur noch, wo keine Börse widersprechen kann: Marktdaten ausgeschaltet, oder der Aufrufer kennt
+ * die Börse des Symbols nicht und sagt das mit `boerse: 'jede'` (Chart-Alarm, Flash-News).
+ * Spot ist nie ein Aktien-Future.
+ */
+async function stammZeile(symbol, { market, boerse: wo = '' } = {}) {
+    if (istSpot(market)) return null
     const knex = getKnex()
-    let boerse = null
-    try { boerse = (await marktdaten.fordere('kerzen', { markt: 'futures' })).id } catch { /* Marktdaten aus */ }
-    // Dasselbe Symbol kann an zwei Börsen Verschiedenes heissen — die Marktdatenquelle gewinnt.
+    let quelle = null
+    if (!wo || wo === JEDE) {
+        try { quelle = (await marktdaten.fordere('kerzen', { markt: 'futures' })).id } catch { /* Marktdaten aus */ }
+    }
+    const boerse = wo && wo !== JEDE ? wo : quelle
     const zeilen = await knex('instrument_listungen as l').join('instrumente as i', 'i.id', 'l.instrumentId')
         .where({ 'l.symbol': symbol, 'l.art': 'perp', 'l.aktiv': 1, 'i.anlageklasse': 'aktien' })
         .whereIn('l.handelsplatz', CHART_BOERSEN)
         .select('i.id', 'i.ticker', 'i.name', 'i.unterart', 'i.region', 'l.handelsplatz')
-    const zeile = zeilen.find((z) => z.handelsplatz === boerse) || zeilen[0]
+    const irgendeine = wo === JEDE || !boerse
+    const zeile = zeilen.find((z) => z.handelsplatz === boerse) || (irgendeine ? zeilen[0] : null)
     return zeile ? { ...zeile, boerse: boerse || zeile.handelsplatz } : null
 }
 
@@ -66,24 +121,29 @@ async function stammZeile(symbol) {
  * Anlageklasse einer Symbolliste (für Strategie-Instanzen): `aktien`, wenn
  * JEDES Symbol ein Aktien-Future ist, `krypto`, wenn keines es ist. Gemischt
  * ist ein Fehler — eine Instanz hat EINE Tagesgrenze und EINEN Markt.
- * Ist die Frage nicht zu beantworten (keine Datenbank), gilt Krypto.
+ * Ist die Frage nicht zu beantworten (keine Datenbank), gilt Krypto — ebenso
+ * bei ausgeschaltetem Aktien-Modus (FUN-K-002) und im Spot-Markt (BUG-K-001).
  *
+ * @param {string[]} symbole
+ * @param {{market?: 'spot'|'futures', boerse?: string}} [opt]  Markt der Symbole, wo der Aufrufer
+ *        ihn kennt; `boerse` wie bei `aktienKontext`
  * @returns {Promise<{klasse: 'krypto'|'aktien', gemischt: boolean, aktien: string[]}>}
  */
-export async function anlageklasseVon(symbole = []) {
+export async function anlageklasseVon(symbole = [], { market, boerse } = {}) {
     const aktien = []
-    for (const s of symbole) {
+    const moeglich = !istSpot(market) && await aktienModusAn()
+    for (const s of moeglich ? symbole : []) {
         let zeile = null
-        try { zeile = await stammZeile(String(s).toUpperCase()) } catch { zeile = null }
+        try { zeile = await stammZeile(String(s).toUpperCase(), { market, boerse: woVon(boerse) }) } catch { zeile = null }
         if (zeile) aktien.push(String(s).toUpperCase())
     }
     const gemischt = aktien.length > 0 && aktien.length < symbole.length
     return { klasse: aktien.length && !gemischt ? 'aktien' : 'krypto', gemischt, aktien }
 }
 
-async function baue(symbol) {
+async function baue(symbol, wo) {
     const knex = getKnex()
-    const zeile = await stammZeile(symbol)
+    const zeile = await stammZeile(symbol, wo)
     if (!zeile) return null
     const gemerkt = (await knex.schema.hasTable('newcomer_titel'))
         ? await knex('newcomer_titel').where('instrumentId', zeile.id).first('kursSymbol') : null
@@ -102,7 +162,11 @@ async function baue(symbol) {
 
 /**
  * @param {string} symbol  wie die Marktdatenquelle es nennt (`NVDAUSDT`)
- * @param {{splitsFrisch?: boolean}} [opt]  `splitsFrisch`: die Splits NICHT aus dem Speicher nehmen.
+ * @param {{splitsFrisch?: boolean, market?: 'spot'|'futures', boerse?: string}} [opt]
+ *        `market`: `spot` ist nie ein Aktien-Future (BUG-K-001). `boerse`: die Börse, von der die
+ *        Kerzen kommen, wenn es NICHT die Marktdatenquelle ist (Chart mit eigener Quelle), oder
+ *        `jede`, wenn der Aufrufer die Börse des Symbols nicht kennt.
+ *        `splitsFrisch`: die Splits NICHT aus dem Speicher nehmen.
  *        Dort gilt auch eine leere Liste zwölf Stunden als bekannt — ein Split von heute fehlt
  *        dann so lange (Audit 15.11.2026, FUN-F-006). Für den Papierbetrieb, wenn in den Kerzen
  *        ein Sprung steht, den die bekannten Splits nicht erklären; höchstens alle zehn Minuten
@@ -110,9 +174,14 @@ async function baue(symbol) {
  * @returns {Promise<null | {ticker, name, unterart, boerse, kursSymbol, splits: object[]|null, splitsGrund: string|null,
  *           termine: {naechster, vergangene}|null, termineGrund: string|null}>}
  */
-export async function aktienKontext(symbol, { splitsFrisch = false } = {}) {
+export async function aktienKontext(symbol, { splitsFrisch = false, market, boerse } = {}) {
     const sym = String(symbol || '').toUpperCase()
-    const c = kontextCache.get(sym)
+    if (istSpot(market) || !(await aktienModusAn())) return null
+    // Der Schlüssel trägt die Börse: «kein Titel» an der einen darf die Antwort für die andere nicht stellen.
+    // Der Markt braucht keinen Platz darin — Spot kommt gar nicht bis zum Speicher.
+    const wo = woVon(boerse)
+    const schluessel = `${wo}|${sym}`
+    const c = kontextCache.get(schluessel)
     const frisch = splitsFrisch && !(Date.now() - (frischGeholt.get(sym) || 0) < FRISCH_MS)
     if (c && !frisch && Date.now() - c.zeit < (c.wert ? KONTEXT_MS : KEIN_TITEL_MS)) return c.wert
     if (frisch) {
@@ -121,10 +190,10 @@ export async function aktienKontext(symbol, { splitsFrisch = false } = {}) {
     }
     let wert
     // Ein gescheiterter Aufbau (Datenbank gerade nicht da) wird nicht gemerkt — nächste Frage, neuer Versuch.
-    try { wert = await baue(sym) } catch { return null }
-    kontextCache.set(sym, { zeit: Date.now(), wert })
+    try { wert = await baue(sym, { market, boerse: wo }) } catch { return null }
+    kontextCache.set(schluessel, { zeit: Date.now(), wert })
     return wert
 }
 
 /** Nur für Selbsttests. */
-export function leereKontextCache() { kontextCache.clear(); splitsCache.clear(); frischGeholt.clear() }
+export function leereKontextCache() { kontextCache.clear(); splitsCache.clear(); frischGeholt.clear(); modusGemerkt = { an: undefined, ts: 0 } }

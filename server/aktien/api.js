@@ -110,7 +110,8 @@ export function setupAktienRoutes(app) {
         const symbol = String(req.query.symbol || '').toUpperCase()
         if (!/^[A-Z0-9_.\-]{2,30}$/.test(symbol)) return res.status(400).json({ ok: false, error: 'ungültiges Symbol' })
         try {
-            const k = await aktienKontext(symbol)
+            // Das Panel kann an jeder Chart-Börse hängen, nicht nur an der Marktdatenquelle (BUG-K-001).
+            const k = await aktienKontext(symbol, { boerse: 'jede' })
             if (!k) return res.json({ ok: true, aktie: null })
             res.json({
                 ok: true,

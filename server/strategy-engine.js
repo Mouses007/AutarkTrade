@@ -344,9 +344,10 @@ export function risikoKontextAbfragen(knex, instanceId, now, tagesBeginn = start
  * (Audit 15.11.2026, FUN-F-006). Die Aufrufer setzen bei Verdacht die Runde
  * aus; der nächste Takt fragt wieder.
  */
-async function mitSplits(symbol, candles) {
+async function mitSplits(symbol, candles, market) {
     if (!candles?.length) return { kerzen: candles, bericht: [], aktie: null, verdacht: null }
-    let aktie = await kontextVon(symbol)
+    // `market` der Instanz geht mit: ein Spot-Symbol ist nie ein Aktien-Future (BUG-K-001).
+    let aktie = await kontextVon(symbol, { market })
     // Coin: unverändert, und kein Blick auf Sprünge — dort gibt es keine Splits.
     if (!aktie) return { kerzen: candles, bericht: [], aktie, verdacht: null }
     const rechne = (a) => (a.splits?.length ? bereinigeSplits(candles, a.splits) : { kerzen: candles, splits: [] })
@@ -354,7 +355,7 @@ async function mitSplits(symbol, candles) {
     let verdacht = jungerSprung(b.kerzen)
     if (verdacht) {
         // Am Speicher vorbei nachfragen (dort gebremst auf einmal je zehn Minuten und Symbol).
-        const frisch = await kontextVon(symbol, { splitsFrisch: true }).catch(() => null)
+        const frisch = await kontextVon(symbol, { splitsFrisch: true, market }).catch(() => null)
         if (frisch) {
             aktie = frisch
             b = rechne(aktie)
@@ -390,8 +391,8 @@ function meldeSplitVerdacht(schluessel, symbol, verdacht) {
         + 'Runde ausgesetzt, Splits werden neu geholt (längstens drei Tage, danach zählt der Sprung als Kursbewegung)')
 }
 
-async function splitBereinigt(symbol, candles) {
-    return (await mitSplits(symbol, candles)).kerzen
+async function splitBereinigt(symbol, candles, market) {
+    return (await mitSplits(symbol, candles, market)).kerzen
 }
 
 const kurz = (v) => (Number.isFinite(Number(v)) ? String(Number(Number(v).toPrecision(8))) : '–')
@@ -580,7 +581,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         { endlich: true, aktie: instance.anlageklasse === 'aktien' })
 
     let { kerzen: candles, bericht: splitBericht, aktie, verdacht: splitVerdacht } = await mitSplits(symbol,
-        await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }))
+        await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }), instance.market)
     // Für Aktien-Futures reist der Rutsch-Aufschlag ausserhalb der regulären
     // Sitzung mit (Vorgabe 0); bei Coins nie.
     const costs = kostenAus(instance.risk, { aktie: Boolean(aktie) })
@@ -598,7 +599,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     const kurzVon = candles[candles.length - 1].t
     if (candles.length < bedarf * 0.9 && nachgefragt.get(key) !== kurzVon) {
         nachgefragt.set(key, kurzVon)
-        const frisch = await mitSplits(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }))
+        const frisch = await mitSplits(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }), instance.market)
         if (frisch.kerzen.length > candles.length) { candles = frisch.kerzen; splitBericht = frisch.bericht; splitVerdacht = frisch.verdacht }
     }
     if (candles.length < 50) return { skipped: 'zu wenige Kerzen' }
@@ -680,7 +681,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         try {
             htfCandles = await splitBereinigt(symbol, await getClosedCandles(
                 symbol, p.htfTimeframe, anzahl, { market: instance.market },
-            ))
+            ), instance.market)
         } catch (e) {
             htfCandles = null
         }
@@ -906,7 +907,7 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     // (`einstiegRegulaer`, dieselbe Funktion wie im Backtest und dieselbe
     // Regel wie im Chart, FUN-H-005). Ab 1d ist der Schalter nicht anwendbar
     // und bleibt ohne Wirkung.
-    const aktie = await kontextVon(setup.symbol)
+    const aktie = await kontextVon(setup.symbol, { market: instance.market })
     if (aktie && instance.risk?.nurRegulaereSitzung) {
         const urteil = einstiegRegulaer(Number(ev?.candleTime ?? ev?.triggeredAt) || now, timeframeMs(setup.timeframe), einstiegsArtVon(ev, setup))
         if (!urteil.regulaer) return beenden('reject_risk', 'ausserhalb_sitzung', `Sitzung ${urteil.sitzung}`)
@@ -1199,7 +1200,7 @@ async function pflegeOffenePositionen() {
             const tfMs = timeframeMs(pflegeTf)
             const bedarf = Math.min(990, Math.max(60, Math.ceil((Date.now() - minAb) / tfMs) + 3))
             const { kerzen: candles, bericht: splitBericht, aktie, verdacht: splitVerdacht } = await mitSplits(symbol,
-                await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }))
+                await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }), instance.market)
             if (!candles?.length) continue
             // Unerklärter Sprung, über den die Position noch nicht fortgeschrieben ist: aussetzen (siehe `mitSplits`).
             if (splitVerdacht && splitVerdacht.t > minAb) {
@@ -1395,7 +1396,7 @@ export async function killSwitch({ closePositions = false } = {}) {
             const preis = await getLastPrice(row.symbol, { market: instance.market }).catch(() => Number(row.entryPrice))
             const r = await schliessePositionManuell({
                 instance, positionRow: row, price: preis, time: Date.now(),
-                costs: kostenAus(instance.risk, { aktie: Boolean(await kontextVon(row.symbol).catch(() => null)) }),
+                costs: kostenAus(instance.risk, { aktie: Boolean(await kontextVon(row.symbol, { market: instance.market }).catch(() => null)) }),
                 reason: 'manual',
             }).catch((err) => ({ ok: false, reason: err.message }))
             if (r.ok) geschlossen++

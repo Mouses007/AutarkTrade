@@ -581,7 +581,9 @@ console.log('\nSplit: offene Papier-Position und wartende Setups')
 // ── 6. `aktienKontext({ splitsFrisch })`: am Zwölf-Stunden-Speicher vorbei ──
 console.log('\nAktien-Kontext: Splits frisch holen')
 {
-    const { aktienKontext, leereKontextCache } = await import('./aktien/kontext.js')
+    const { aktienKontext, anlageklasseVon, leereKontextCache, vergissModus } = await import('./aktien/kontext.js')
+    // Aktien-Futures gibt es nur mit eingeschaltetem Aktien-Modus (FUN-K-002) — Gegenprobe weiter unten.
+    await knex('settings').where('id', 1).update({ modusAktienAn: 1, marktdatenQuelle: 'binance' })
     const [iid] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'KORU', unterart: 'etf', name: 'Korea Bull 3X' })
     await knex('instrument_listungen').insert({ instrumentId: iid, handelsplatz: 'binance', symbol: 'KORUUSDT', art: 'perp', aktiv: 1 })
     // Gestellte Kursquelle: nur der Split-Abruf antwortet, alles andere (Zahlentermine) scheitert ohne Netz.
@@ -624,6 +626,46 @@ console.log('\nAktien-Kontext: Splits frisch holen')
         try {
             pruefe('nach 30 Sekunden: als Aktien-Future erkannt', (await aktienKontext('SPAETUSDT'))?.ticker === 'SPAET')
         } finally { Date.now = jetztEcht }
+
+        // BUG-K-001: dasselbe Symbol heisst an zwei Börsen Verschiedenes. `ACNUSDT` ist nur bei Bitunix
+        // der Accenture-Future — an der Marktdatenquelle (Binance) ist es keiner, und Spot ist nie einer.
+        console.log('\nAktien-Kontext: Symbol-Kollision und Spot (BUG-K-001)')
+        const [aid] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'ACN', unterart: 'aktie', name: 'Accenture' })
+        await knex('instrument_listungen').insert({ instrumentId: aid, handelsplatz: 'bitunix', symbol: 'ACNUSDT', art: 'perp', aktiv: 1 })
+        const vorher = splitAbrufe
+        pruefe('nur an einer fremden Börse Aktie: an der Marktdatenquelle ein Coin', (await aktienKontext('ACNUSDT')) === null)
+        pruefe('…auch für die Instanz-Klasse', (await anlageklasseVon(['ACNUSDT'])).klasse === 'krypto'
+            && (await anlageklasseVon(['BTCUSDT', 'ACNUSDT'])).gemischt === false)
+        pruefe('…und ohne Abruf an die Kursquelle', splitAbrufe === vorher, `${splitAbrufe - vorher} Abrufe`)
+        const anBitunix = await aktienKontext('ACNUSDT', { boerse: 'bitunix' })
+        pruefe('Chart-Panel an Bitunix: dort ist es die Aktie', anBitunix?.ticker === 'ACN' && anBitunix.boerse === 'bitunix')
+        pruefe('Chart-Panel an Bitget: dort nicht', (await aktienKontext('ACNUSDT', { boerse: 'bitget' })) === null)
+        pruefe('Börse unbekannt (`jede`): Aktie, wie bisher', (await aktienKontext('ACNUSDT', { boerse: 'jede' }))?.ticker === 'ACN'
+            && (await anlageklasseVon(['ACNUSDT'], { boerse: 'jede' })).klasse === 'aktien')
+        pruefe('die Antworten je Börse stehen einander im Speicher nicht im Weg', (await aktienKontext('ACNUSDT')) === null
+            && (await aktienKontext('ACNUSDT', { boerse: 'bitunix' }))?.ticker === 'ACN')
+        pruefe('Spot ist nie ein Aktien-Future, auch bei gleichem Symbol', (await aktienKontext('KORUUSDT', { market: 'spot' })) === null
+            && (await aktienKontext('ACNUSDT', { market: 'spot', boerse: 'bitunix' })) === null
+            && (await anlageklasseVon(['KORUUSDT'], { market: 'spot' })).klasse === 'krypto')
+        pruefe('Futures an der Marktdatenquelle: weiter Aktie', (await aktienKontext('KORUUSDT', { market: 'futures' }))?.ticker === 'KORU'
+            && (await anlageklasseVon(['KORUUSDT'], { market: 'futures' })).klasse === 'aktien')
+
+        // FUN-K-002: Aktien-Modus aus → jedes Symbol ist ein Coin, kein Abruf — auch bei gefülltem Stamm.
+        console.log('\nAktien-Kontext: Aktien-Modus aus (FUN-K-002)')
+        await knex('settings').where('id', 1).update({ modusAktienAn: 0 })
+        pruefe('Schalter wird 30 s gemerkt: ohne `vergissModus` noch Aktie', (await aktienKontext('KORUUSDT'))?.ticker === 'KORU')
+        vergissModus()
+        {
+            const davor = splitAbrufe
+            pruefe('Modus aus: Kontext null', (await aktienKontext('KORUUSDT')) === null && (await aktienKontext('KORUUSDT', { splitsFrisch: true })) === null
+                && (await aktienKontext('ACNUSDT', { boerse: 'jede' })) === null)
+            pruefe('Modus aus: Instanz-Klasse Krypto, nichts gemischt', (await anlageklasseVon(['KORUUSDT'])).klasse === 'krypto'
+                && (await anlageklasseVon(['BTCUSDT', 'KORUUSDT'])).gemischt === false)
+            pruefe('Modus aus: kein Abruf an die Kursquelle', splitAbrufe === davor, `${splitAbrufe - davor} Abrufe`)
+        }
+        await knex('settings').where('id', 1).update({ modusAktienAn: 1 })
+        vergissModus()
+        pruefe('Modus wieder an: wieder Aktie', (await aktienKontext('KORUUSDT'))?.ticker === 'KORU')
     } finally {
         globalThis.fetch = fetchEcht
         leereKontextCache()

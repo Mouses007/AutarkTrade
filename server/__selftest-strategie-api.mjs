@@ -37,6 +37,7 @@ const { initDb } = await import('./database.js')
 const knex = await initDb()
 await knex('settings').where('id', 1).update({ marktdatenQuelle: 'aus' })
 const { setupStrategyRoutes, ladePerformance } = await import('./strategy-api.js')
+const { vergissModus } = await import('./aktien/kontext.js')
 const { ladeInstanz, schliessePositionManuell, stopStrategyEngine } = await import('./strategy-engine.js')
 const { openPaperPosition } = await import('./execution/paper.js')
 const { runBacktest } = await import('./strategy-backtest.js')
@@ -271,6 +272,9 @@ console.log('\nStrategie nur für Krypto: im Aktien-Markt abgelehnt')
 {
     const [instrumentId] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'NVDA', unterart: 'aktie', name: 'NVIDIA' })
     await knex('instrument_listungen').insert({ instrumentId, handelsplatz: 'binance', art: 'perp', symbol: 'NVDAUSDT', aktiv: 1 })
+    // Aktien-Futures gibt es nur mit eingeschaltetem Aktien-Modus (FUN-K-002, Gegenprobe im Block darunter).
+    await knex('settings').where('id', 1).update({ modusAktienAn: 1 })
+    vergissModus()
     const reg = (await rufe('get', '/api/strategies/registry')).d.strategies
     pruefe('Registry: nur die Liquidations-Kerze trägt nurKrypto',
         reg.filter((s) => s.nurKrypto).map((s) => s.id).join() === 'liq_kerze' && reg.every((s) => typeof s.nurKrypto === 'boolean'))
@@ -315,6 +319,55 @@ console.log('\nStrategie nur für Krypto: im Aktien-Markt abgelehnt')
     pruefe('runBacktest mit Aktien-Kontext: leer, Kennung nur_krypto', gesperrt.trades.length === 0 && gesperrt.stats.hinweisCode === 'nur_krypto' && /nur für Krypto/.test(gesperrt.stats.hinweis))
     const frei = await runBacktest({ ...basis, aktie: null })
     pruefe('runBacktest ohne Aktien-Kontext: rechnet wie bisher', frei.stats.hinweisCode === undefined && frei.stats.aktien === null && Boolean(frei.funnel), JSON.stringify(frei.stats).slice(0, 200))
+}
+
+// ── Audit 15.11.2026, niedrige Befunde (Rückwirkungen auf Krypto) ─────────
+console.log('\nAktien-Modus aus, Risikofelder, paramsVersion (FUN-K-002/-003/-004, BUG-K-001, SEC-S-005)')
+{
+    // FUN-K-002: Alt-Instanz mit Coin + TradFi-Kontrakt. Modus an → gemischt, 400 bei jedem Speichern.
+    const [mixId] = await knex('strategy_instances').insert({ strategyId: 'ema_touch', name: 'Mix', symbols: '["BTCUSDT","NVDAUSDT"]', timeframe: '1h',
+        params: '{}', risk: '{}', mode: 'paper', enabled: 0, anlageklasse: 'krypto' })
+    const anMix = await rufe('put', `/api/strategies/instances/${mixId}`, { name: 'Mix 2' })
+    pruefe('Modus an: Coin + Aktien-Future bleibt gemischt (400)', anMix.s === 400 && /NVDAUSDT/.test(anMix.d.error), JSON.stringify(anMix).slice(0, 200))
+    // BUG-K-001: dieselben Symbole als Spot-Instanz sind keine Aktien-Futures.
+    const spot = await rufe('post', '/api/strategies/instances', { strategyId: 'ema_touch', name: 'Spot', mode: 'paper', timeframe: '1h', symbols: ['BTCUSDT', 'NVDAUSDT'], market: 'spot' })
+    pruefe('Spot-Instanz mit gleichnamigem Symbol: Krypto, nicht gemischt', spot.s === 201 && spot.d.anlageklasse === 'krypto', JSON.stringify(spot).slice(0, 200))
+    const spotLk = await rufe('post', '/api/strategies/instances', { strategyId: 'liq_kerze', name: 'Spot LK', mode: 'paper', timeframe: '1h', symbols: ['NVDAUSDT'], market: 'spot' })
+    pruefe('Spot: die Sperre «nur für Krypto» greift nicht', spotLk.s === 201 && spotLk.d.anlageklasse === 'krypto', JSON.stringify(spotLk).slice(0, 200))
+
+    await knex('settings').where('id', 1).update({ modusAktienAn: 0 })
+    vergissModus()
+    const ausMix = await rufe('put', `/api/strategies/instances/${mixId}`, { name: 'Mix 2' })
+    pruefe('Modus aus: dieselbe Instanz lässt sich wieder speichern, als Krypto', ausMix.s === 200 && ausMix.d.name === 'Mix 2' && ausMix.d.anlageklasse === 'krypto', JSON.stringify(ausMix).slice(0, 200))
+    const ausNeu = await rufe('post', '/api/strategies/instances', { strategyId: 'liq_kerze', name: 'Aus', mode: 'paper', timeframe: '1h', symbols: ['NVDAUSDT'], market: 'futures' })
+    pruefe('Modus aus: ein TradFi-Kontrakt ist ein Coin (keine Sperre, Klasse Krypto)', ausNeu.s === 201 && ausNeu.d.anlageklasse === 'krypto', JSON.stringify(ausNeu).slice(0, 200))
+
+    // FUN-K-003: genau die drei Aktien-Felder tragen das Kennzeichen.
+    const reg = (await rufe('get', '/api/strategies/registry')).d
+    pruefe('Registry: drei Risikofelder tragen nurAktien', reg.riskParams.filter((p) => p.nurAktien).map((p) => p.key).join() === 'nurRegulaereSitzung,meideZahlentermine,slippageAusserhalbBps',
+        reg.riskParams.filter((p) => p.nurAktien).map((p) => p.key).join())
+
+    // FUN-K-004: Alt-Instanz, deren gespeichertes Risiko die neuen Vorgaben noch nicht kennt.
+    const [altId] = await knex('strategy_instances').insert({ strategyId: 'ema_touch', name: 'Alt-Version', symbols: '["BTCUSDT"]', timeframe: '1h',
+        params: '{"emaFast":21}', risk: '{"leverage":5,"riskPerTradePct":1}', mode: 'paper', enabled: 0, paramsVersion: 1, anlageklasse: 'krypto' })
+    const ohne = await rufe('put', `/api/strategies/instances/${altId}`, { name: 'Alt-Version 2' })
+    pruefe('Speichern ohne Wertänderung: paramsVersion bleibt 1', ohne.s === 200 && ohne.d.paramsVersion === 1 && ohne.d.paramsVersionErhoeht === false,
+        JSON.stringify({ s: ohne.s, v: ohne.d?.paramsVersion, e: ohne.d?.paramsVersionErhoeht }))
+    // Dieselben Werte in anderer Schlüssel-Reihenfolge gespeichert: ebenfalls keine Änderung.
+    const zeile = await knex('strategy_instances').where('id', altId).first()
+    const umgedreht = (text) => JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(text)).reverse()))
+    await knex('strategy_instances').where('id', altId).update({ risk: umgedreht(zeile.risk), params: umgedreht(zeile.params) })
+    const reihenfolge = await rufe('put', `/api/strategies/instances/${altId}`, { risk: { leverage: 5 } })
+    pruefe('andere Schlüssel-Reihenfolge, gleicher Wert geschickt: bleibt 1', reihenfolge.s === 200 && reihenfolge.d.paramsVersion === 1, JSON.stringify(reihenfolge.d?.paramsVersion))
+    const echtRisk = await rufe('put', `/api/strategies/instances/${altId}`, { risk: { leverage: 6 } })
+    pruefe('echte Risiko-Änderung: paramsVersion 2', echtRisk.s === 200 && echtRisk.d.paramsVersion === 2 && echtRisk.d.paramsVersionErhoeht === true, JSON.stringify(echtRisk.d?.paramsVersion))
+    const echtParam = await rufe('put', `/api/strategies/instances/${altId}`, { params: { emaFast: 34 } })
+    pruefe('echte Parameter-Änderung: paramsVersion 3', echtParam.s === 200 && echtParam.d.paramsVersion === 3, JSON.stringify(echtParam.d?.paramsVersion))
+
+    // SEC-S-005: fremde `anlageklasse` (Import, DB-Zugriff) steht in der Krypto-Liste, nicht in keiner.
+    await knex('strategy_instances').where('id', altId).update({ anlageklasse: 'forex' })
+    const ids = async (markt) => (await rufe('get', `/api/strategies/instances?markt=${markt}`)).d.map((x) => x.id)
+    pruefe('fremde anlageklasse: in der Krypto-Liste, nicht in der Aktien-Liste', (await ids('krypto')).includes(altId) && !(await ids('aktien')).includes(altId))
 }
 
 await stopStrategyEngine?.().catch(() => {})

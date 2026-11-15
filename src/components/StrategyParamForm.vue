@@ -13,6 +13,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
+import { aktienAn } from '@/stores/markt.js'
 
 const { t, te } = useI18n()
 
@@ -50,6 +51,8 @@ const optionWert = (o) => (typeof o === 'object' ? o.value : o)
 const gruppiert = computed(() => {
     const map = new Map()
     for (const p of props.schema) {
+        // Felder nur für Aktien-Futures (`nurAktien` im Schema) erscheinen erst mit dem Aktien-Modus (FUN-K-003).
+        if (p.nurAktien && !aktienAn.value) continue
         const g = p.group || 'other'
         if (!map.has(g)) map.set(g, [])
         map.get(g).push(p)

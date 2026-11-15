@@ -1390,7 +1390,7 @@
     "profilBildUnlesbar": "Das Bild lässt sich nicht lesen.",
     "esp32HauptLabel": "Hauptschlüssel (Handy-App, Widget, Desklet)",
     "modeAktien": "Aktien (im Aufbau)",
-    "modeAktienInfo": "Schaltet den Umschalter Krypto ↔ Aktien in der Kopfleiste frei und gleicht zweimal täglich ab, welche Aktien an Binance, Bitget, Bitunix, Pionex und Bitpanda handelbar sind.\nIm Markt «Aktien» gibt es bisher: Newcomer-Radar, Aktien-Radar, die Titel-Liste mit einer Seite je Titel (Kurs, Kennzahlen, Analysten) und den Chart mit eigenen Layouts und Watchlists. Der Marktradar zeigt weiterhin Krypto-Daten.\nGelesen werden nur öffentliche Listen und Kurse; Kennzahlen kommen von Yahoo Finance und brauchen den Schalter «Quellen mit eingeschränkten Nutzungsbedingungen».\nAus: Umschalter und Aktien-Seiten verschwinden, es wird nichts abgerufen."
+    "modeAktienInfo": "Schaltet den Umschalter Krypto ↔ Aktien in der Kopfleiste frei und gleicht zweimal täglich ab, welche Aktien an Binance, Bitget, Bitunix, Pionex und Bitpanda handelbar sind.\nIm Markt «Aktien» gibt es bisher: Newcomer-Radar, Aktien-Radar, die Titel-Liste mit einer Seite je Titel (Kurs, Kennzahlen, Analysten) und den Chart mit eigenen Layouts und Watchlists. Der Marktradar zeigt weiterhin Krypto-Daten.\nGelesen werden nur öffentliche Listen und Kurse; Kennzahlen kommen von Yahoo Finance und brauchen den Schalter «Quellen mit eingeschränkten Nutzungsbedingungen».\nAus: Umschalter und Aktien-Seiten verschwinden, es wird nichts abgerufen, und Backtest, Papierbetrieb und Chart behandeln jedes Symbol wieder wie einen Coin (keine Börsensitzungen, keine Split-Umrechnung)."
   },
   "setup": {
     "welcome": "Willkommen!",

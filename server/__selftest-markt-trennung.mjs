@@ -77,6 +77,9 @@ const api = async (methode, pfad, body) => {
 
 try {
     console.log('\nChart-Alarme je Markt (Routen)\n')
+    // Aktien-Futures gibt es nur mit eingeschaltetem Aktien-Modus (FUN-K-002).
+    await knex('settings').where('id', 1).update({ modusAktienAn: 1 })
+    ;(await import('./aktien/kontext.js')).vergissModus()
     // Titel-Stamm: NVIDIA als Future bei Binance und Bitget (andere Schreibweise)
     const [instrumentId] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'NVDA', unterart: 'aktie', name: 'NVIDIA' })
     await knex('instrument_listungen').insert([

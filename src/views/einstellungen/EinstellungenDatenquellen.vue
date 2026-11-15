@@ -31,6 +31,7 @@ import Schalter from './gemeinsam/Schalter.vue'
 import CryptoQuant from './datenquellen/CryptoQuant.vue'
 import KerzenSchluessel from './datenquellen/KerzenSchluessel.vue'
 import Edgar from './datenquellen/Edgar.vue'
+import { aktienAn } from '@/stores/markt.js'
 
 const { t } = useI18n()
 
@@ -218,7 +219,7 @@ async function cgSpeichern(loeschen = false) {
         <KerzenSchluessel />
 
         <!-- Aktien: Kontaktangabe für die Einreichungen der SEC -->
-        <Edgar />
+        <Edgar v-if="aktienAn" />
 
         <!-- Wo die übrigen Schlüssel stehen — als Verweise, nicht als Text -->
         <Abschnitt kennung="weitere-schluessel" :titel="t('datenquellen.andere.titel')" symbol="verknuepfung">

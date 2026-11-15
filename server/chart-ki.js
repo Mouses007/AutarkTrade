@@ -691,7 +691,7 @@ export async function ladeChartDaten({ symbol, interval, markt = 'futures', anza
     const knex = getKnex()
     // Aktien-Future: keine geschätzten Liquidationszonen in die Eingabe — das Modell aus Open Interest
     // ist für Coins gebaut und sagt bei Aktien nichts (`docs/RECHERCHE-AKTIEN.md`). Coins: unverändert.
-    const istAktie = markt !== 'spot' && (await anlageklasseVon([symbol]).catch(() => ({ klasse: 'krypto' }))).klasse === 'aktien'
+    const istAktie = markt !== 'spot' && (await anlageklasseVon([symbol], { boerse: 'jede' }).catch(() => ({ klasse: 'krypto' }))).klasse === 'aktien'
     const [zeichnungenRoh, hebel, tagesZeilen, s] = await Promise.all([
         // Feste Reihenfolge (neueste zuerst); welche in die Analyse kommen, entscheidet `waehleNutzer`
         knex('chart_zeichnungen').where('symbol', symbol).orderBy('geaendertAm', 'desc').orderBy('id', 'desc').catch(() => []),
