@@ -26,6 +26,7 @@ import Hinweis from '../basis/Hinweis.vue'
 import Kreisel from '../basis/Kreisel.vue'
 import Diagramm from '../strategien/Diagramm.vue'
 import QuelleAus from '../quellen/QuelleAus.vue'
+import Kaufzettel from './Kaufzettel.vue'
 import { marktdaten, ladeMarktdaten } from '../../utils/marktdaten.js'
 import { symbolBei, vorzug } from '../../utils/chart/aktienSymbole.js'
 import { vorgabeBoerse, waehlbareBoersen } from '../../utils/chart/kerzenQuelle.js'
@@ -53,6 +54,7 @@ const bewegung = ref(null)
 const bewegungLaedt = ref(false)
 const bewegungHinweis = ref('')
 const alleEinstufungen = ref(false)
+const zettelOffen = ref(false)
 
 const d = computed(() => seite.value?.daten || null)
 const waehrung = computed(() => d.value?.profil?.waehrung || '')
@@ -262,9 +264,12 @@ const grundText = computed(() => {
             </div>
             <div class="knoepfe">
                 <Knopf v-if="chartZiel" klein art="haupt" symbol="chart" :to="chartZiel">{{ t('titel.zumChart') }}</Knopf>
+                <Knopf v-if="listungen.length" klein symbol="dokument" :titel="t('kaufzettel.knopfTitel', { ticker })" @click="zettelOffen = true">{{ t('kaufzettel.knopf') }}</Knopf>
                 <Knopf klein nur-symbol symbol="aktualisieren" :titel="t('titel.aktualisieren')" :laedt="laedt" @click="lade(true)" />
             </div>
         </header>
+
+        <Kaufzettel v-if="seite" v-model="zettelOffen" :ticker="ticker" :seite="seite" />
 
         <QuelleAus v-if="aus" :aus="aus" />
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>

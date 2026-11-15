@@ -12,6 +12,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Knopf from '../components/basis/Knopf.vue'
+import Kaufzettel from '../components/aktien/Kaufzettel.vue'
 import Pille from '../components/basis/Pille.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Leerzustand from '../components/basis/Leerzustand.vue'
@@ -37,6 +38,7 @@ const lauf = ref(null)
 const mitHuerden = ref(false)
 const laedt = ref(true)
 const laeuft = ref(false)
+const zettelTicker = ref('')
 const fortschritt = ref(null)
 const fehler = ref('')
 
@@ -226,6 +228,8 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
                             <Pille v-for="l in geordnet(z.boersen?.liste)" :key="l.boerse + l.art" :ton="TON[l.art]" :title="l.symbol">
                                 {{ PLATZ[l.boerse] || l.boerse }} · {{ t('aktien.art_' + l.art) }}
                             </Pille>
+                            <Knopf v-if="z.boersen?.ticker" klein nur-symbol art="leise" symbol="dokument"
+                                :titel="t('kaufzettel.knopfTitel', { ticker: z.boersen.ticker })" @click="zettelTicker = z.boersen.ticker" />
                         </td>
                     </tr>
                 </tbody>
@@ -233,6 +237,8 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
         </div>
 
         <p class="leise">{{ t('aktienradar.hinweis') }}</p>
+
+        <Kaufzettel v-if="zettelTicker" :model-value="true" :ticker="zettelTicker" @update:model-value="zettelTicker = ''" />
     </div>
 </template>
 

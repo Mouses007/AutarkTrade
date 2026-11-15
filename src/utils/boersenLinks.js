@@ -63,6 +63,33 @@ export const BOERSE_URL = {
     },
 }
 
+/*
+ * Handelsseite einer Aktien-Listung aus dem Titel-Stamm (`instrument_listungen`:
+ * `{handelsplatz, art, symbol}`) — für den Kaufzettel.
+ *
+ * Futures tragen bei Bitunix, Bitget und Binance das Symbol der Börse im Pfad
+ * (`NVDAUSDT`, bei Bitget auch `ACNSTOCKUSDT`). Pionex führt Aktien als
+ * Spot-Token `NVDAX_USDT`. Bitpanda hat keine Adresse je Asset, die sich aus
+ * der öffentlichen Liste bilden liesse (kein Kürzel für den Pfad: von acht
+ * probierten Mustern `name-ticker` am 15.11.2026 lieferten zwei 404) — dort
+ * führt der Link zur Aktien-Übersicht.
+ */
+export const AKTIEN_URL = {
+    'bitunix|perp': (s) => bitunixUrl(s),
+    'bitget|perp': (s) => `https://www.bitget.com/futures/usdt/${s}`,
+    'binance|perp': (s) => `https://www.binance.com/en/futures/${s}`,
+    'pionex|token-spot': (s) => `https://www.pionex.com/en/trade/${s}/Manual`,
+    'bitpanda|broker-spot': () => 'https://www.bitpanda.com/en/prices/stocks',
+}
+
+/** @param {{handelsplatz: string, art: string, symbol: string}} listung */
+export function aktienHandelsUrl(listung) {
+    const muster = AKTIEN_URL[`${listung?.handelsplatz}|${listung?.art}`]
+    const symbol = String(listung?.symbol || '').trim().toUpperCase()
+    if (!muster || !/^[A-Z0-9._-]{1,40}$/.test(symbol)) return null
+    return muster(encodeURIComponent(symbol))
+}
+
 export const BOERSE_KURZ = { bitunix: 'BX', bitget: 'BG', pionex: 'PX', tradingview: 'CH' }
 export const BOERSE_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', tradingview: 'Chart' }
 
