@@ -75,11 +75,14 @@ export async function pionexRequest(method, path, apiKey, secretKey, params = {}
 
     if (!response.ok) {
         const msg = data ? `[${data.code}] ${data.message}` : `${response.status} ${response.statusText}`
-        throw new Error(`Pionex API: ${msg}`)
+        // Der HTTP-Status geht am Fehler mit (Audit SEC-R-103): im Text steht er nur,
+        // wenn der Körper kein JSON war — ein 503 mit JSON-Körper sah sonst aus wie
+        // eine Ablehnung durch Pionex.
+        throw Object.assign(new Error(`Pionex API: ${msg}`), { status: response.status })
     }
     // Erfolgs-Envelope: result === true
     if (data && data.result === false) {
-        throw new Error(`Pionex API: [${data.code}] ${data.message || 'Unbekannter Fehler'}`)
+        throw Object.assign(new Error(`Pionex API: [${data.code}] ${data.message || 'Unbekannter Fehler'}`), { status: response.status })
     }
     return data
 }

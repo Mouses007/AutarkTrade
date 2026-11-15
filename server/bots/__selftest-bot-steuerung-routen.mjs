@@ -61,6 +61,7 @@ globalThis.__botTest = {
         if (pionex.modus === 'zeit') throw new Error('The operation was aborted due to timeout')
         if (pionex.modus === 'abgelehnt') throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] nein')
         if (pionex.modus === 'gateway') throw new Error('Pionex API: 502 Bad Gateway')
+        if (pionex.modus === 'gatewayJson') throw Object.assign(new Error('Pionex API: [INTERNAL_ERROR] try again later'), { status: 503 })
         pionex.letzte = { pfad, body }
         return { result: true, data: pionex.neueId ? { buOrderId: pionex.neueId } : {} }
     },
@@ -120,6 +121,16 @@ try {
     pionex.modus = 'abgelehnt'
     const s4 = await sende((await pruefe()).token)
     p('Pionex-Fehler → abgelehnt', s4.d.zustand === 'abgelehnt')
+    console.log('5xx mit JSON-Körper (Audit SEC-R-103)')
+    pionex.modus = 'gatewayJson'
+    const vor503 = pionex.sendungen
+    const s503 = await sende((await pruefe()).token)
+    p('HTTP 503 mit JSON-Körper → unklar, nicht abgelehnt; genau eine Sendung', s503.d.zustand === 'unklar' && s503.d.ok === false && pionex.sendungen === vor503 + 1, JSON.stringify(s503.d))
+    const fe = (text, status) => Object.assign(new Error(text), status == null ? {} : { status })
+    p('Status 500/503/504 und 408 am Fehler → unklar', [500, 503, 504, 408].every((st) => deuteSendung(null, fe('Pionex API: [X] y', st)).zustand === 'unklar'))
+    p('Status 400/401/429 mit Pionex-Text → abgelehnt; 200 mit result false ebenso', [400, 401, 429, 200].every((st) => deuteSendung(null, fe('Pionex API: [BOT_INVALID_ARGUMENT] nein', st)).zustand === 'abgelehnt'))
+    p('ohne Status zählt der Text: „408 …" unklar, „[CODE] …" abgelehnt', deuteSendung(null, fe('Pionex API: 408 Request Timeout')).zustand === 'unklar' && deuteSendung(null, fe('Pionex API: [X] y')).zustand === 'abgelehnt')
+    p('Netzabbruch und Zeitüberschreitung → unklar', deuteSendung(null, new TypeError('fetch failed')).zustand === 'unklar' && deuteSendung(null, fe('The operation was aborted due to timeout')).zustand === 'unklar')
     pionex.modus = 'ok'
     p('5xx gilt als unklar, leere Antwort ebenso', deuteSendung(null, new Error('Pionex API: 502 Bad Gateway')).zustand === 'unklar' && deuteSendung(null).zustand === 'unklar' && deuteSendung({ result: true }).zustand === 'ausgefuehrt')
 

@@ -127,13 +127,19 @@ async function frage(k, pfad, body) {
 
 /**
  * Sendung: drei Ausgänge (Audit SEC-02). `pionexRequest` wirft „Pionex API: …"
- * nur, wenn Pionex mit einem Fehlerstatus geantwortet hat — ausser 5xx, das
- * kann auch ein Gateway vor Pionex sein. Alles andere ist „unklar".
+ * nur, wenn Pionex mit einem Fehlerstatus geantwortet hat — ausser 5xx und 408:
+ * das kann auch ein Gateway vor Pionex sein, oder Pionex ist mitten in der
+ * Ausführung gescheitert. Erkannt wird das am HTTP-Status des Fehlers
+ * (`fehler.status`, Audit SEC-R-103: ein 503 mit JSON-Körper trägt den Status
+ * nicht im Text), ersatzweise am Text. Alles andere (Zeitüberschreitung,
+ * Netzabbruch) ist ebenfalls „unklar" — dann wird nachgelesen statt neu gesendet.
  */
 export function deuteSendung(antwort, fehler = null) {
     if (fehler) {
         const text = String(fehler.message || fehler)
-        if (/^Pionex API: /.test(text) && !/^Pionex API: 5\d\d\b/.test(text)) return { zustand: 'abgelehnt', text }
+        const status = Number(fehler.status)
+        if (status >= 500 || status === 408) return { zustand: 'unklar', text }
+        if (/^Pionex API: /.test(text) && !/^Pionex API: (5\d\d|408)\b/.test(text)) return { zustand: 'abgelehnt', text }
         return { zustand: 'unklar', text }
     }
     if (!antwort || typeof antwort !== 'object') return { zustand: 'unklar', text: 'Leere Antwort' }

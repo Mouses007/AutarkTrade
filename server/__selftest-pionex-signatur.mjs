@@ -16,7 +16,7 @@
  */
 
 import crypto from 'crypto'
-import { createSignature, baueQuery, BASE_URL } from './pionex-transport.js'
+import { createSignature, baueQuery, BASE_URL, pionexRequest } from './pionex-transport.js'
 
 const SECRET = 'testgeheimnis-nicht-echt'
 
@@ -109,6 +109,30 @@ console.log('\nSonstiges\n')
     // Header, ist er nicht Teil der Signatur und Pionex lehnt ab.
     check('timestamp steckt in der Query, nicht im Header',
         baueQuery({}, 42).includes('timestamp=42'))
+}
+
+console.log('\nHTTP-Status am Fehler (Audit SEC-R-103) — fetch ist eine Attrappe, nichts geht ins Netz\n')
+{
+    const echt = globalThis.fetch
+    const antwort = (status, koerper) => async () => new Response(koerper, { status, statusText: 'Test' })
+    const fange = async () => { try { return { daten: await pionexRequest('POST', '/api/v1/test', 'k', SECRET, {}, { a: 1 }) } } catch (e) { return { e } } }
+    try {
+        globalThis.fetch = antwort(503, '{"result":false,"code":"INTERNAL_ERROR","message":"try again"}')
+        const a = await fange()
+        check('503 mit JSON-Körper: Status am Fehler, Text wie bisher', a.e?.status === 503 && a.e.message === 'Pionex API: [INTERNAL_ERROR] try again', a.e?.message)
+        globalThis.fetch = antwort(502, '<html>Bad Gateway</html>')
+        const b = await fange()
+        check('502 ohne JSON: Status am Fehler und im Text', b.e?.status === 502 && /^Pionex API: 502\b/.test(b.e.message), b.e?.message)
+        globalThis.fetch = antwort(400, '{"result":false,"code":"BOT_INVALID_ARGUMENT","message":"nein"}')
+        const c = await fange()
+        check('400 mit JSON: Status 400', c.e?.status === 400 && c.e.message === 'Pionex API: [BOT_INVALID_ARGUMENT] nein')
+        globalThis.fetch = antwort(200, '{"result":false,"code":"X","message":"y"}')
+        const d = await fange()
+        check('200 mit result false: Fehler mit Status 200', d.e?.status === 200 && d.e.message === 'Pionex API: [X] y')
+        globalThis.fetch = antwort(200, '{"result":true,"data":{}}')
+        const f = await fange()
+        check('200 mit result true: Antwort, kein Fehler', f.daten?.result === true && !f.e)
+    } finally { globalThis.fetch = echt }
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
