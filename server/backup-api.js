@@ -548,6 +548,8 @@ export function setupBackupRoutes(app) {
 
             // Gate und Generation aus der (unveränderten) Zeile 1 neu laden.
             await loadAuthConfig()
+            // Der Import kann `modusAktienAn` geändert haben — der gemerkte Schalter gilt sofort neu (FUN-K-002).
+            ;(await import('./aktien/kontext.js')).vergissModus()
             console.log('Backup import erfolgreich:', imported)
             res.json({ ok: true, imported })
         } catch (e) {

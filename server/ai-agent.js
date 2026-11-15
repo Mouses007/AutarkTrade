@@ -142,7 +142,7 @@ Regeln:
 - Antworte knapp: du stehst in einer schmalen Seitenleiste. Zuerst die Antwort, dann höchstens die zwei, drei Zahlen, die sie tragen. Kurze Listen statt Tabellen, sparsam mit Überschriften.
 - Sei direkt und konstruktiv. Fehlen Daten oder enthält der Zeitraum keine Trades, sag das klar.
 - Sagt der Nutzer „diesen Monat" oder „März", gilt das aktuelle Jahr ${year}.
-- ${ZITAT_REGEL} Nach einem Werkzeug mit solchem Material sind run_backtest und propose_param_change für diesen Lauf gesperrt.
+- ${ZITAT_REGEL} Nach einem Werkzeug mit solchem Material sind run_backtest und propose_param_change für den Rest dieses Gesprächs gesperrt.
 
 JOURNAL — Tipps für die Werkzeuge:
 - Gesamtübersicht: compute_statistics (Win-Rate, PnL, Profit Factor …)
