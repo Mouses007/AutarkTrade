@@ -98,7 +98,7 @@ async function loadAiSettings() {
  * Seite. Jetzt nennt er je Bereich der App die zuständigen Werkzeuge und
  * bekommt, was der Nutzer gerade vor sich hat (`config.seitenStand`).
  *
- * @param {{seitenKontext?: object|null, chartKontext?: object|null, seitenStand?: {zeilen: string[]}|null}} config
+ * @param {{seitenKontext?: object|null, chartKontext?: object|null, seitenStand?: {zeilen: string[], hatFremdtext?: boolean}|null}} config
  */
 export function buildSystemPrompt(config = {}) {
     const { seitenKontext = null, chartKontext = null, seitenStand = null } = config
@@ -256,6 +256,7 @@ function toolsToPromptText() {
 async function callAnthropicWithTools(messages, config) {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        signal: config.signal, // FUN-R-204: Abbruch des Laufs beendet auch den Abruf
         headers: {
             'x-api-key': config.apiKey,
             'anthropic-version': '2023-06-01',
@@ -313,6 +314,7 @@ async function callOpenAIWithTools(messages, config, endpoint = 'https://api.ope
 
     const response = await fetch(endpoint, {
         method: 'POST',
+        signal: config.signal, // FUN-R-204
         headers: {
             'Authorization': `Bearer ${config.apiKey}`,
             'Content-Type': 'application/json'
@@ -398,6 +400,7 @@ async function callGeminiWithTools(messages, config) {
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`, {
         method: 'POST',
+        signal: config.signal, // FUN-R-204
         headers: {
             'Content-Type': 'application/json',
             'x-goog-api-key': config.apiKey
@@ -489,7 +492,9 @@ async function callOllamaWithTools(messages, config) {
             path: parsedUrl.pathname,
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-            timeout: 600000
+            timeout: 600000,
+            // FUN-R-204: bei Abbruch zerstört Node die Anfrage, `error` unten lehnt ab
+            ...(config.signal ? { signal: config.signal } : {}),
         }, (res) => {
             let body = ''
             res.on('data', chunk => body += chunk)
@@ -607,9 +612,15 @@ function buildAnthropicMessages(history) {
     return messages
 }
 
-function buildOpenAIMessages(history) {
+export function buildOpenAIMessages(history) {
     const messages = []
+    // BUG-R-205: Auf eine Assistenten-Nachricht mit `tool_calls` müssen die `tool`-Antworten
+    // zu ALLEN IDs unmittelbar folgen. Bilder (als `user`-Nachricht) warten deshalb, bis die
+    // Runde zu Ende ist — sonst lehnt der Anbieter parallele Aufrufe mit 400 ab.
+    let bilder = []
+    const bilderAnhaengen = () => { messages.push(...bilder); bilder = [] }
     for (const msg of history) {
+        if (msg.role !== 'tool') bilderAnhaengen()
         if (msg.role === 'user') {
             messages.push({ role: 'user', content: msg.content })
         } else if (msg.role === 'assistant') {
@@ -620,6 +631,7 @@ function buildOpenAIMessages(history) {
             messages.push(entry)
         } else if (msg.role === 'tool') {
             // OpenAI tool messages are text-only — but we can add image via a follow-up user message
+            // (nach der letzten tool-Antwort der Runde, siehe oben)
             messages.push({
                 role: 'tool',
                 tool_call_id: msg.toolCallId,
@@ -627,7 +639,7 @@ function buildOpenAIMessages(history) {
             })
             // If there's image content, add it as a user message with the image
             if (msg.imageContent) {
-                messages.push({
+                bilder.push({
                     role: 'user',
                     content: [
                         { type: 'text', text: `[Screenshot für Analyse — ${msg.toolName || 'analyze_screenshot'}]` },
@@ -643,6 +655,7 @@ function buildOpenAIMessages(history) {
             }
         }
     }
+    bilderAnhaengen()
     return messages
 }
 
@@ -674,8 +687,13 @@ function buildGeminiMessages(history) {
  * Massgebend ist der Werkzeugname, nicht der Inhalt: auch ein Fehlergebnis
  * sperrt (wie in `executeTool`), und ein Werkzeug, das das Kennzeichen erst
  * später bekam, sperrt rückwirkend.
+ * Dasselbe gilt für eine Zeile mit der Rolle `FREMDTEXT_MARKE` (SEC-R-207): sie
+ * hält fest, dass ein Lauf Fremdtext aus dem Seitenstand im Systemprompt hatte
+ * (Token-Name des Hype-Radars). Sie trägt keinen Inhalt und kommt nicht in den Verlauf.
  * @returns {{ verlauf: Array<{role: string, content: string}>, fremdtextGesehen: boolean }}
  */
+export const FREMDTEXT_MARKE = 'fremdtext'
+
 export function baueVerlauf(zeilen) {
     const verlauf = []
     let fremdtextGesehen = false
@@ -683,6 +701,9 @@ export function baueVerlauf(zeilen) {
     for (const msg of zeilen || []) {
         if (msg.role === 'user') {
             verlauf.push({ role: 'user', content: msg.content || '' })
+        } else if (msg.role === FREMDTEXT_MARKE) {
+            // SEC-R-207: Fremdtext kam über den Seitenstand in einen früheren Lauf
+            fremdtextGesehen = true
         } else if (msg.role === 'tool') {
             if (istFremdtextWerkzeug(msg.toolName)) fremdtextGesehen = true
             offen.push(`[Tool: ${msg.toolName}] ${(msg.content || '').substring(0, 500)}`)
@@ -708,7 +729,9 @@ export async function runAgentLoop(userMessage, conversationHistory, config, sen
     const rufeModell = config.rufeModell || callLLMWithTools
     // Zustand für die Werkzeuge (Fremdtext-Sperre, siehe ai-agent-tools.js). Enthält das
     // Gespräch schon Fremdtext aus einem früheren Lauf, beginnt dieser Lauf gesperrt.
-    const lauf = { fremdtextGesehen: vorher?.fremdtextGesehen === true }
+    // Fremdtext aus dem Seitenstand (aufgeklappter Token, steht als Zitat im Systemprompt)
+    // sperrt wie ein Fremdtext-Werkzeug (SEC-R-207).
+    const lauf = { fremdtextGesehen: vorher?.fremdtextGesehen === true || config.seitenStand?.hatFremdtext === true }
     const history = [...conversationHistory]
     history.push({ role: 'user', content: userMessage })
 
@@ -732,8 +755,15 @@ export async function runAgentLoop(userMessage, conversationHistory, config, sen
         // Build provider-specific messages
         const providerMessages = buildProviderMessages(history, config.provider)
 
-        // Call LLM with tools
-        const response = await rufeModell(providerMessages, config)
+        // Call LLM with tools. FUN-R-204: `config.signal` bricht den Abruf ab, sobald der
+        // Client weg ist — der Fehler daraus ist dann kein Fehler, sondern das Ende des Laufs.
+        let response
+        try {
+            response = await rufeModell(providerMessages, config)
+        } catch (e) {
+            if (istAbgebrochen() || config.signal?.aborted) break
+            throw e
+        }
         totalTokens += response.usage.totalTokens
         promptTokens += response.usage.promptTokens || 0
         completionTokens += response.usage.completionTokens || 0
@@ -851,11 +881,16 @@ export async function runAgentLoop(userMessage, conversationHistory, config, sen
             finalAnswer = abschluss.text
                 || 'Das Token-Budget ist erreicht, bevor eine Antwort fertig wurde. Bitte stelle die Frage enger (kürzerer Zeitraum, ein Symbol), dann reicht das Budget.'
         } catch (e) {
-            logWarn('ai-agent', 'Abschluss-Zusammenfassung nach Budget/Iterationsende fehlgeschlagen: ' + e.message)
-            finalAnswer = 'Das Token-Budget ist erreicht und die Abschluss-Zusammenfassung schlug fehl (' + e.message + '). Bitte stelle die Frage enger.'
+            // Abbruch während des Abschlussaufrufs (FUN-R-204): keine Antwort, kein Fehlertext
+            if (!(istAbgebrochen() || config.signal?.aborted)) {
+                logWarn('ai-agent', 'Abschluss-Zusammenfassung nach Budget/Iterationsende fehlgeschlagen: ' + e.message)
+                finalAnswer = 'Das Token-Budget ist erreicht und die Abschluss-Zusammenfassung schlug fehl (' + e.message + '). Bitte stelle die Frage enger.'
+            }
         }
-        history.push({ role: 'assistant', content: finalAnswer })
-        sendSSE({ type: 'answer', content: finalAnswer, kiGeneriert: true })
+        if (finalAnswer) {
+            history.push({ role: 'assistant', content: finalAnswer })
+            sendSSE({ type: 'answer', content: finalAnswer, kiGeneriert: true })
+        }
     }
 
     /*
@@ -919,6 +954,12 @@ export function setupAgentRoutes(app) {
         // stummgeschaltet.
         const istAbgebrochen = beobachteAbbruch(res)
         const sendSSE = sseSender(res, istAbgebrochen)
+        // FUN-R-204: Der Abbruch wurde nur ZWISCHEN den Runden geprüft; der laufende
+        // Modellabruf lief (und kostete) weiter und hielt «ein Lauf zur Zeit» fest. Das
+        // Signal beendet ihn sofort. Nach `beobachteAbbruch` angemeldet, damit
+        // `istAbgebrochen()` schon stimmt, wenn der Abruf mit dem Abbruchfehler zurückkommt.
+        const abbruch = new AbortController()
+        res.on('close', () => { if (!res.writableFinished) abbruch.abort() })
 
         agentRunning = true
         // Backtests sind teuer und deshalb je Lauf gedeckelt. Ohne diesen
@@ -930,6 +971,7 @@ export function setupAgentRoutes(app) {
         try {
             // Load AI config
             const config = await loadAiSettings()
+            config.signal = abbruch.signal
             config.seitenKontext = seitenId ? seitenKontext(seitenId) : null
             // Reiter, aufgeklappte Zeile, Filter — geprüft, bevor es in den Systemprompt geht.
             config.seitenStand = seite && typeof seite === 'object' ? pruefeSeitenStand(seite.stand) : null
@@ -984,6 +1026,13 @@ export function setupAgentRoutes(app) {
                 role: 'user',
                 content: message
             })
+
+            // SEC-R-207: Der Token-Name aus dem Seitenstand steht in diesem Lauf im Prompt und
+            // kann über die Antwort ins Gespräch gelangen — die Sperre gilt deshalb wie nach
+            // einem Fremdtext-Werkzeug für das ganze Gespräch. Die Marke hält das fest.
+            if (config.seitenStand?.hatFremdtext && !fremdtextGesehen) {
+                await knex('ai_agent_messages').insert({ sessionId: session.id, role: FREMDTEXT_MARKE, content: '', toolName: 'seitenstand' })
+            }
 
             // Run agent loop
             const result = await runAgentLoop(message, conversationHistory, config, sendSSE, istAbgebrochen, { fremdtextGesehen })

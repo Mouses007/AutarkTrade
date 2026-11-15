@@ -11,8 +11,10 @@
  * hier eine Positivliste: nur bekannte Schlüssel, jeder mit festem Typ und
  * fester Länge. Alles andere fällt stillschweigend weg. Zwei Felder sind
  * Fremdtext (Kürzel und Name eines Tokens — beliebig benennbar) und werden
- * als Zitat markiert; `hatFremdtext` sagt dem Aufrufer, dass die Zitat-Regel
- * in den Prompt gehört.
+ * als Zitat markiert (`zitatZeile`); `hatFremdtext` sagt dem Aufrufer, dass
+ * damit Fremdtext im Systemprompt steht — `runAgentLoop` sperrt dann die
+ * schreibenden Werkzeuge wie nach einem Fremdtext-Werkzeug, und die Route
+ * hält es für das Gespräch fest (SEC-R-207, `FREMDTEXT_MARKE` in ai-agent.js).
  *
  * Rein: keine Datenbank, kein Netz. Selbsttest `__selftest-ki-seitenstand.mjs`.
  */
