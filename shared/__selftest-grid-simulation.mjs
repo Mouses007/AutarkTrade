@@ -93,8 +93,87 @@ p('Startposition zahlt die Markt-Gebühr', nahe(rf.gebuehren, -(0.002 * 4 * 105 
 
 console.log('Durchstich')
 const rd = simuliereGrid({ kerzen: [k(0, 105, 109, 101, 109)], unten: 100, oben: 110, anzahl: 10, richtung: 'long', menge: 1, durchstich: 0.005 })
-// Tief 101: Linie 101 wird nur berührt (101 × 0,995 < 101) → kein Kauf; Hoch 109: 109 nur berührt → kein Verkauf
-p('Berühren am Extrem füllt nicht, Durchstechen schon', rd.zyklen === 5 && rd.position === 2)
+// Tief 101: Linie 101 wird nur berührt (101 × 0,995 < 101) → kein Kauf; Hoch 109: 109 nur berührt → kein Verkauf.
+// Seit FUN-R-101 zählt die Schwelle, nicht die Linie: der Start liegt AUF der Linie 105, der Fall
+// durchsticht sie (104,475) → Kauf bei 105, Verkauf bei 106. Käufe 105, 104, 103, 102; Verkäufe
+// 103, 104, 105, 106 (je +1) und 107, 108 aus der Startposition → 6 Zyklen (vorher 5: die Linie 105
+// wurde nie gefüllt), offen bleiben die Startzellen 108–109 und 109–110.
+p('Berühren am Extrem füllt nicht, Durchstechen schon', rd.zyklen === 6 && rd.position === 2 && rd.ausfuehrungen === 4 + 4 + 6, `${rd.zyklen}/${rd.position}/${rd.ausfuehrungen}`)
+
+console.log('Wegpunkt auf oder knapp hinter einer Linie (Audit FUN-R-101)')
+// Band 80–120, 40 Zellen (Linien im Schritt 1), Kerzen im Schritt 0,5: jeder zweite Wegpunkt
+// liegt genau auf einer Linie, durchstochen wird sie erst von der nächsten Kerze.
+const treppe = (von, bis, t0 = 0) => {
+    const aus = []; const s = bis < von ? -0.5 : 0.5; let t = t0
+    for (let x = von + s; s < 0 ? x >= bis : x <= bis; x += s) aus.push(k(t += 60000, x - s, Math.max(x, x - s), Math.min(x, x - s), x))
+    return aus
+}
+const runter = treppe(100, 70), rauf = treppe(70, 100, runter.at(-1).t)
+const band = { unten: 80, oben: 120, anzahl: 40, menge: 1, startPreis: 100 }
+const fl = simuliereGrid({ ...band, kerzen: runter, richtung: 'long', durchstich: 0.0002 })
+// Start: 19 Zellen (Linien 101…119) zu 100. Fall: Käufe bei 100, 99, … 80 (21) → alle 40 offen.
+// Schwebend bei 70: 19 × (70 − 100) + Σ(70 − l, l = 80…100) = −570 − 420 = −990.
+p('Long 100 → 70: jede Linie wird gekauft (21 Käufe, Position 40)', fl.position === 40 && fl.ausfuehrungen === 19 + 21, `${fl.position}/${fl.ausfuehrungen}`)
+p('Long 100 → 70: Verlust −990 statt −570', nahe(fl.gesamt, -990) && nahe(fl.maxVerlust, -990), String(fl.gesamt))
+const fl2 = simuliereGrid({ ...band, kerzen: [...runter, ...rauf], richtung: 'long', durchstich: 0.0002 })
+// Zurück auf 100: Verkäufe bei 81…99 (19 Zyklen zu +1); 100 wird nur berührt → Zelle 99–100 bleibt (+1 schwebend).
+p('Long 100 → 70 → 100: 19 Zyklen, 21 offen, gesamt 20', fl2.zyklen === 19 && fl2.position === 21 && nahe(fl2.gesamt, 20) && nahe(fl2.maxVerlust, -990), `${fl2.zyklen}/${fl2.position}/${fl2.gesamt}`)
+const fl0 = simuliereGrid({ ...band, kerzen: [...runter, ...rauf], richtung: 'long' })
+// Ohne Durchstich: der Startkurs auf der Linie 100 zählt nicht (wie bisher), Käufe 99…80, Verkäufe 81…100.
+p('ohne Durchstich unverändert: 20 Zyklen, 19 offen, gesamt 20', fl0.zyklen === 20 && fl0.position === 19 && nahe(fl0.gesamt, 20) && nahe(fl0.maxVerlust, -960))
+// Marge 600: bei 80 sind 39 Zellen offen, schwebend −380 − 210 = −590 → Eigenkapital 10 ≤ 0,005 × 39 × 80
+const fliq = simuliereGrid({ ...band, kerzen: [...runter, ...rauf], richtung: 'long', durchstich: 0.0002, einsatz: 600, mmr: 0.005 })
+p('Long mit Marge 600 wird bei 80 liquidiert (vorher: keine Liquidation)', fliq.liquidation?.preis === 80 && nahe(fliq.gesamt, -600), JSON.stringify(fliq.liquidation))
+const hoch = treppe(100, 130), ab = treppe(130, 100, hoch.at(-1).t)
+const fs = simuliereGrid({ ...band, kerzen: [...hoch, ...ab], richtung: 'short', durchstich: 0.0002 })
+// Spiegel: Start 19 Zellen short zu 100, Verkäufe 100…120, bei 130 schwebend −990; zurück: Rückkäufe 119…101.
+p('Short 100 → 130 → 100: 19 Zyklen, −21 offen, gesamt 20, grösster Verlust −990', fs.zyklen === 19 && fs.position === -21 && nahe(fs.gesamt, 20) && nahe(fs.maxVerlust, -990), `${fs.zyklen}/${fs.position}/${fs.gesamt}/${fs.maxVerlust}`)
+const fn = simuliereGrid({ ...band, kerzen: [...runter, ...rauf, ...treppe(100, 130, 1e7), ...treppe(130, 100, 2e7)], richtung: 'neutral', durchstich: 0.0002 })
+// Neutral: Long-Zellen 80…99 kaufen (20), verkaufen 81…99 und – im Anstieg über 100 – auch 100 (20 Zyklen);
+// Short-Zellen verkaufen 101…120 (20), kaufen 119…101 zurück (19 Zyklen), Zelle 100–101 bleibt short (+1).
+p('Neutral 100 → 70 → 100 → 130 → 100: 39 Zyklen, Position −1, gesamt 40', fn.zyklen === 39 && fn.position === -1 && nahe(fn.gesamt, 40), `${fn.zyklen}/${fn.position}/${fn.gesamt}`)
+// Knapp hinter der Linie: 98,99 liegt unter 99, aber über der Schwelle 99 × 0,9998 = 98,9802
+const fk = simuliereGrid({ ...band, kerzen: [k(1, 100, 100, 98.99, 98.99), k(2, 98.99, 98.99, 97.5, 97.5)], richtung: 'long', durchstich: 0.0002 })
+p('Wegpunkt 98,99 (< 2 bp unter 99): 99 wird von der nächsten Kerze gekauft', fk.position === 19 + 3 && nahe(fk.realisiert, 0), String(fk.position))
+
+// Gegenprobe ohne Indexrechnung: je Zelle entscheidet das letzte Ereignis auf dem Weg
+// (Schwelle unten erreicht / Schwelle oben erreicht) über offen oder zu, jeder Wechsel
+// zurück ist ein Zyklus. Kurse auf Tick 0,5 gerundet, damit Wegpunkte oft auf Linien liegen.
+{
+    let saat = 4711
+    const zufall = () => (saat = (saat * 1664525 + 1013904223) >>> 0) / 2 ** 32
+    let abweichungen = 0, faelle = 0, aufLinie = 0
+    for (let lauf = 0; lauf < 300; lauf++) {
+        const eps = [0, 0.0002, 0.003][lauf % 3], richtung = ['long', 'short', 'neutral'][(lauf / 3 | 0) % 3]
+        const start = 100.25, kz = []
+        let x = start
+        for (let i = 0; i < 60; i++) {
+            const o = x, e1 = Math.round((o + (zufall() - 0.5) * 6) * 2) / 2, e2 = Math.round((o + (zufall() - 0.5) * 6) * 2) / 2
+            const h = Math.max(o, e1, e2), l = Math.min(o, e1, e2)
+            x = Math.round((l + zufall() * (h - l)) * 2) / 2
+            kz.push(k(i + 1, o, h, l, x))
+        }
+        const r = simuliereGrid({ kerzen: kz, unten: 90, oben: 110, anzahl: 20, richtung, menge: 1, startPreis: start, durchstich: eps })
+        const Lg = gridLinien(90, 110, 20)
+        const weg = kz.flatMap((c) => (c.c >= c.o ? [c.o, c.l, c.h, c.c] : [c.o, c.h, c.l, c.c]))
+        aufLinie += weg.filter((w) => Number.isInteger(w)).length
+        let pos = 0, zyk = 0
+        for (let i = 0; i < 20; i++) {
+            const lang = richtung === 'long' || (richtung === 'neutral' && Lg[i] < start)
+            let offen = richtung === 'long' ? Lg[i] > start : richtung === 'short' ? Lg[i + 1] < start : false
+            for (const w of weg) {
+                const unten = w <= Lg[i] * (1 - eps), oben = w >= Lg[i + 1] * (1 + eps)
+                const auf = lang ? unten : oben, zu = lang ? oben : unten
+                if (auf) offen = true
+                else if (zu && offen) { offen = false; zyk++ }
+            }
+            if (offen) pos += lang ? 1 : -1
+        }
+        faelle++
+        if (r.position !== pos || r.zyklen !== zyk) abweichungen++
+    }
+    p(`Gegenprobe je Zelle: ${faelle} Zufallswege (Long/Short/Neutral, Durchstich 0/2 bp/30 bp, ${aufLinie} Wegpunkte auf einer Linie) – Position und Zyklen gleich`, abweichungen === 0 && aufLinie > 1000, `${abweichungen} Abweichungen`)
+}
 
 console.log('Funding')
 const ff = simuliereGrid({ kerzen: [k(0, 105, 105, 105, 105), k(8, 105, 105, 105, 105)], unten: 100, oben: 110, anzahl: 10, richtung: 'long', menge: 1, funding: [{ t: 8, rate: 0.001 }] })

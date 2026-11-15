@@ -7,7 +7,9 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
-import { vergleiche, pruefeVariante, gebuehrenFuer, MAX_VARIANTEN } from './simulation.js'
+import { vergleiche, pruefeVariante, gebuehrenFuer, MAX_VARIANTEN, DURCHSTICH } from './simulation.js'
+import { planBot } from './planer.js'
+import { simuliereBot } from '../../shared/grid-simulation.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -86,6 +88,24 @@ p('Stop-Loss 100 im Fall von 109 auf 83: Ausstieg bei 100, Position 0', sl.varia
 const gleich = vergleiche(bot, kerzen, [{ unten: bot.grid.unten, oben: bot.grid.oben, anzahl: bot.grid.anzahl, art: 'arithmetic' }])
 p('gleiche Einstellung: Ziel ≈ heutige Position (± 1 Zelle)', Math.abs(Math.abs(gleich.abJetzt[0].ziel) - Math.abs(bot.position.menge)) <= bot.grid.mengeJeGrid + 1e-9,
     `${gleich.abJetzt[0].ziel} / ${bot.position.menge}`)
+
+console.log('Wegpunkte auf den Grid-Linien (Audit FUN-R-101)')
+// Fall aus dem Audit: Band 80–120, 40 Grids, Hebel 5, Einsatz 1000, Kurs 100 → 70 → 100 in
+// Kerzen zu 0,5 — jede zweite Kerze endet genau auf einer Linie. Vorher: kein einziger Kauf,
+// grösster Verlust −700, keine Liquidation, obwohl die eigene Schätzung 74,12 nannte.
+{
+    const kz = []; let t = 0
+    for (let x = 100; x >= 70; x -= 0.5) kz.push({ t: t += 60000, o: x + 0.5, h: x + 0.5, l: x, c: x })
+    for (let x = 70; x <= 100; x += 0.5) kz.push({ t: t += 60000, o: x - 0.5, h: x, l: x - 0.5, c: x })
+    kz[0].o = 100; kz[0].h = 100
+    const plan = planBot({ coin: 'SOL', coinM: false, richtung: 'LONG', unten: 80, oben: 120, anzahl: 40, art: 'arithmetic', hebel: 5, einsatz: 1000, startKurs: 100, start: kz[0].t })
+    const opt = { gebuehr: 0.0002, gebuehrMarkt: 0.0005, mmr: 0.005, durchstich: DURCHSTICH, startPreis: 100 }
+    const r1 = simuliereBot(plan, kz, opt)
+    p('Einsatz 1000: Liquidation bei 74,5 (Schätzung 74,12), Ergebnis −1000', r1.liquidation?.preis === 74.5 && nahe(r1.gesamt, -1000), JSON.stringify(r1.liquidation))
+    const r2 = simuliereBot(plan, kz, { ...opt, marge: 1e6 })
+    // Menge je Grid 1,2269: 19 Startzellen und 21 Käufe (100 … 80) → bei 70 schwebend −990 × Menge, dazu Gebühren
+    p('ohne Liquidation (grosse Marge): grösster Verlust rund −1216 statt −700, 19 Zyklen auf dem Rückweg', r2.maxVerlust < -1210 && r2.maxVerlust > -1220 && r2.zyklen === 19 && nahe(r2.position, 21 * plan.grid.mengeJeGrid), `${r2.maxVerlust} / ${r2.zyklen}`)
+}
 
 console.log('Grenzen')
 p(`höchstens ${MAX_VARIANTEN} Varianten`, vergleiche(bot, kerzen, Array(5).fill({ unten: 75, oben: 150, anzahl: 50 })).varianten.length === MAX_VARIANTEN)

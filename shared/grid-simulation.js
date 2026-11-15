@@ -195,19 +195,29 @@ export function simuliereGrid(p) {
     // (Anteil) überschreitet: ein Berühren genau am Kerzenextrem füllt an der
     // Börse oft nicht, und die Kerzen stammen von einer anderen Börse.
     const eps = p.durchstich ?? 0
-    // Erster Index mit L[i] >= x (bzw. > x) — Binärsuche über die aufsteigenden Linien
-    const abIndex = (x, streng) => {
+    // Füll-Schwellen: abwärts gilt die Linie i ab L[i] × (1 − eps) als durchstochen,
+    // aufwärts ab L[i] × (1 + eps). Beide Reihen steigen mit i.
+    const schwelleAb = (i) => L[i] * (1 - eps)
+    const schwelleAuf = (i) => L[i] * (1 + eps)
+    // Erster Index, dessen Schwelle >= x (bzw. > x) ist — Binärsuche
+    const abIndex = (schwelle, x, streng) => {
         let lo = 0, hi = L.length
-        while (lo < hi) { const m = (lo + hi) >> 1; if (streng ? L[m] > x : L[m] >= x) hi = m; else lo = m + 1 }
+        while (lo < hi) { const m = (lo + hi) >> 1; if (streng ? schwelle(m) > x : schwelle(m) >= x) hi = m; else lo = m + 1 }
         return lo
     }
-    // Nur die Linien zwischen a und b anfassen (Audit FUN-02), dieselben Bedingungen wie zuvor
+    // Nur die Linien anfassen, deren SCHWELLE die Bewegung überquert (Audit FUN-02,
+    // FUN-R-101): abwärts b <= Schwelle < a, aufwärts a < Schwelle <= b. Früher zählte
+    // beim Start die Linie selbst (L[i] < a) — landete ein Wegpunkt auf einer Linie
+    // oder im Durchstich-Streifen dahinter, war sie nicht gefüllt und wurde von der
+    // nächsten Bewegung übergangen, also nie mehr gekauft. So teilen aufeinander
+    // folgende Bewegungen die Schwellen lückenlos und ohne Überschneidung auf; nach
+    // einer Umkehr verhindert der Zellenzustand (offen/zu) eine doppelte Füllung.
     function bewege(a, b) {
         if (b < a) {
-            const bis = Math.min(abIndex(a, false) - 1, n - 1)
+            const bis = Math.min(abIndex(schwelleAb, a, false) - 1, n - 1)
             for (let i = bis; i >= 0; i--) {
+                if (schwelleAb(i) < b) break
                 const lv = L[i]
-                if (lv * (1 - eps) < b) break
                 const z = zellen[i]
                 if (z.art === 'L' && !z.offen) { oeffne(z, lv); fuelle(lv) }
                 else if (z.art === 'S' && z.offen) {
@@ -216,9 +226,9 @@ export function simuliereGrid(p) {
                 }
             }
         } else if (b > a) {
-            for (let j = Math.max(abIndex(a, true), 1); j <= n; j++) {
+            for (let j = Math.max(abIndex(schwelleAuf, a, true), 1); j <= n; j++) {
+                if (schwelleAuf(j) > b) break
                 const lv = L[j]
-                if (lv * (1 + eps) > b) break
                 const i = j - 1
                 const z = zellen[i]
                 if (z.art === 'L' && z.offen) {
@@ -320,6 +330,15 @@ export function simuliereGrid(p) {
  * 0,98 ×, das Gesamtergebnis 1,8 % des Einsatzes daneben; ohne Durchstich
  * zählte die Simulation 16 % zu viele Zyklen. Beim laufenden SOL-Coin-M-Bot
  * traf die Liquidationsschätzung 71,45 gegen 70,92 USD bei Pionex.
+ *
+ * ACHTUNG (15.11.2026, Audit FUN-R-101): diese Werte stammen von VOR der Korrektur
+ * in `bewege` — damals blieb eine Linie für immer ungefüllt, wenn ein Wegpunkt auf
+ * ihr oder im Durchstich-Streifen dahinter landete. An den 53 Bots ist seither NICHT
+ * neu gemessen (dazu braucht es deren Verlauf von Pionex). Auf Zufallswegen (3000
+ * Kerzen, Tick 0,01–0,1, Repro `docs/audit/2026-11-15-repro/rest/bots/durchstich.mjs`)
+ * zählt die Simulation mit 2 bp nach der Korrektur 10–17 % mehr Zyklen als davor
+ * (194 statt 177 bei 200 Grids, 54 statt 46 bei 40 Grids; ohne Durchstich 237 und 63,
+ * unverändert) — die Zahl „Zyklen 1,00 ×" dürfte also zu tief liegen, bis neu geeicht ist.
  */
 export function simuliereBot(bot, kerzenUsd, { aenderung = {}, gebuehr = 0.0002, gebuehrMarkt = gebuehr, mmr = 0.005, ab, bis, startPreis, funding = null, durchstich = 0, marge = null, mengeFest = null } = {}) {
     const d = bot.roh || {}
