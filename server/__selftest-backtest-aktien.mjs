@@ -106,4 +106,34 @@ const schlimmster = (e) => Math.min(...e.trades.map((t) => t.rMultiple))
 ok(schlimmster(bereinigt) > -2 && bereinigt.trades.every((t) => Math.abs(t.entryPrice) < 60), `bereinigt: kein Trade durch den Sprung zerstört (schlimmster ${schlimmster(bereinigt).toFixed(2)} R), alle Kurse im neuen Massstab`)
 ok(roh.trades.some((t) => t.entryPrice > 300) && roh.trades.some((t) => t.entryPrice < 60), 'unbereinigt: Kurse in zwei Massstäben — die Gegenprobe')
 
+// Quartalszahlen: Termin mitten im Zeitraum (Kerze 500), einer davor ausserhalb
+const TERMIN = T0 + 500 * H
+const mitTerminen = { ...AKTIE, termine: { naechster: { zeit: T0 + 3000 * H, geschaetzt: false }, vergangene: [T0 - 2000 * H, TERMIN] }, termineGrund: null }
+const zl = await lauf(kerzen, mitTerminen)
+const zb = zl.stats.aktien.zahlen
+ok(zb.bekannt && zb.termine.length === 1 && zb.termine[0] === TERMIN && zb.gemieden === false, 'Termin im Zeitraum erkannt')
+const beruehrt = zl.trades.filter((t) => t.zahlen)
+ok(beruehrt.length >= 4 && beruehrt.every((t) => t.zahlen === TERMIN && t.exitTime >= TERMIN - 24 * H && t.entryTime <= TERMIN + 24 * H), `Trades im Fenster markiert (${beruehrt.length})`)
+ok(zb.bilanz.mit.trades === beruehrt.length && zb.bilanz.mit.trades + zb.bilanz.ohne.trades === zl.trades.length, 'Bilanz mit und ohne summiert auf alle Trades')
+ok(zl.trades.length === aktie.trades.length, 'das Markieren ändert keinen Trade')
+ok(zb.lueckeVorn === false, 'Termine reichen vor den Zeitraum zurück: keine Lücke')
+
+const gemieden = await lauf(kerzen, mitTerminen, { meideZahlentermine: true })
+ok(gemieden.funnel.entrySkipped.zahlentermin >= 4 && gemieden.stats.aktien.zahlen.gemieden === true, `Sperre lässt die Einstiege im Fenster aus (${gemieden.funnel.entrySkipped.zahlentermin})`)
+ok(gemieden.trades.every((t) => t.entryTime < TERMIN - 24 * H || t.entryTime > TERMIN + 24 * H), 'kein Einstieg im Fenster')
+ok(gemieden.setups.some((s) => s.rejectReason === 'zahlentermin'), 'Grund steht am Setup')
+
+const unbekannt = await lauf(kerzen, { ...AKTIE, termine: null, termineGrund: 'quelleAus' }, { meideZahlentermine: true })
+ok(unbekannt.stats.aktien.zahlen.bekannt === false && unbekannt.stats.aktien.zahlen.grund === 'quelleAus' && unbekannt.stats.aktien.zahlen.bilanz === null, 'Termine unbekannt: steht im Ergebnis')
+ok(unbekannt.trades.length === aktie.trades.length && unbekannt.trades.every((t) => t.zahlen === undefined) && !unbekannt.funnel.entrySkipped.zahlentermin, 'unbekannt: nichts markiert, nichts gesperrt')
+
+// Die Quelle nennt nur vier Quartale: ein langer Lauf reicht vor den ältesten bekannten Termin zurück
+const lang = reihe(3700)
+const spaet = await lauf(lang, { ...AKTIE, termine: { naechster: null, vergangene: [T0 + 3600 * H] }, termineGrund: null })
+ok(spaet.stats.aktien.zahlen.lueckeVorn === true && spaet.stats.aktien.zahlen.bekanntAb > T0 + 1000 * H, 'Termine erst spät bekannt: Lücke vorn gemeldet')
+ok(zl.stats.aktien.zahlen.bekanntAb < T0, 'Gegenprobe: im kurzen Lauf liegt der Beginn der Abdeckung vor dem Zeitraum')
+
+const coinMitSperre = await lauf(kerzen, null, { meideZahlentermine: true })
+ok(coinMitSperre.trades.length === coin.trades.length, 'Coin: die Zahlen-Sperre wirkt nicht')
+
 console.log(`✓ Backtest Aktien: ${n} Prüfungen`)

@@ -117,6 +117,27 @@ export function ausZusammenfassung(json) {
 }
 
 /**
+ * Zahlentermine aus derselben Antwort: der nächste Termin und die Meldezeitpunkte
+ * der letzten Quartale (Yahoo nennt vier). Für die Simulation
+ * (`shared/aktien-zahlen.js`) und die Spalte im Aktien-Radar.
+ *
+ * @returns {{naechster: {zeit: number, geschaetzt: boolean}|null, vergangene: number[]}}
+ * @throws wenn die Antwort keinen Titel enthält
+ */
+export function termineAus(json) {
+    const fehler = json?.quoteSummary?.error
+    if (fehler) throw new Error(fehler.description || fehler.code || 'Fehlerantwort')
+    const r = json?.quoteSummary?.result?.[0]
+    if (!r) throw new Error('leere Antwort')
+    const t = r.calendarEvents?.earnings
+    const zeit = ms(t?.earningsDate?.[0])
+    return {
+        naechster: zeit ? { zeit, geschaetzt: t.isEarningsDateEstimate === true } : null,
+        vergangene: (r.earnings?.earningsChart?.quarterly || []).map((q) => ms(q.reportedDate)).filter(Boolean).sort((a, b) => a - b),
+    }
+}
+
+/**
  * Tageskerzen → Punkte für die Kurslinie der Seite: `[t, schluss]`, höchstens
  * `max` (jeder n-te, der letzte immer).
  */

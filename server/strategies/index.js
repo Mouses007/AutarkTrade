@@ -46,6 +46,10 @@ export const RISK_PARAMS = [
     // rund um die Uhr, ist dort aber dünn — am Wochenende etwa ein Zehntel des
     // Stundenvolumens (`shared/aktien-sitzung.js`). Bei Coins ohne Wirkung.
     { key: 'nurRegulaereSitzung', type: 'boolean', default: false, group: 'limits' },
+    // Nur Aktien-Futures: keine Einstiege von einem Tag vor bis einem Tag nach
+    // einem Zahlentermin (`shared/aktien-zahlen.js`). Bei Coins ohne Wirkung;
+    // sind die Termine unbekannt, wirkt die Sperre nicht und das Ergebnis sagt es.
+    { key: 'meideZahlentermine', type: 'boolean', default: false, group: 'limits' },
     // Fährt eine Instanz mehrere Zeiteinheiten, konkurrieren sie um dasselbe
     // Symbol: `symbol` (Standard, sicher) lässt nur EINE Position je Coin zu —
     // die schnellste Zeiteinheit gewinnt und die langsameren kommen kaum zum

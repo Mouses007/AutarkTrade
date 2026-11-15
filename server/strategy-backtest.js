@@ -20,6 +20,7 @@ import { wartungsmargeMitQuelle } from './margin-rates.js'
 import { aktienKontext } from './aktien/kontext.js'
 import { bereinigeSplits, verdaechtigeSpruenge } from './aktien/splits.js'
 import { sitzungVon, handelstagBeginn, sitzungsBilanz, regimeWechsel } from '../shared/aktien-sitzung.js'
+import { imZahlenFenster, beruehrtZahlen, zahlenBilanz, terminListe } from '../shared/aktien-zahlen.js'
 import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, istSchlussEinstieg, riskPerUnit, fundingFor } from './fill-simulator.js'
 
 /**
@@ -251,6 +252,9 @@ export async function runBacktest(opts) {
         }
     }
     const nurRegulaer = Boolean(aktie && risk.nurRegulaereSitzung)
+    // Zahlentermine des Titels: `null` = unbekannt (dann wird weder markiert noch gesperrt).
+    const zahlen = aktie?.termine ? terminListe(aktie.termine) : null
+    const meideZahlen = Boolean(zahlen && risk.meideZahlentermine)
 
     // Kerzen der höheren Zeiteinheit — nur laden, wenn der Filter auch an ist.
     //
@@ -440,6 +444,8 @@ export async function runBacktest(opts) {
         const trade = closePosition(pos, exit, costs, extra)
         // Aktien: in welcher Börsensitzung wurde eingestiegen? (Auswertung je Sitzung)
         if (aktie) trade.sitzung = sitzungVon(pos.entryTime)
+        // …und hat die Position ein Zahlen-Fenster berührt? (Termin oder null)
+        if (zahlen) trade.zahlen = beruehrtZahlen(pos.entryTime, exit.time, zahlen.liste)
         // Welcher Anteil des Kontos stand bei diesem Trade WIRKLICH im Risiko?
         // Nicht zwingend `riskPerTradePct`: der Notional-Deckel, die Marge und
         // die Mengenrundung verkleinern die Position, und `rMultiple` bezieht
@@ -610,6 +616,14 @@ export async function runBacktest(opts) {
                 bump(funnel.entrySkipped, 'ausserhalb_sitzung')
                 setup.status = 'rejected'
                 setup.rejectReason = 'ausserhalb_sitzung'
+                continue
+            }
+
+            // Aktien: auf Wunsch kein Einstieg rund um einen Zahlentermin.
+            if (meideZahlen && imZahlenFenster(triggerKerze.t, zahlen.liste)) {
+                bump(funnel.entrySkipped, 'zahlentermin')
+                setup.status = 'rejected'
+                setup.rejectReason = 'zahlentermin'
                 continue
             }
 
@@ -788,6 +802,18 @@ export async function runBacktest(opts) {
                 splitsGrund: aktie.splitsGrund || null,
                 // nur ohne Split-Angaben: Stellen, die wie ein Split aussehen
                 sprungVerdacht,
+                // Quartalszahlen: Ergebnis mit und ohne Trades, die ein Zahlen-Fenster berührt haben.
+                // `bekannt: false` = die Termine waren nicht zu holen; `bekanntAb` = davor ist
+                // unbekannt, ob es einen Termin gab (die Quelle nennt nur vier Quartale).
+                zahlen: {
+                    bekannt: Boolean(zahlen), grund: aktie.termineGrund || null,
+                    gemieden: meideZahlen,
+                    termine: zahlen ? zahlen.liste.filter((t) => t >= candles[0].t && t <= letzte.t) : [],
+                    naechster: aktie.termine?.naechster || null,
+                    bekanntAb: zahlen?.bekanntAb ?? null,
+                    lueckeVorn: Boolean(zahlen?.bekanntAb && zahlen.bekanntAb > (candles[warmup]?.t ?? candles[0].t)),
+                    bilanz: zahlen ? zahlenBilanz(trades) : null,
+                },
                 // Der Zeitraum reicht vor den Tag, ab dem die Börse am Wochenende frei handelt
                 regime: regimeWechsel(aktie.boerse, candles[warmup]?.t ?? candles[0].t, letzte.t),
             } : null,

@@ -38,6 +38,9 @@ import {
 import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, GEWICHTE_AKTIEN } from './aktien-kennzahlen.js'
 import { ladeTagesdaten, INDEX } from './aktien-tagesdaten.js'
 import { sitzungVon } from '../../shared/aktien-sitzung.js'
+import { ladeTermine } from '../aktien/termine.js'
+import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
+import { terminListe, tageBisZahlen } from '../../shared/aktien-zahlen.js'
 import * as marktdaten from '../marktdaten/index.js'
 import { ladeAktienUniversum, waehleReferenz, boersenFelder } from './aktien-universum.js'
 
@@ -340,6 +343,32 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         staerkeImFeld(liste).forEach((rang, i) => { staerkeJe.get(offen[i].symbol).rang = rang })
     }
 
+    /*
+     * ── Stufe 3e (nur Aktien): nächster Zahlentermin ────────────────────
+     *
+     * Wer in zwei Tagen Zahlen meldet, ist ein anderer Kandidat als einer mit
+     * Ruhe bis ins nächste Quartal. Der Termin geht NICHT in die Note — er
+     * steht daneben. Ein Abruf je Titel, zwölf Stunden gemerkt; bremst die
+     * Quelle, hört der Lauf auf zu fragen.
+     */
+    const zahlenJe = new Map()
+    let zahlenGrund = null
+    if (aktien && !abbruch()) {
+        melde({ schritt: 'zahlen', gesamt: offen.length })
+        for (const [i, a] of offen.entries()) {
+            const kursSymbol = kursSymbolKandidaten(aktienTitel.get(a.symbol)?.ticker)[0]
+            if (!kursSymbol) continue
+            const { termine, grund } = await ladeTermine(kursSymbol)
+            if (grund === 'gebremst' || grund === 'quelleAus') { zahlenGrund = grund; break }
+            if (termine) {
+                const liste = terminListe(termine).liste
+                const tage = tageBisZahlen(liste, jetzt)
+                if (tage != null) zahlenJe.set(a.symbol, { tage, zeit: termine.naechster?.zeit ?? null, geschaetzt: termine.naechster?.geschaetzt === true })
+            }
+            if ((i + 1) % 10 === 0) melde({ schritt: 'zahlen', fertig: i + 1, gesamt: offen.length })
+        }
+    }
+
     // ── Stufe 4: Bewertung ──────────────────────────────────────────────
     melde({ schritt: 'bewerten', gesamt: offen.length })
     const gewichte = aktien
@@ -396,6 +425,9 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
                     abstandHochPct: t?.abstandHochPct ?? null, quelle: t?.quelle ?? null,
                     rvolBasis: tz?.basis ?? null, rvolProben: tz?.proben ?? null, rvolAlt: ze[haupt].rvol,
                     gewichtBekannt: b.gewichtBekannt, duenn: b.duenn, sitzung: tz?.sitzung ?? null,
+                    // Nächster Zahlentermin: Tage bis dahin (0 = heute oder gerade gemeldet), sonst null
+                    zahlenIn: zahlenJe.get(a.symbol)?.tage ?? null, zahlenZeit: zahlenJe.get(a.symbol)?.zeit ?? null,
+                    zahlenGeschaetzt: zahlenJe.get(a.symbol)?.geschaetzt ?? null,
                 }
                 // Die Spalte `rvol` trägt bei Aktien den tageszeitbereinigten Wert — unbekannt bleibt leer.
                 ze[haupt] = { ...ze[haupt], rvol: tz?.rvol ?? null }
@@ -464,6 +496,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
             mit: tagesdaten.je.size, gemerkt: tagesdaten.gemerkt, abgerufen: tagesdaten.abgerufen,
             indexPerf: tagesdaten.index?.[INDEX.haupt] || null, zweit: tagesdaten.index?.[INDEX.zweit] || null,
         }
+        quellenStand.zahlen = { mit: zahlenJe.size, grund: zahlenGrund }
         quellenStand.sitzung = sitzungVon(jetzt)
         await knex('coinradar_laeufe').where('id', lauf.id).update({ quellenStand: JSON.stringify(quellenStand) })
     }

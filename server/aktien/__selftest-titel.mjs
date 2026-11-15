@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { ausZusammenfassung, kursLinie, bewegungsFrage, zahl } from './titel-kern.js'
+import { ausZusammenfassung, kursLinie, bewegungsFrage, zahl, termineAus } from './titel-kern.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -37,6 +37,14 @@ ok(ohneZiel.analysten.liste[0].ziel === null && ohneZiel.analysten.anzahl === nu
 assert.throws(() => ausZusammenfassung({ quoteSummary: { result: null, error: { description: 'No fundamentals data' } } }), /No fundamentals/); n++
 assert.throws(() => ausZusammenfassung({}), /leere Antwort/); n++
 ok(zahl({ raw: NaN }) === null && zahl('5') === null && zahl(0) === 0, 'zahl: nur endliche Zahlen')
+
+// Zahlentermine für Simulation und Radar
+const te = termineAus(roh)
+ok(te.naechster.zeit === Date.UTC(2026, 10, 17, 21, 0) && te.naechster.geschaetzt === false, 'nächster Termin mit Uhrzeit')
+ok(te.vergangene.length === 4 && te.vergangene[0] === Date.UTC(2025, 10, 19, 21, 20) && te.vergangene[3] === Date.UTC(2026, 7, 26, 20, 20), 'vier vergangene Termine, aufsteigend')
+const ohneTermin = termineAus({ quoteSummary: { result: [{ price: {} }] } })
+ok(ohneTermin.naechster === null && ohneTermin.vergangene.length === 0, 'ETF ohne Termine: leer, kein Fehler')
+assert.throws(() => termineAus({}), /leere Antwort/); n++
 
 const kerzen = Array.from({ length: 1001 }, (_, i) => ({ t: i, c: i }))
 const linie = kursLinie(kerzen, 500)

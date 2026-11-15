@@ -26,6 +26,7 @@ const boerse = computed(() => PLATZ[props.aktien?.boerse] || props.aktien?.boers
 const angewendet = computed(() => (props.aktien?.splits || []).filter((s) => s.angewendet))
 const offen = computed(() => (props.aktien?.splits || []).filter((s) => !s.angewendet))
 const splitText = (liste) => liste.map((s) => `${s.text || faktor(s.faktor)} (${datum(s.t)})`).join(', ')
+const ton = (v) => (v > 0 ? 'gut' : v < 0 ? 'schlecht' : '')
 const summeTrades = computed(() => (props.aktien?.sitzungen || []).reduce((n, s) => n + s.trades, 0))
 </script>
 
@@ -52,6 +53,42 @@ const summeTrades = computed(() => (props.aktien?.sitzungen || []).reduce((n, s)
         <Hinweis v-if="aktien.regime" art="warn" class="abstandUnten">
             {{ t(aktien.regime.ganzDavor ? 'strategies.aktien.regimeDavor' : 'strategies.aktien.regimeUeber', { boerse, tag: datum(aktien.regime.stichtag) }) }}
         </Hinweis>
+
+        <!-- Quartalszahlen: Ergebnis mit und ohne Trades, die ein Zahlen-Fenster berührt haben -->
+        <Hinweis v-if="aktien.zahlen && !aktien.zahlen.bekannt" art="warn" class="abstandUnten">
+            {{ t('strategies.aktien.zahlenUnbekannt_' + (aktien.zahlen.grund || 'abrufFehlgeschlagen')) }}
+        </Hinweis>
+        <template v-else-if="aktien.zahlen">
+            <Hinweis v-if="aktien.zahlen.lueckeVorn" art="warn" class="abstandUnten">
+                {{ t('strategies.aktien.zahlenLuecke', { tag: datum(aktien.zahlen.bekanntAb) }) }}
+            </Hinweis>
+            <div class="sitzungen abstandUnten">
+                <h4>{{ t('strategies.aktien.zahlenTitel', { n: aktien.zahlen.termine.length, tage: aktien.zahlen.termine.map(datum).join(', ') || '–' }) }}</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>{{ t('strategies.aktien.zahlenGruppe') }}</th>
+                            <th class="rechts">{{ t('strategies.aktien.trades') }}</th>
+                            <th class="rechts">{{ t('strategies.aktien.treffer') }}</th>
+                            <th class="rechts">{{ t('strategies.aktien.summeR') }}</th>
+                            <th class="rechts">{{ t('strategies.aktien.jeTrade') }}</th>
+                            <th class="rechts">{{ t('strategies.aktien.netto') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="g in ['ohne', 'mit']" :key="g">
+                            <td>{{ t('strategies.aktien.zahlen_' + g) }}</td>
+                            <td class="rechts">{{ aktien.zahlen.bilanz[g].trades }}</td>
+                            <td class="rechts">{{ aktien.zahlen.bilanz[g].trades ? zahl(aktien.zahlen.bilanz[g].gewinner / aktien.zahlen.bilanz[g].trades * 100, 0) + ' %' : '–' }}</td>
+                            <td class="rechts" :class="ton(aktien.zahlen.bilanz[g].summeR)">{{ zahl(aktien.zahlen.bilanz[g].summeR) }} R</td>
+                            <td class="rechts" :class="ton(aktien.zahlen.bilanz[g].summeR)">{{ aktien.zahlen.bilanz[g].trades ? zahl(aktien.zahlen.bilanz[g].summeR / aktien.zahlen.bilanz[g].trades) + ' R' : '–' }}</td>
+                            <td class="rechts" :class="ton(aktien.zahlen.bilanz[g].netPnl)">{{ geld(aktien.zahlen.bilanz[g].netPnl) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="klein">{{ t(aktien.zahlen.gemieden ? 'strategies.aktien.zahlenGemieden' : 'strategies.aktien.zahlenHinweis') }}</p>
+            </div>
+        </template>
 
         <div v-if="aktien.sitzungen?.length" class="sitzungen abstandUnten">
             <h4>{{ t('strategies.aktien.jeSitzung') }}</h4>

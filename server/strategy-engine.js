@@ -39,6 +39,7 @@ import { aussortierteZeilen } from './strategie-aussortiert.js'
 import { zeitpunkt } from '../shared/strategieChart.js'
 import { aktienKontext } from './aktien/kontext.js'
 import { sitzungVon, handelstagBeginn } from '../shared/aktien-sitzung.js'
+import { imZahlenFenster, terminListe } from '../shared/aktien-zahlen.js'
 
 // Instanzen, deren „Marktdaten aus" schon im Log steht: alle 15 s dieselbe
 // Zeile wäre Lärm, der echte Fehler verdeckt (S12). `lastError` sagt es der
@@ -700,6 +701,13 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     if (aktie && instance.risk?.nurRegulaereSitzung) {
         const sitzung = sitzungVon(Number(ev?.candleTime ?? ev?.triggeredAt) || now)
         if (sitzung !== 'regulaer') return beenden('reject_risk', 'ausserhalb_sitzung', `Sitzung ${sitzung}`)
+    }
+    // (a4) …und auf Wunsch kein Einstieg rund um einen Zahlentermin (ein Tag
+    // davor bis ein Tag danach). Sind die Termine unbekannt, wirkt die Sperre
+    // nicht — wie im Backtest.
+    if (aktie?.termine && instance.risk?.meideZahlentermine) {
+        const termin = imZahlenFenster(Number(ev?.candleTime ?? ev?.triggeredAt) || now, terminListe(aktie.termine).liste)
+        if (termin) return beenden('reject_risk', 'zahlentermin', `Zahlen am ${new Date(termin).toISOString().slice(0, 10)}`)
     }
 
     // (b) Agenten-Veto — optional, darf NUR ablehnen oder verkleinern

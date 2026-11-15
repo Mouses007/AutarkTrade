@@ -5,7 +5,8 @@
  * durch Backtest und Papierbetrieb wie ein Coin. Diese Auskunft macht den
  * Unterschied sichtbar: Ticker, Börse (für die Stichtage in
  * `shared/aktien-sitzung.js`) und die Splits des Titels (für
- * `splits.js` — die Kerzen der Futures sind nicht split-bereinigt).
+ * `splits.js` — die Kerzen der Futures sind nicht split-bereinigt) und seine
+ * Zahlentermine (`shared/aktien-zahlen.js`).
  *
  * `null` heisst Krypto, und zwar auch dann, wenn die Frage nicht zu
  * beantworten ist (keine Datenbank im Selbsttest, leerer Stamm): die
@@ -17,6 +18,7 @@ import { holeSplits } from '../newcomer-radar/kursquelle.js'
 import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
 import { istAus } from '../quellen/aus.js'
 import { CHART_BOERSEN } from './chart-symbole.js'
+import { ladeTermine } from './termine.js'
 
 const KONTEXT_MS = 10 * 60_000
 const SPLITS_MS = 12 * 60 * 60_000
@@ -53,18 +55,21 @@ async function baue(symbol) {
         kursSymbol = (await knex('newcomer_titel').where('instrumentId', zeile.id).first())?.kursSymbol || null
     }
     kursSymbol = kursSymbol || kursSymbolKandidaten(zeile.ticker)[0] || null
-    const { splits, grund } = await ladeSplits(kursSymbol)
+    const [{ splits, grund }, zahlen] = await Promise.all([ladeSplits(kursSymbol), ladeTermine(kursSymbol)])
     return {
         ticker: zeile.ticker, name: zeile.name || null, unterart: zeile.unterart,
         boerse: boerse || zeile.handelsplatz, kursSymbol,
         // null = unbekannt (Quelle aus oder Abruf gescheitert) — NICHT «keine Splits»
         splits, splitsGrund: grund,
+        // Zahlentermine (`{naechster, vergangene}`), ebenfalls null = unbekannt
+        termine: zahlen.termine, termineGrund: zahlen.grund,
     }
 }
 
 /**
  * @param {string} symbol  wie die Marktdatenquelle es nennt (`NVDAUSDT`)
- * @returns {Promise<null | {ticker, name, unterart, boerse, kursSymbol, splits: object[]|null, splitsGrund: string|null}>}
+ * @returns {Promise<null | {ticker, name, unterart, boerse, kursSymbol, splits: object[]|null, splitsGrund: string|null,
+ *           termine: {naechster, vergangene}|null, termineGrund: string|null}>}
  */
 export async function aktienKontext(symbol) {
     const sym = String(symbol || '').toUpperCase()

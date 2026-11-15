@@ -130,6 +130,10 @@ const rvolText = (z) => {
     const g = tages(z)
     return g?.rvolBasis ? t('aktienradar.rvolBasis_' + g.rvolBasis, { n: g.rvolProben }) : t('aktienradar.rvolOhne')
 }
+const zahlenText = (z) => {
+    const g = tages(z)
+    return g?.zahlenZeit ? t(g.zahlenGeschaetzt ? 'aktienradar.zahlenAmGeschaetzt' : 'aktienradar.zahlenAm', { zeit: zeit(g.zahlenZeit) }) : ''
+}
 const staerke = computed(() => lauf.value?.quellenStand?.staerke || null)
 const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
 </script>
@@ -173,6 +177,7 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
                         <template v-if="!mitHuerden">
                             <th class="rechts" :title="t('aktienradar.staerkeInfo')">{{ t('aktienradar.staerke') }}</th>
                             <th class="rechts" :title="t('aktienradar.hochInfo')">{{ t('aktienradar.hoch') }}</th>
+                            <th class="rechts" :title="t('aktienradar.zahlenInfo')">{{ t('aktienradar.zahlen') }}</th>
                             <th class="rechts" :title="t('aktienradar.atrInfo')">ATR %</th>
                             <th class="rechts" :title="t('aktienradar.rvolInfo')">RVOL</th>
                             <th class="rechts" :title="t('aktienradar.adxInfo')">ADX</th>
@@ -201,6 +206,9 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
                         <template v-if="!mitHuerden">
                             <td class="rechts" :title="staerkeText(z)">{{ rund(tages(z)?.staerkeRang) }}</td>
                             <td class="rechts">{{ tages(z)?.abstandHochPct == null ? '—' : zahl(tages(z).abstandHochPct, 0) + ' %' }}</td>
+                            <td class="rechts" :class="{ bald: tages(z)?.zahlenIn != null && tages(z).zahlenIn <= 2 }" :title="zahlenText(z)">
+                                {{ tages(z)?.zahlenIn == null ? '—' : tages(z).zahlenIn === 0 ? t('aktienradar.zahlenHeute') : t('aktienradar.zahlenTage', { n: tages(z).zahlenIn }) }}
+                            </td>
                             <td class="rechts">{{ zahl(z.atrPct, 2) }}</td>
                             <td class="rechts" :title="rvolText(z)">{{ z.rvol == null ? '—' : zahl(z.rvol, 1) + '×' }}</td>
                             <td class="rechts">{{ zahl(z.adx, 0) }}</td>
@@ -229,6 +237,11 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
 </template>
 
 <style scoped>
+.bald {
+    color: var(--warn);
+    font-weight: 600;
+}
+
 .aktienradar-seite {
     display: flex;
     flex-direction: column;
