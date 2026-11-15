@@ -34,6 +34,7 @@ const WERTPAPIER_TYPEN = new Set(['EQUITY', 'ETF'])
 const warte = (ms) => new Promise((r) => setTimeout(r, ms))
 
 let stand = { laeuft: false }
+let startet = null                     // Versprechen eines Laufs, der gerade anläuft
 export const laufStand = () => stand
 
 /**
@@ -169,6 +170,15 @@ async function bearbeite(knex, titel, gespeichert, referenz, jetzt, wechselkurse
  */
 export async function starteLauf(opt = {}) {
     if (stand.laeuft) return stand
+    // `stand.laeuft` steht erst nach zwei Datenbank-Abfragen. Bis dahin hält dieses
+    // Versprechen die Sperre: ein zweiter Aufruf (Doppelklick, zweiter Tab, Takt)
+    // bekommt denselben Lauf, statt daneben einen zweiten zu starten, der die
+    // Kursquelle doppelt so schnell fragt (Audit SEC-S-003).
+    startet ||= beginneLauf(opt).finally(() => { startet = null })
+    return startet
+}
+
+async function beginneLauf(opt) {
     const knex = getKnex()
     const jetzt = Date.now()
     const gespeichert = new Map((await knex('newcomer_titel').select('instrumentId', 'kursSymbol', 'zuordnung', 'stand')).map((z) => [z.instrumentId, z]))
@@ -232,11 +242,20 @@ export async function starteLauf(opt = {}) {
 const json = (text, sonst) => { try { return JSON.parse(text) ?? sonst } catch { return sonst } }
 
 /**
+ * Nur Titel, die noch mindestens ein Handelsplatz führt. Der Lauf rechnet nur
+ * solche neu (`leseStamm`); ein abgelisteter Titel behielte sonst seine letzte
+ * Note für immer und stünde damit oben in Rangliste, Zähler und KI-Werkzeug
+ * (Audit DB-D-002). Die Zeile selbst bleibt — kommt die Listung wieder, gilt
+ * sie nach dem nächsten Lauf weiter.
+ */
+const mitAktiverListung = (knex, q, spalte) => q.whereIn(spalte, knex('instrument_listungen').where('aktiv', 1).select('instrumentId'))
+
+/**
  * Titel mit Stand, Stammdaten und Listungen, beste Note zuerst.
  * @param {{kategorie?: string, mitHuerden?: boolean, grenze?: number}} filter
  */
 export async function leseTitel(knex, filter = {}) {
-    let q = knex('newcomer_titel as n').join('instrumente as i', 'i.id', 'n.instrumentId')
+    let q = mitAktiverListung(knex, knex('newcomer_titel as n').join('instrumente as i', 'i.id', 'n.instrumentId'), 'n.instrumentId')
         .select('n.*', 'i.ticker', 'i.name', 'i.unterart', 'i.region', 'i.ipoDatum', 'i.heimatboerse')
     if (filter.kategorie) q = q.where('n.kategorie', filter.kategorie)
     // Vorbörsliche Firmen haben keine Kurse und damit keine Note — sie stehen trotzdem in ihrer Liste.
@@ -261,7 +280,7 @@ export async function leseTitel(knex, filter = {}) {
 
 /** Wie viele Titel je Kategorie, und wie viele davon in der Rangliste stehen. */
 export async function zaehleTitel(knex) {
-    const zeilen = await knex('newcomer_titel').select('kategorie', 'note', 'huerden', 'grund')
+    const zeilen = await mitAktiverListung(knex, knex('newcomer_titel'), 'instrumentId').select('kategorie', 'note', 'huerden', 'grund')
     const je = {}
     for (const z of zeilen) {
         const k = (je[z.kategorie || 'unbekannt'] ||= { gesamt: 0, zugelassen: 0, ohneKurse: 0 })
