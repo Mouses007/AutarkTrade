@@ -82,6 +82,12 @@ ok(wieder[0].ticker === 'AAA' && wieder[0].listungen.length === 1 && wieder[0].l
 await knex('newcomer_titel').del(); await knex('instrument_listungen').del(); await knex('instrumente').del()
 let abgleiche = 0
 _setzeAbgleich(async () => { abgleiche++ })
+// Aktien-Modus aus (Vorgabe): kein Abgleich hinter dem ausgeschalteten Schalter, eigener Grund (RAS-10)
+const { _setzeModusLeser } = await import('../aktien/kontext.js')
+_setzeModusLeser(async () => 0)
+const aus = await starteLauf({ alle: true })
+ok(abgleiche === 0 && aus.laeuft === false && aus.abbruch === 'modusAus' && aus.gesamt === 0, 'leerer Stamm, Aktien-Modus aus: kein Abgleich, Grund «modusAus»')
+_setzeModusLeser(async () => 1)
 const leer = await starteLauf({ alle: true })
 ok(abgleiche === 1 && leer.laeuft === false && leer.abbruch === 'stammLeer' && leer.gesamt === 0, 'leerer Stamm, Abgleich bringt nichts: kein Lauf, Grund «stammLeer»')
 _setzeAbgleich(async () => {
@@ -92,7 +98,14 @@ _setzeAbgleich(async () => {
 const gefuellt = await starteLauf({ alle: true })
 ok(abgleiche === 2 && gefuellt.gesamt === 1 && gefuellt.abbruch === null, 'leerer Stamm, Abgleich füllt ihn: der Lauf rechnet die neuen Titel')
 while (laufStand().laeuft) await new Promise((r) => setTimeout(r, 50))
+// Gefüllter Stamm: der Modus wird gar nicht gefragt, kein Abgleich
+let gefragt = 0
+_setzeModusLeser(async () => { gefragt++; return 0 })
+const voll = await starteLauf({ alle: true })
+ok(abgleiche === 2 && gefragt === 0 && voll.gesamt === 1 && voll.abbruch === null, 'gefüllter Stamm: kein Abgleich, der Modus wird nicht gefragt')
+while (laufStand().laeuft) await new Promise((r) => setTimeout(r, 50))
 _setzeAbgleich(null)
+_setzeModusLeser(null)
 
 console.log = log
 await knex.destroy()

@@ -36,6 +36,9 @@ function letzter(reihe) {
     return null
 }
 
+/** Unter so vielen Kerzen rechnet `rechneZeiteinheit` nichts (ATR/ADX 14 brauchen Anlauf). */
+export const MIN_KERZEN = 30
+
 /**
  * Kennzahlen einer Zeiteinheit.
  *
@@ -44,7 +47,7 @@ function letzter(reihe) {
  */
 export function rechneZeiteinheit(kerzen) {
     const leer = { atrPct: null, rvol: null, adx: null, preis: null, kerzen: 0 }
-    if (!Array.isArray(kerzen) || kerzen.length < 30) return { ...leer, kerzen: kerzen?.length || 0 }
+    if (!Array.isArray(kerzen) || kerzen.length < MIN_KERZEN) return { ...leer, kerzen: kerzen?.length || 0 }
 
     const schluss = Number(kerzen[kerzen.length - 1]?.c)
     if (!Number.isFinite(schluss) || schluss <= 0) return { ...leer, kerzen: kerzen.length }

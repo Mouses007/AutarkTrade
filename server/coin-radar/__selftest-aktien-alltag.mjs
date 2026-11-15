@@ -232,7 +232,9 @@ gleich(leseGewichteAktien(null), GEWICHTE_AKTIEN, 'Lesen: null → Vorgaben')
     const lauf = readFileSync(new URL('lauf.js', hier), 'utf8')
     ok(/aktien && [^\n]*genugKerzen\(kerzen\[haupt\], huerden\.minKerzen\)/.test(lauf), 'der Lauf wendet `minKerzen` an — nur bei Aktien')
     ok(lauf.includes('leseHuerdenAktien(einst.huerdenAktien)') && lauf.includes('leseGewichteAktien(einst.gewichteAktien)'), 'der Lauf liest Hürden und Gewichte bereinigt (SEC-S-005)')
-    ok(/if \(aktien\) \{\s+const handel = rechneAlle\(/.test(lauf), 'ATR/ADX ohne geschlossene Börse: nur bei Aktien (FACH-H-013)')
+    ok(/if \(aktien\) \{\s+const reihen = [^\n]*handelsKerzen\(v\)[^\n]*\n\s+const handel = rechneAlle\(/.test(lauf), 'ATR/ADX ohne geschlossene Börse: nur bei Aktien (FACH-H-013)')
+    ok(lauf.includes('volleReihe: true') && lauf.includes('quellenStand.volleReihe = volleReihe'), 'Rückfall auf die volle Reihe steht an der Zeile und am Lauf (RAS-06)')
+    ok(lauf.indexOf('!(await aktienModusAn())') > 0 && lauf.indexOf('!(await aktienModusAn())') < lauf.indexOf('.gleicheAb()'), 'leerer Stamm: der Lauf gleicht nur bei eingeschaltetem Aktien-Modus ab (RAS-10)')
 }
 
 // Die Route prüft nur die Aktien-Schlüssel; Coin-Schlüssel fasst sie nicht an

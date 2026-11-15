@@ -126,6 +126,16 @@ export const VALID_SETTINGS_KEYS = [
  * Schlüssel ab, und der Browser bekommt — wie bei allen anderen Schlüsseln —
  * nur `keySet`.
  */
+/**
+ * Wurde der Aktien-Modus mit diesem Speichern EINgeschaltet (vorher aus, jetzt an)?
+ * Nur dann holt die Einstellungs-Route den Titel-Stamm sofort — nicht bei jedem
+ * Speichern mit `modusAktienAn: 1`, das am 12-Stunden-Takt vorbei abgliche (RAS-10).
+ */
+export function aktienModusEbenEingeschaltet(altWert, neuWert) {
+    const an = (w) => w === true || Number(w) === 1
+    return an(neuWert) && !an(altWert)
+}
+
 export function apisSchluesselVerschluesseln(liste) {
     if (!Array.isArray(liste)) return liste
     return liste.map((a) => (a && typeof a.key === 'string' && a.key && !isEncrypted(a.key)
@@ -339,12 +349,16 @@ export function registriereApiRouten(app) {
                 Object.assign(updateData, baselineBeimEinschalten(alt?.showTradePopups, updateData.showTradePopups, Date.now()))
             }
 
+            // Vor dem Speichern lesen: nur der WECHSEL von aus auf an holt unten den Stamm (RAS-10).
+            const aktienWarAn = updateData.modusAktienAn === undefined ? null
+                : (await knex('settings').select('modusAktienAn').where('id', 1).first())?.modusAktienAn
+
             updateData.updatedAt = knex.fn.now()
             await knex('settings').where('id', 1).update(updateData)
             // Aktien-Modus umgeschaltet: der Aktien-Kontext merkt den Schalter 30 s — sofort neu lesen (FUN-K-002).
             if (updateData.modusAktienAn !== undefined) (await import('./aktien/kontext.js')).vergissModus()
             // Eben eingeschaltet: den Titel-Stamm gleich holen (im Hintergrund), nicht erst beim nächsten Takt in bis zu 30 Minuten.
-            if (Number(updateData.modusAktienAn) === 1) import('./aktien/stamm.js').then((m) => m.gleicheAb()).catch(() => {})
+            if (aktienModusEbenEingeschaltet(aktienWarAn, updateData.modusAktienAn)) import('./aktien/stamm.js').then((m) => m.gleicheAb()).catch(() => {})
             const row = await knex('settings').where('id', 1).first()
             res.json(settingsAusliefern(row))
         } catch (error) {

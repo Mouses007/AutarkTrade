@@ -17,6 +17,7 @@ import { getKnex } from '../database.js'
 import { beansprucheAufgabe } from '../db-claim.js'
 import { quelleErlaubt } from '../quellen/freigabe.js'
 import { leseStamm, suchForm } from '../aktien/stamm-speicher.js'
+import { aktienModusAn } from '../aktien/kontext.js'
 import { kennzahlen, rendite } from './kennzahlen.js'
 import { bewerte } from './bewertung.js'
 import { wechselkursSymbol, ausWechselkurs } from './waehrung.js'
@@ -194,10 +195,15 @@ async function beginneLauf(opt) {
     if (!stamm.length) {
         // Leerer Stamm (Aktien-Modus eben erst eingeschaltet, der Takt lief noch nicht): erst abgleichen.
         // Bleibt er leer, sagt der Lauf das, statt «0 bewertet» zu melden.
-        try { await abgleich() } catch { /* bleibt leer */ }
-        stamm = await leseStamm(knex, { anlageklasse: 'aktien', grenze: 5000 })
+        // Nur bei eingeschaltetem Aktien-Modus: sonst holte ein direkter Aufruf den
+        // Stamm hinter einem ausgeschalteten Schalter (RAS-10) — dann eigener Grund.
+        const modusAn = await aktienModusAn()
+        if (modusAn) {
+            try { await abgleich() } catch { /* bleibt leer */ }
+            stamm = await leseStamm(knex, { anlageklasse: 'aktien', grenze: 5000 })
+        }
         if (!stamm.length) {
-            stand = { laeuft: false, beginn: jetzt, gesamt: 0, fertig: 0, bewertet: 0, ohneKurse: 0, fehler: 0, abbruch: 'stammLeer', ende: Date.now() }
+            stand = { laeuft: false, beginn: jetzt, gesamt: 0, fertig: 0, bewertet: 0, ohneKurse: 0, fehler: 0, abbruch: modusAn ? 'stammLeer' : 'modusAus', ende: Date.now() }
             return stand
         }
     }

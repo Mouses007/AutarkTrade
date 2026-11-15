@@ -35,12 +35,12 @@ import {
     bewerte, pruefeHuerden, vergibRaenge, rangkorrelation,
     STANDARD_GEWICHTE, STANDARD_HUERDEN,
 } from './bewertung.js'
-import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, ohneGeschlosseneBoerse, genugKerzen } from './aktien-kennzahlen.js'
+import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, handelsKerzen, genugKerzen } from './aktien-kennzahlen.js'
 import { leseHuerdenAktien, leseGewichteAktien } from './aktien-einstellungen.js'
 import { ladeTagesdaten, INDEX } from './aktien-tagesdaten.js'
 import { sitzungVon } from '../../shared/aktien-sitzung.js'
 import { ladeTermine } from '../aktien/termine.js'
-import { aktienKontext } from '../aktien/kontext.js'
+import { aktienKontext, aktienModusAn } from '../aktien/kontext.js'
 import { ohneSplitSpruengeJe } from '../aktien/splits.js'
 import { terminListe, tageBisZahlen } from '../../shared/aktien-zahlen.js'
 import * as marktdaten from '../marktdaten/index.js'
@@ -102,6 +102,11 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         // Wirft `MarktdatenAus`, bevor ein leerer Stamm als Grund herhalten muss.
         const quelle = (await marktdaten.fordere('ticker', { markt: 'futures' })).id
         aktienTitel = await ladeAktienUniversum(knex, quelle)
+        // Nur bei eingeschaltetem Aktien-Modus: sonst holte ein direkter Aufruf den
+        // Stamm (Börsenlisten, Bitpanda) hinter einem ausgeschalteten Schalter (RAS-10).
+        if (!aktienTitel.size && !(await aktienModusAn())) {
+            throw new Error('Der Aktien-Modus ist aus und der Titel-Stamm leer. Den Aktien-Modus in den Einstellungen einschalten, dann holt der Lauf den Stamm selbst')
+        }
         if (!aktienTitel.size) {
             // Leerer Stamm (Aktien-Modus eben erst eingeschaltet, der Takt lief noch nicht):
             // den Abgleich selbst anstossen, statt den Nutzer auf eine andere Seite zu schicken.
@@ -420,6 +425,8 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         ? leseGewichteAktien(einst.gewichteAktien)
         : { ...STANDARD_GEWICHTE, ...(einst.gewichte || {}) }
     const zeilen = []
+    /** Nur Aktien: je Zeiteinheit, bei wie vielen Titeln ATR/ADX auf der vollen Reihe stehen (RAS-06). */
+    const volleReihe = {}
 
     for (const [i, a] of offen.entries()) {
         if (abbruch()) return { abgebrochen: true }
@@ -435,10 +442,16 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
              * Wochenende, dessen Wiederanlauf als «starker Trend» zählte
              * (FACH-H-013, `ohneGeschlosseneBoerse`). Preis, Kerzenzahl und das alte
              * RVOL bleiben von der vollen Reihe. Coins: unverändert.
+             * Bleiben zu wenige Handelskerzen (15m am Sonntagabend), gilt die volle
+             * Reihe — gekennzeichnet je Zeiteinheit (`volleReihe`) und am Lauf (RAS-06).
              */
             if (aktien) {
-                const handel = rechneAlle(Object.fromEntries(Object.entries(kerzen).map(([k, v]) => [k, ohneGeschlosseneBoerse(v)])))
-                for (const k of Object.keys(ze)) ze[k] = { ...ze[k], atrPct: handel[k].atrPct, adx: handel[k].adx }
+                const reihen = Object.fromEntries(Object.entries(kerzen).map(([k, v]) => [k, handelsKerzen(v)]))
+                const handel = rechneAlle(Object.fromEntries(Object.entries(reihen).map(([k, r]) => [k, r.kerzen])))
+                for (const k of Object.keys(ze)) {
+                    ze[k] = { ...ze[k], atrPct: handel[k].atrPct, adx: handel[k].adx, ...(reihen[k].voll ? { volleReihe: true } : {}) }
+                    if (reihen[k].voll) volleReihe[k] = (volleReihe[k] || 0) + 1
+                }
             }
 
             /*
@@ -480,6 +493,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
                 const t = tagesdaten.je.get(a.symbol) || null
                 b = bewerteAktie({ kerzen: ze[haupt], rvol: tz?.rvol ?? null, staerkeRang: st.rang ?? null, abstandHochPct: t?.abstandHochPct ?? null }, gewichte)
                 b.bestaetigt = null
+                if (ze[haupt].volleReihe) b.hinweise.push('Bewegung und Trend mit Wochenend-Kerzen gerechnet: zu wenige Handelskerzen')
                 tages = {
                     rs3m: st.rs3m ?? null, rs6m: st.rs6m ?? null, rs12m: st.rs12m ?? null, staerkeRang: st.rang ?? null,
                     perf3m: t?.perf3m ?? null, perf6m: t?.perf6m ?? null, perf12m: t?.perf12m ?? null,
@@ -562,6 +576,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         }
         quellenStand.zahlen = { mit: zahlenJe.size, grund: zahlenGrund }
         quellenStand.sitzung = sitzungVon(jetzt)
+        if (Object.keys(volleReihe).length) quellenStand.volleReihe = volleReihe
         await knex('coinradar_laeufe').where('id', lauf.id).update({ quellenStand: JSON.stringify(quellenStand) })
     }
 

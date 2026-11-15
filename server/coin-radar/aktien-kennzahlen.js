@@ -29,6 +29,7 @@
  */
 import { sitzungVon, nyTeile, sitzungenDerKerze, sitzungsRegelAnwendbar } from '../../shared/aktien-sitzung.js'
 import { skala, ANKER } from './bewertung.js'
+import { MIN_KERZEN } from './kennzahlen.js'
 
 /** Vorgabe-Gewichte der Aktien-Note. Summe 100. */
 export const GEWICHTE_AKTIEN = {
@@ -130,6 +131,28 @@ export function ohneGeschlosseneBoerse(kerzen = []) {
     }
     if (!sitzungsRegelAnwendbar(ivMs)) return kerzen
     return kerzen.filter((k) => !sitzungenDerKerze(Number(k.t), ivMs).every((s) => GESCHLOSSEN.includes(s)))
+}
+
+/**
+ * Die Reihe für ATR und ADX der Aktien-Note: die Handelskerzen
+ * (`ohneGeschlosseneBoerse`) — ausser es bleiben davon zu wenige zum Rechnen.
+ *
+ * 200 Kerzen 15m sind 50 Stunden. Zwischen Sonntagnachmittag und Montagfrüh
+ * (New York) liegen davon weniger als 30 in Handelszeit; ATR und ADX wären
+ * leer, und mit 15m als Hauptzeiteinheit fiele jeder Titel mit «keine_kerzen»
+ * aus (Review RAS-06). Dann lieber die volle Reihe samt Wochenende — mit
+ * `voll: true`, damit der Lauf es kennzeichnet: der ADX steht dann wieder auf
+ * dem flachen Wochenende (FACH-H-013).
+ *
+ * @param {{t:number}[]} kerzen  geschlossene Kerzen, älteste zuerst
+ * @param {number} [min]  so viele Kerzen braucht die Rechnung
+ * @returns {{kerzen: {t:number}[], voll: boolean}}  `voll` = auf die volle Reihe zurückgefallen
+ */
+export function handelsKerzen(kerzen = [], min = MIN_KERZEN) {
+    const handel = ohneGeschlosseneBoerse(kerzen)
+    // Reicht auch die volle Reihe nicht, bleibt es bei den Handelskerzen — es gibt dann ohnehin keinen Wert.
+    if (handel === kerzen || handel.length >= min || kerzen.length < min) return { kerzen: handel, voll: false }
+    return { kerzen, voll: true }
 }
 
 /**

@@ -265,6 +265,14 @@ gleich(await meldeNeueListungen([{ ...nvda, anlageklasse: 'sonstige' }]), false,
     gleich(await messeFaellige({ [ART_AKTIEN]: 20 }, quellen), { gemessen: 0, fehlgeschlagen: 0 }, 'der ausgelassene Auftrag steht nicht mehr in der Warteschlange')
 }
 
+// ── RAS-10: die Einstellungs-Route holt den Stamm nur beim WECHSEL von aus auf an ──
+{
+    const { aktienModusEbenEingeschaltet: eben } = await import('./api-routes.js')
+    ok(eben(0, 1) && eben(false, true) && eben(null, 1) && eben(undefined, '1'), 'aus → an: Abgleich')
+    ok(!eben(1, 1) && !eben(true, 1) && !eben('1', true), 'war schon an: kein Abgleich bei jedem Speichern')
+    ok(!eben(1, 0) && !eben(0, 0) && !eben(0, undefined) && !eben(null, undefined), 'ausschalten oder Schalter nicht im Speichern: kein Abgleich')
+}
+
 gleich(abrufe, 0, 'im ganzen Test ging kein Abruf ins Netz')
 
 await knex.destroy()

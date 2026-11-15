@@ -148,6 +148,8 @@ const splitText = (z) => {
 }
 const staerke = computed(() => lauf.value?.quellenStand?.staerke || null)
 const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
+// Zeiteinheiten, auf denen ATR/ADX mangels Handelskerzen auf der vollen Reihe stehen (RAS-06)
+const volleReihe = computed(() => Object.keys(lauf.value?.quellenStand?.volleReihe || {}).join(', '))
 </script>
 
 <template>
@@ -173,6 +175,7 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
         <p v-if="!laeuft && sitzung" class="leise">
             {{ t('aktienradar.sitzung', { sitzung: t('strategies.aktien.sitzung_' + sitzung) }) }}
             <template v-if="sitzung !== 'regulaer'"> {{ t('aktienradar.sitzungDuenn') }}</template>
+            <template v-if="volleReihe"> {{ t('aktienradar.volleReihe', { ze: volleReihe }) }}</template>
         </p>
         <Hinweis v-if="!laeuft && staerke && !staerke.ok" art="warn">{{ t('aktienradar.staerkeFehlt_' + (staerke.grund || 'abrufFehlgeschlagen')) }}</Hinweis>
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>

@@ -4,7 +4,7 @@
  *   node server/coin-radar/__selftest-aktien-kennzahlen.mjs
  */
 import assert from 'node:assert/strict'
-import { ohneGeschlosseneBoerse, genugKerzen, rvolTageszeit, staerkeGegenIndex, raengeImFeld, staerkeImFeld, bewerteAktie, GEWICHTE_AKTIEN, DECKEL_DUENN } from './aktien-kennzahlen.js'
+import { ohneGeschlosseneBoerse, handelsKerzen, genugKerzen, rvolTageszeit, staerkeGegenIndex, raengeImFeld, staerkeImFeld, bewerteAktie, GEWICHTE_AKTIEN, DECKEL_DUENN } from './aktien-kennzahlen.js'
 import { bewerte, STANDARD_GEWICHTE } from './bewertung.js'
 
 let n = 0
@@ -149,6 +149,44 @@ ok(STANDARD_GEWICHTE.kosten === 15 && bewerte({ fundingJahresRate: 0 }, { '1h': 
     // Tageskerzen: Regel nicht anwendbar, die Reihe bleibt dieselbe
     const tage = Array.from({ length: 10 }, (_, i) => ({ t: Date.UTC(2026, 10, 7 + i) }))
     ok(ohneGeschlosseneBoerse(tage) === tage && ohneGeschlosseneBoerse([]).length === 0 && ohneGeschlosseneBoerse([{ t: 1 }]).length === 1, 'ab 1d und bei leerer Reihe unverändert')
+}
+
+// ── Zu wenige Handelskerzen: Rückfall auf die volle Reihe (RAS-06) ──
+{
+    const { rechneZeiteinheit, MIN_KERZEN } = await import('./kennzahlen.js')
+    const V = 900_000
+    // 200 Kerzen 15m, deren letzte zur genannten Zeit beginnt
+    const viertel = (ende) => Array.from({ length: 200 }, (_, i) => {
+        const t = ende - (199 - i) * V, c = 100 + Math.sin(i / 5) * 2
+        return { t, o: c - 0.1, h: c + 0.3, l: c - 0.3, c, v: 100 }
+    })
+    ok(MIN_KERZEN === 30, 'die Rechnung braucht 30 Kerzen')
+    // So 15.11.2026 19:45 New York (Mo 00:45 UTC): 50 h zurück reicht bis Freitag 18:00 — fast alles Wochenende
+    const sonntag = viertel(Date.UTC(2026, 10, 16, 0, 45))
+    const wenige = ohneGeschlosseneBoerse(sonntag)
+    ok(wenige.length > 0 && wenige.length < 30 && rechneZeiteinheit(wenige).atrPct === null, `Sonntagabend 15m: nur ${wenige.length} Handelskerzen, ATR daraus leer`)
+    const rueck = handelsKerzen(sonntag)
+    ok(rueck.voll === true && rueck.kerzen === sonntag, 'dann gilt die volle Reihe, gekennzeichnet')
+    ok(Number.isFinite(rechneZeiteinheit(rueck.kerzen).atrPct) && Number.isFinite(rechneZeiteinheit(rueck.kerzen).adx), 'ATR und ADX sind damit messbar — der Titel fällt nicht mit «keine_kerzen» aus')
+    // Mo 02:00 New York (07:00 UTC): 24 Handelskerzen seit Sonntag 20:00 plus der Freitagabend — knapp über oder unter 30
+    const montag = handelsKerzen(viertel(Date.UTC(2026, 10, 16, 7)))
+    ok(montag.voll === (ohneGeschlosseneBoerse(viertel(Date.UTC(2026, 10, 16, 7))).length < 30), 'Montagfrüh: Rückfall genau dann, wenn weniger als 30 Handelskerzen bleiben')
+    // Gegenprobe: Mittwoch — nichts fällt weg, kein Kennzeichen
+    const mittwoch = viertel(Date.UTC(2026, 10, 11, 15))
+    const mi = handelsKerzen(mittwoch)
+    ok(mi.voll === false && mi.kerzen.length === mittwoch.length, 'Gegenprobe: unter der Woche dieselbe Reihe, ohne Kennzeichen')
+    // Gegenprobe: genug Handelskerzen trotz Wochenende (1h, 200 Kerzen) — gefiltert, kein Rückfall
+    const stunden = Array.from({ length: 200 }, (_, i) => ({ t: Date.UTC(2026, 10, 16, 0) - (199 - i) * H }))
+    const st = handelsKerzen(stunden)
+    ok(st.voll === false && st.kerzen.length < 200 && st.kerzen.length >= 30, 'Gegenprobe: 1h über das Wochenende bleibt gefiltert')
+    // Schwelle: genau `min` Handelskerzen reichen, eine weniger nicht
+    const n29 = ohneGeschlosseneBoerse(sonntag).length
+    ok(handelsKerzen(sonntag, n29).voll === false && handelsKerzen(sonntag, n29 + 1).voll === true, 'genau die Mindestzahl reicht, eine weniger fällt zurück')
+    // Reicht auch die volle Reihe nicht, gibt es kein Kennzeichen (es entsteht ohnehin kein Wert)
+    ok(handelsKerzen(sonntag.slice(-20)).voll === false && handelsKerzen([]).voll === false, 'zu kurze Reihe: kein Rückfall, kein Kennzeichen')
+    // Tageskerzen: Regel nicht anwendbar
+    const tage = Array.from({ length: 10 }, (_, i) => ({ t: Date.UTC(2026, 10, 7 + i) }))
+    ok(handelsKerzen(tage).kerzen === tage && handelsKerzen(tage).voll === false, 'ab 1d unverändert')
 }
 
 // ── Hürde «Mindestens N Kerzen» (FUN-F-008) ──
