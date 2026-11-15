@@ -25,6 +25,12 @@ import knexLib from 'knex'
 import { ausBitpandaPortfolio } from './normal.js'
 import { ausBitpanda } from '../aktien/einordnung.js'
 import { bewertbareSeiten } from './abruf.js'
+import axios from 'axios'
+
+// Ohne Netz: Preise und Listen kommen als Attrappen herein. Ginge doch ein Abruf hinaus, fällt der Test.
+const keinNetz = async (ziel) => { throw new Error(`Abruf im Selbsttest: ${ziel?.url || ziel}`) }
+globalThis.fetch = keinNetz
+axios.defaults.adapter = keinNetz
 
 let bestanden = 0, fehlgeschlagen = 0
 function check(name, ok, detail) {
@@ -346,18 +352,30 @@ console.log('\nFACH-P-006: Aktien-Future als Ersatzkurs nur, wenn Stamm und Name
     const stand = [{ quelle: 'bitget', stand: '{"aktienNamen":{"X":"Y"}}' }, { quelle: 'bitpanda', stand: JSON.stringify({ aktienNamen: { ai: 'Air Liquide', AAPL: 'Apple' } }) }]
     check('Namen aus dem Stand des Bitpanda-Abrufs', bitpandaAktienNamen(stand).get('AI') === 'Air Liquide' && bitpandaAktienNamen(stand).size === 2 && bitpandaAktienNamen([{ quelle: 'bitpanda', stand: 'kaputt' }]).size === 0)
 
+    // RAS-04: verglichen wird Bitpandas Name mit dem Namen der KURSQUELLE (`quellenName`), nicht mit dem
+    // Stamm-Namen — der stammt selbst von Bitpanda («Air Liquide» gegen «Air Liquide» passte immer).
     const apple = { ticker: 'AAPL', name: 'Apple Inc.', region: null }
-    check('Apple: Bitpanda-Listung, Name passt, Kurssymbol AAPL → erlaubt', ersatzkursErlaubt({ titel: apple, bitpandaListung: true, kursSymbol: 'AAPL', bitpandaName: 'Apple' }) === true)
-    check('AI: Stamm kennt C3.ai, Bitpanda hält Air Liquide → kein Ersatzkurs', ersatzkursErlaubt({ titel: { ticker: 'AI', name: 'C3.ai, Inc.' }, bitpandaListung: true, kursSymbol: 'AI', bitpandaName: 'Air Liquide' }) === false)
-    check('AI: Stamm-Name von Bitpanda (Air Liquide), Kursquelle fand AI.PA → kein Ersatzkurs', ersatzkursErlaubt({ titel: { ticker: 'AI', name: 'Air Liquide' }, bitpandaListung: true, kursSymbol: 'AI.PA', bitpandaName: 'Air Liquide' }) === false)
-    check('ohne Bitpanda-Listung im Stamm kein Ersatzkurs', ersatzkursErlaubt({ titel: apple, bitpandaListung: false, kursSymbol: 'AAPL', bitpandaName: 'Apple' }) === false)
-    check('ohne Namen oder ohne Newcomer-Lauf kein Ersatzkurs', !ersatzkursErlaubt({ titel: apple, bitpandaListung: true, kursSymbol: 'AAPL', bitpandaName: null }) && !ersatzkursErlaubt({ titel: apple, bitpandaListung: true, kursSymbol: null, bitpandaName: 'Apple' }) && !ersatzkursErlaubt({ titel: { ticker: 'AAPL', name: null }, bitpandaListung: true, kursSymbol: 'AAPL', bitpandaName: 'Apple' }))
+    const erlaubt = (o) => ersatzkursErlaubt({ titel: apple, bitpandaListung: true, kursSymbol: 'AAPL', quellenName: 'Apple Inc.', bitpandaName: 'Apple', ...o })
+    check('Apple: Bitpanda-Listung, Kurssymbol AAPL, Kursquelle nennt «Apple Inc.» → erlaubt', erlaubt({}) === true)
+    check('AI: Stamm-Name von Bitpanda (Air Liquide), Kursquelle führt unter AI «C3.ai, Inc.» → kein Ersatzkurs',
+        erlaubt({ titel: { ticker: 'AI', name: 'Air Liquide' }, kursSymbol: 'AI', quellenName: 'C3.ai, Inc.', bitpandaName: 'Air Liquide' }) === false)
+    check('AI: Stamm kennt C3.ai, Bitpanda hält Air Liquide → kein Ersatzkurs',
+        erlaubt({ titel: { ticker: 'AI', name: 'C3.ai, Inc.' }, kursSymbol: 'AI', quellenName: 'C3.ai, Inc.', bitpandaName: 'Air Liquide' }) === false)
+    check('AI: Kursquelle fand AI.PA → kein Ersatzkurs (der Future hängt an AI)',
+        erlaubt({ titel: { ticker: 'AI', name: 'Air Liquide' }, kursSymbol: 'AI.PA', quellenName: "L'Air Liquide S.A.", bitpandaName: 'Air Liquide' }) === false)
+    check('RAS-01-Paare: Future ≠ Bitpanda-Firma → kein Ersatzkurs', [['SAN', 'Sanofi', 'Banco Santander, S.A.'], ['AA', 'Anglo American', 'Alcoa Corporation'], ['MC', 'LVMH', 'Moelis & Company'], ['T', 'Telus', 'AT&T Inc.'], ['ON', 'E.ON', 'ON Semiconductor Corporation']]
+        .every(([ticker, bp, quelle]) => erlaubt({ titel: { ticker, name: bp }, kursSymbol: ticker, quellenName: quelle, bitpandaName: bp }) === false))
+    check('der Stamm-Name zählt nicht mehr: fehlt er oder ist er ein anderer, entscheidet der Name der Kursquelle',
+        erlaubt({ titel: { ticker: 'AAPL', name: null } }) === true && erlaubt({ titel: { ticker: 'AAPL', name: 'Ganz Anderes' } }) === true)
+    check('ohne Bitpanda-Listung im Stamm kein Ersatzkurs', erlaubt({ bitpandaListung: false }) === false)
+    check('ohne Bitpanda-Namen, ohne Newcomer-Lauf oder ohne Namen der Kursquelle (Stand vor RAS-04) kein Ersatzkurs',
+        !erlaubt({ bitpandaName: null }) && !erlaubt({ kursSymbol: null }) && !erlaubt({ quellenName: null }) && !erlaubt({ quellenName: '' }))
 
     // Gegen einen Stamm im Speicher; die Preise kommen herein, kein Netz.
     const knex = knexLib({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
     await knex.schema.createTable('instrumente', (t) => { t.increments('id'); t.string('anlageklasse'); t.string('ticker'); t.string('name'); t.string('region') })
     await knex.schema.createTable('instrument_listungen', (t) => { t.increments('id'); t.integer('instrumentId'); t.string('handelsplatz'); t.string('symbol'); t.string('art'); t.integer('aktiv') })
-    await knex.schema.createTable('newcomer_titel', (t) => { t.increments('id'); t.integer('instrumentId'); t.string('kursSymbol') })
+    await knex.schema.createTable('newcomer_titel', (t) => { t.increments('id'); t.integer('instrumentId'); t.string('kursSymbol'); t.text('kennzahlen') })
     await knex('instrumente').insert([
         { id: 1, anlageklasse: 'aktien', ticker: 'AAPL', name: 'Apple Inc.' },
         { id: 2, anlageklasse: 'aktien', ticker: 'AI', name: 'Air Liquide' },          // Name von Bitpanda, Future = C3.ai
@@ -372,7 +390,9 @@ console.log('\nFACH-P-006: Aktien-Future als Ersatzkurs nur, wenn Stamm und Name
         l(3, 'bitget', 'AAUSDT', 'perp'), l(3, 'bitpanda', 'p-aa', 'broker-spot'),
         l(4, 'bitget', 'NVDAUSDT', 'perp'),
     ])
-    await knex('newcomer_titel').insert([{ instrumentId: 1, kursSymbol: 'AAPL' }, { instrumentId: 2, kursSymbol: 'AI.PA' }, { instrumentId: 3, kursSymbol: 'AA' }, { instrumentId: 4, kursSymbol: 'NVDA' }])
+    const kz = (quellenName) => JSON.stringify({ perf3m: 1, quellenName })
+    await knex('newcomer_titel').insert([{ instrumentId: 1, kursSymbol: 'AAPL', kennzahlen: kz('Apple Inc.') }, { instrumentId: 2, kursSymbol: 'AI', kennzahlen: kz('C3.ai, Inc.') },
+        { instrumentId: 3, kursSymbol: 'AA', kennzahlen: kz('Alcoa Corporation') }, { instrumentId: 4, kursSymbol: 'NVDA', kennzahlen: kz('NVIDIA Corporation') }])
     _setzeLeser(async () => 'bitget')
     let geholt = 0
     const holePreise = async () => { geholt++; return new Map([['AAPLUSDT', 356], ['AIUSDT', 30], ['AAUSDT', 40], ['NVDAUSDT', 190]]) }
@@ -385,6 +405,11 @@ console.log('\nFACH-P-006: Aktien-Future als Ersatzkurs nur, wenn Stamm und Name
     check('ohne Bitpanda-Namen kein Ersatzkurs und kein Preisabruf', ohneNamen.size === 0 && geholt === 0)
     const nurFremde = await stammKurseUsd(knex, ['AI', 'AA'], bpNamen, { holePreise })
     check('passt kein Titel, werden keine Preise geholt', nurFremde.size === 0 && geholt === 0)
+    // Stand eines Laufs von vor RAS-04: Kurssymbol da, Name der Kursquelle nicht gemerkt (auch: kaputtes JSON).
+    await knex('newcomer_titel').where('instrumentId', 1).update({ kennzahlen: JSON.stringify({ perf3m: 1 }) })
+    check('Altstand ohne gemerkten Namen der Kursquelle: kein Ersatzkurs bis zum nächsten Lauf', (await stammKurseUsd(knex, ['AAPL'], bpNamen, { holePreise })).size === 0)
+    await knex('newcomer_titel').where('instrumentId', 1).update({ kennzahlen: '{kaputt' })
+    check('unlesbare Kennzahlen: kein Ersatzkurs, kein Absturz', (await stammKurseUsd(knex, ['AAPL'], bpNamen, { holePreise })).size === 0)
     await knex('newcomer_titel').where('instrumentId', 1).del()
     check('ohne Newcomer-Lauf (Name ungeprüft) kein Ersatzkurs', (await stammKurseUsd(knex, ['AAPL'], bpNamen, { holePreise })).size === 0)
     await knex.destroy()

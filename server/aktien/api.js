@@ -43,7 +43,7 @@ const bewegungLaeuft = new Map()  // ticker → Promise des laufenden (bezahlten
 async function baueTitelSeite(ticker) {
     const gefunden = await ladeTitel(getKnex(), ticker)
     if (!gefunden) return { ok: false, grund: 'unbekannt' }
-    const { titel, kursSymbol, zuordnung } = gefunden
+    const { titel, kursSymbol, zuordnung, perp } = gefunden
     const kopf = {
         ok: true,
         titel: { ticker: titel.ticker, name: titel.name, unterart: titel.unterart, listungen: titel.listungen },
@@ -58,10 +58,14 @@ async function baueTitelSeite(ticker) {
         if (zus.status === 'rejected' && chart.status === 'rejected') throw zus.reason
         const daten = zus.status === 'fulfilled' ? ausZusammenfassung(zus.value) : null
         const quellenName = (chart.status === 'fulfilled' ? chart.value.meta.name : null) || daten?.profil?.name || null
+        const nameQuelle = namensWarnung(titel.name, quellenName, ticker)
         return {
             ...kopf,
             daten,
-            nameQuelle: namensWarnung(titel.name, quellenName, ticker),
+            nameQuelle,
+            // RAS-01: mit einem Future gilt dessen Ticker — dann ist nicht die Kursquelle fraglich,
+            // sondern der Name im Stamm (von Bitpanda, dort eine andere Firma unter demselben Kürzel).
+            nameZweifelhaft: !!nameQuelle && perp === true,
             datenFehler: zus.status === 'rejected' ? String(zus.reason?.message || zus.reason) : null,
             linie: chart.status === 'fulfilled' ? kursLinie(chart.value.kerzen) : [],
             // «Junge Firma» und Haltefrist hängen daran: dieselbe Regel wie im Newcomer-Lauf (FUN-F-014).

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { kennzahlen, rendite, MIN_TAGE_HOCH } from './kennzahlen.js'
 import { bewerte, noteNeuheit, noteMomentum, momentumTeile, noteBeteiligung, kategorie, huerden, juengsteListung, fruehesteListung, DECKEL_DUENN, MIN_MOMENTUM_TEILE } from './bewertung.js'
 import { waehrungsEinheit, wechselkursSymbol, usdFaktor, ausWechselkurs, renditeInUsd } from './waehrung.js'
-import { kursSymbolKandidaten, kursSymbolFuer, passtZurRegion, nameGleich, nameAehnlich, tickerStamm, namensWoerter, ausChart, ausSuche } from './kursquelle-kern.js'
+import { kursSymbolKandidaten, kursSymbolFuer, hatKryptoPerp, passtZurRegion, nameGleich, nameAehnlich, tickerStamm, namensWoerter, ausChart, ausSuche } from './kursquelle-kern.js'
 import { findeKurse } from './lauf.js'
 import { NichtGefunden } from './kursquelle.js'
 
@@ -226,6 +226,24 @@ gleich(kursSymbolFuer({ ticker: 'BYD', region: 'HK' }), null, 'BYD (HK) ohne Sta
 gleich(kursSymbolFuer({ ticker: 'BYD', region: 'HK' }, { kursSymbol: 'BYD', zuordnung: 'ticker' }), null, 'BYD (HK): alter Stand «BYD» gilt nicht mehr')
 gleich(kursSymbolFuer({ ticker: 'BYD', region: 'HK' }, { kursSymbol: '1211.HK', zuordnung: 'suche' }), '1211.HK', 'BYD (HK): gefundene Hongkong-Listung gilt')
 
+// RAS-01: mit einem Future an einer Krypto-Börse gilt der Ticker — sofort, auch gegen ein gespeichertes Symbol
+{
+    const perpL = [{ handelsplatz: 'bitget', symbol: 'SANUSDT', art: 'perp' }, { handelsplatz: 'bitpanda', symbol: 'x', art: 'broker-spot' }]
+    gleich([hatKryptoPerp(perpL), hatKryptoPerp([{ handelsplatz: 'bitpanda', symbol: 'x', art: 'broker-spot' }]), hatKryptoPerp([{ handelsplatz: 'pionex', symbol: 'SANX_USDT', art: 'token-spot' }]),
+        hatKryptoPerp([{ handelsplatz: 'pionex', symbol: 'X', art: 'perp' }]), hatKryptoPerp(undefined)], [true, false, false, false, false], 'Future an Binance/Bitget/Bitunix — Bitpanda und Pionex zählen nicht')
+    for (const [ticker, falsch, zuordnung] of [['SAN', 'SAN.PA', 'suche'], ['AA', 'AAL.L', 'sucheFremd'], ['MC', 'MC.PA', 'suche'], ['T', 'T.TO', 'suche']]) {
+        gleich(kursSymbolFuer({ ticker }, { kursSymbol: falsch, zuordnung }, { perp: true }), ticker, `${ticker} mit Future: gespeichertes ${falsch} gilt nicht, der Ticker gilt`)
+        gleich(kursSymbolFuer({ ticker }, { kursSymbol: falsch, zuordnung }), falsch, `${ticker} ohne Future (nur Bitpanda): ${falsch} gilt weiter`)
+    }
+    gleich(kursSymbolFuer({ ticker: 'SAN', listungen: perpL }, { kursSymbol: 'SAN.PA', zuordnung: 'suche' }), 'SAN', 'ohne Angabe liest die Funktion die Listungen des Titels')
+    gleich(kursSymbolFuer({ ticker: 'SAN' }, { kursSymbol: 'SAN', zuordnung: 'ticker' }, { perp: true }), 'SAN', 'mit Future: richtiges Symbol bleibt')
+    gleich(kursSymbolFuer({ ticker: 'BRKB' }, { kursSymbol: 'BRK-B', zuordnung: 'ticker' }, { perp: true }), 'BRK-B', 'mit Future: Aktiengattung bleibt')
+    gleich(kursSymbolFuer({ ticker: 'SAN' }, { kursSymbol: null, grund: 'keinTreffer' }, { perp: true }), null, 'mit Future, Lauf fand nichts: bleibt unbekannt bis zum nächsten Lauf')
+    gleich(kursSymbolFuer({ ticker: 'SAN' }, null, { perp: true }), 'SAN', 'mit Future, noch nie gelaufen: Ticker')
+    gleich([kursSymbolFuer({ ticker: 'BYD', region: 'HK' }, { kursSymbol: 'BYD', zuordnung: 'ticker' }, { perp: true }), kursSymbolFuer({ ticker: 'BYD', region: 'HK' }, { kursSymbol: '1211.HK', zuordnung: 'suche' }, { perp: true })],
+        [null, '1211.HK'], 'Future mit fremder Region (Binance HK_EQUITY): kein Ticker-Kandidat, Regel wie bisher')
+}
+
 // Der Lauf selbst, mit einer Kursquelle als Attrappe: was sie unter welchem Symbol führt.
 const attrappe = (charts, suche = null) => {
     const gefragt = []
@@ -252,11 +270,50 @@ gleich(await findeKurse({ ticker: 'BYD', region: 'HK', name: 'Boyd Gaming Corpor
 q = attrappe(BOYD, { symbol: '1211.HK', heimat: false })
 let fund = await findeKurse({ ticker: 'BYD', region: 'HK', name: 'BYD Company', listungen: anBinance }, undefined, 0, q)
 gleich([fund?.chart.meta.symbol, fund?.zuordnung], ['1211.HK', 'sucheFremd'], 'BYD (HK): Hongkong-Listung aus der Namenssuche gilt')
-// Krypto-Börse mit bekanntem Namen: der Name wird geprüft (früher galt der Ticker ungeprüft).
-q = attrappe({ SAN: 'Banco Santander, S.A.' })
-gleich(await findeKurse({ ticker: 'SAN', name: 'Sanofi', listungen: [{ handelsplatz: 'bitget', symbol: 'SANUSDT', art: 'perp' }] }, undefined, 0, q), null, 'Krypto-Börse, Name bekannt und widerspricht: kein Treffer')
-q = attrappe({ SAN: 'Banco Santander, S.A.' })
-gleich(await findeKurse({ ticker: 'SAN', name: 'Sanofi', listungen: anBinance }, { kursSymbol: 'SAN', zuordnung: 'ticker' }, 0, q), null, 'gespeicherter ungeprüfter Treffer wird am Namen nachgeprüft')
+// RAS-01: Der Stamm bündelt nach Ticker und hat den Namen von Bitpanda. Neben dem Future ist der
+// Ticker massgebend — der Lauf darf dem Future nicht die Firma der Bitpanda-Seite unterschieben.
+{
+    const faelle = [
+        ['AA', 'Anglo American', 'Alcoa Corporation', 'AAL.L', 'Anglo American plc', false],
+        ['MC', 'LVMH', 'Moelis & Company', 'MC.PA', 'LVMH Moët Hennessy - Louis Vuitton, Société Européenne', true],
+        ['SAN', 'Sanofi', 'Banco Santander, S.A.', 'SAN.PA', 'Sanofi', true],
+        ['T', 'Telus', 'AT&T Inc.', 'T.TO', 'TELUS Corporation', true],
+    ]
+    for (const [ticker, bpName, usName, heimSym, heimName, heimat] of faelle) {
+        const charts = { [ticker]: usName, [heimSym]: heimName }
+        const mitFuture = { ticker, name: bpName, region: null, listungen: [{ handelsplatz: 'bitget', art: 'perp', symbol: ticker + 'USDT' }, { handelsplatz: 'bitpanda', art: 'broker-spot', symbol: 'x' }] }
+        const nurBitpanda = { ...mitFuture, listungen: [mitFuture.listungen[1]] }
+        const zuordnungAlt = heimat ? 'suche' : 'sucheFremd'
+        for (const [was, gesp] of [['frisch', undefined], ['Altstand ticker', { kursSymbol: ticker, zuordnung: 'ticker' }], ['Altstand name', { kursSymbol: ticker, zuordnung: 'name' }],
+            [`Altstand ${heimSym}`, { kursSymbol: heimSym, zuordnung: zuordnungAlt }], ['Altstand keinTreffer', { kursSymbol: null, zuordnung: null }]]) {
+            q = attrappe(charts, { symbol: heimSym, heimat })
+            fund = await findeKurse(mitFuture, gesp, 0, q)
+            gleich([fund?.chart.meta.symbol, fund?.chart.meta.name, fund?.zuordnung], [ticker, usName, 'ticker'], `${ticker}USDT neben Bitpanda «${bpName}», ${was}: Kurse von ${usName}, ungeprüft über den Ticker`)
+            gleich(q.gefragt, [ticker], `${ticker}USDT, ${was}: ${heimSym} wird gar nicht erst abgerufen, der Ticker nur einmal`)
+        }
+        // Derselbe Titel ohne Future: Namensprüfung und Suche wie bisher.
+        q = attrappe(charts, { symbol: heimSym, heimat })
+        fund = await findeKurse(nurBitpanda, undefined, 0, q)
+        gleich([fund?.chart.meta.symbol, fund?.zuordnung], [heimSym, zuordnungAlt], `${ticker} nur bei Bitpanda («${bpName}»): Heimatlistung über den Namen, wie bisher`)
+        q = attrappe(charts, { symbol: heimSym, heimat })
+        fund = await findeKurse(nurBitpanda, { kursSymbol: heimSym, zuordnung: zuordnungAlt }, 0, q)
+        gleich([fund?.chart.meta.symbol, fund?.zuordnung, q.gefragt], [heimSym, zuordnungAlt, [heimSym]], `${ticker} nur bei Bitpanda: gespeicherte Heimatlistung gilt weiter`)
+        q = attrappe(charts, null)
+        gleich(await findeKurse(nurBitpanda, { kursSymbol: ticker, zuordnung: 'ticker' }, 0, q), null, `${ticker} nur bei Bitpanda: ungeprüfter Ticker-Treffer fällt am Namen, Suche ohne Fund → kein Treffer`)
+    }
+    // Mit Future, aber die Kursquelle kennt den Ticker nicht: kein Treffer — NICHT die Firma, die Bitpanda so nennt.
+    q = attrappe({ 'SAN.PA': 'Sanofi' }, { symbol: 'SAN.PA', heimat: true })
+    gleich(await findeKurse({ ticker: 'SAN', name: 'Sanofi', listungen: [{ handelsplatz: 'bitget', symbol: 'SANUSDT', art: 'perp' }] }, undefined, 0, q), null, 'Future, Ticker bei der Kursquelle unbekannt: kein Treffer statt Namenssuche')
+    gleich(q.gefragt, ['SAN'], '…und SAN.PA wird nicht abgerufen')
+    // Mit Future und passendem Namen: weiterhin «name»; ein altes «ticker» wird hochgestuft.
+    q = attrappe({ NVDA: 'NVIDIA Corporation' })
+    fund = await findeKurse({ ticker: 'NVDA', name: 'NVIDIA', listungen: anBinance }, { kursSymbol: 'NVDA', zuordnung: 'ticker' }, 0, q)
+    gleich([fund?.zuordnung, q.gefragt], ['name', ['NVDA']], 'Future, Name passt: Zuordnung «name», ein Abruf')
+    // RAS-04: ein altes «name» aus der zu lockeren Ticker-Regel wird nachgeprüft (reiner Bitpanda-Titel).
+    q = attrappe({ AI: 'C3.ai, Inc.', 'AI.PA': "L'Air Liquide S.A." }, { symbol: 'AI.PA', heimat: true })
+    fund = await findeKurse({ ticker: 'AI', name: 'Air Liquide', listungen: [{ handelsplatz: 'bitpanda', symbol: 'x', art: 'broker-spot' }] }, { kursSymbol: 'AI', zuordnung: 'name' }, 0, q)
+    gleich([fund?.chart.meta.symbol, fund?.zuordnung], ['AI.PA', 'suche'], 'Air Liquide nur bei Bitpanda, Altstand «AI = name» (C3.ai): fällt, die Suche findet AI.PA')
+}
 q = attrappe({ NVDA: 'NVIDIA Corporation' })
 fund = await findeKurse({ ticker: 'NVDA', name: 'NVIDIA', listungen: anBinance }, undefined, 0, q)
 gleich(fund?.zuordnung, 'name', 'Krypto-Börse, Name passt: Zuordnung «name»')
@@ -308,12 +365,17 @@ for (const [stamm, quelle, ticker] of [
     ['TSMC', 'Taiwan Semiconductor Manufacturing Company Limited', 'TSM'],
     ['AMD', 'Advanced Micro Devices, Inc.', 'AMD'],
     ['IBM', 'International Business Machines Corporation', 'IBM'],
-    ['Pinduoduo', 'PDD Holdings Inc.', 'PDD'],
     ['British Petroleum', 'BP p.l.c.', 'BP'],
     ['HP', 'HP Inc.', 'HPQ'],
     ['ExxonMobil', 'Exxon Mobil Corporation', 'XOM'],
     ['Zoom Video Communications', 'Zoom Communications, Inc.', 'ZM'],
     ['Circle Internet Group, Inc.', 'Circle Internet Group, Inc.', 'CRCL'],
+    // RAS-04: Ticker im Namen der Kursquelle UND ein weiteres gemeinsames Wort
+    ['GE Vernova', 'GE Vernova Inc.', 'GEV'],
+    ['General Electric Aerospace', 'GE Aerospace', 'GE'],
+    ['C3 AI', 'C3.ai, Inc.', 'AI'],
+    ['ON Semiconductor', 'ON Semiconductor Corporation', 'ON'],
+    ['Blue Owl Capital', 'OWL Blue Tech', 'OWL'],          // erdacht: gilt NUR über Ticker + gemeinsames kurzes Wort
 ]) ok(nameAehnlich(stamm, quelle, ticker), `ähnlich: ${stamm} / ${quelle}`)
 for (const [stamm, quelle, ticker] of [
     ['Sanofi', 'Banco Santander, S.A.', 'SAN'],
@@ -325,6 +387,17 @@ for (const [stamm, quelle, ticker] of [
     ['Carlsberg', 'Carlsmed, Inc.', 'CARL'],
     ['Commerzbank', 'Commercial Bancgroup, Inc.', 'CBK'],
     ['', 'Reddit, Inc.', 'RDDT'],
+    // RAS-04: der Ticker als Wort im Namen der Kursquelle reicht allein nicht
+    ['Air Liquide', 'C3.ai, Inc.', 'AI'],
+    ['E.ON', 'ON Semiconductor Corporation', 'ON'],
+    ['Banco BPM', 'BP p.l.c.', 'BP'],
+    ['Genel Energy', 'GE Aerospace', 'GE'],
+    ['Intesa', 'Gartner, Inc.', 'IT'],
+    ['Anglo American', 'Alcoa Corporation', 'AA'],
+    ['LVMH', 'Moelis & Company', 'MC'],
+    ['Telus', 'AT&T Inc.', 'T'],
+    // Preis der Regel: eine Umbenennung, die nur am Ticker hing, gilt nicht mehr als belegt (bis 16.11.2026 «ähnlich»)
+    ['Pinduoduo', 'PDD Holdings Inc.', 'PDD'],
 ]) ok(!nameAehnlich(stamm, quelle, ticker), `nicht ähnlich: ${stamm} / ${quelle}`)
 
 // ── Echte Daten durch die ganze Kette ──

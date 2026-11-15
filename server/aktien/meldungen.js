@@ -293,7 +293,7 @@ export async function pruefeZahlentermine() {
     // Symbol der Watchlist → Titel des Stamms → Symbol der Kursquelle.
     const zeilen = await knex('instrument_listungen as l').join('instrumente as i', 'i.id', 'l.instrumentId')
         .whereIn('l.symbol', symbole.slice(0, 400)).where({ 'l.aktiv': 1, 'i.anlageklasse': 'aktien' })
-        .select('i.id', 'i.ticker', 'i.name', 'i.region')
+        .select('i.id', 'i.ticker', 'i.name', 'i.region', 'l.art', 'l.handelsplatz')
     const titel = zahlenFenster([...new Map(zeilen.map((z) => [z.id, z])).values()])
     if (!titel.length) return false
     const kursSymbole = new Map()
@@ -303,10 +303,12 @@ export async function pruefeZahlentermine() {
         }
     }
     const { ladeTermine } = await import('./termine.js')
-    const { kursSymbolFuer } = await import('../newcomer-radar/kursquelle-kern.js')
+    const { kursSymbolFuer, hatKryptoPerp } = await import('../newcomer-radar/kursquelle-kern.js')
+    // Titel, deren Watchlist-Symbol ein Future einer Krypto-Börse ist: dort gilt der Ticker (RAS-01).
+    const mitPerp = new Set(zeilen.filter((z) => hatKryptoPerp([z])).map((z) => z.id))
     const mitTermin = []
     for (const t of titel) {
-        const kursSymbol = kursSymbolFuer(t, kursSymbole.get(t.id) || null)
+        const kursSymbol = kursSymbolFuer(t, kursSymbole.get(t.id) || null, { perp: mitPerp.has(t.id) })
         if (!kursSymbol) continue
         const { termine, grund } = await ladeTermine(kursSymbol)
         // Bremst die Quelle oder ist sie aus, hört die Runde auf statt weiterzufragen.

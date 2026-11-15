@@ -21,7 +21,7 @@ import { aktienModusAn } from '../aktien/kontext.js'
 import { kennzahlen, rendite } from './kennzahlen.js'
 import { bewerte } from './bewertung.js'
 import { wechselkursSymbol, ausWechselkurs } from './waehrung.js'
-import { kursSymbolKandidaten, kursSymbolFuer, passtZurRegion, nameAehnlich, boersengangDatum } from './kursquelle-kern.js'
+import { kursSymbolKandidaten, kursSymbolFuer, hatKryptoPerp, passtZurRegion, nameAehnlich, boersengangDatum } from './kursquelle-kern.js'
 import { holeChart, sucheSymbol, NichtGefunden, Gebremst } from './kursquelle.js'
 
 const FRISCH_MS = 20 * 3600e3
@@ -40,10 +40,17 @@ export const laufStand = () => stand
 
 /**
  * Kurse eines Titels finden. Zuordnung, in dieser Reihenfolge:
- *   gespeichert  das Symbol des letzten Laufs — ein ungeprüftes (`ticker`) nur, solange der
- *                inzwischen bekannte Name nicht widerspricht und die Region es zulässt
- *   ticker       der Stamm kennt keinen Namen (Titel nur an Krypto-Börsen): der Ticker gilt ungeprüft
- *   name         Ticker passt und der Name widerspricht nicht (`nameAehnlich`) — auch an Krypto-Börsen
+ *   gespeichert  das Symbol des letzten Laufs — ein über den Ticker gefundenes (`ticker`, `name`) nur,
+ *                solange der Name nicht widerspricht und die Region es zulässt
+ *   ticker       der Ticker gilt ungeprüft: der Stamm kennt keinen Namen, ODER der Titel hat einen
+ *                Future an einer Krypto-Börse und der Stamm-Name (von Bitpanda) widerspricht
+ *   name         Ticker passt und der Name widerspricht nicht (`nameAehnlich`)
+ *
+ * RAS-01: Der Stamm bündelt nach Ticker, den Namen liefert Bitpanda. Führt Bitpanda unter `SAN`
+ * Sanofi und die Krypto-Börse `SANUSDT` (Banco Santander), hat der Titel Bitpandas Namen und den
+ * Future. Gerechnet wird auf dem Future — dessen Ticker ist massgebend, der Name ist der zweifelhafte
+ * Teil (die Titel-Seite sagt es). Für solche Titel gibt es deshalb auch keine Namenssuche: sie fände
+ * die Firma der Bitpanda-Seite (`SAN.PA`). Reine Bitpanda-Titel behalten Namensprüfung und Suche.
  *
  * Titel mit fremder Region (Binance `HK_EQUITY`) haben keinen Ticker-Kandidaten:
  * `BYD` wäre Boyd Gaming. Für sie bleibt die Namenssuche oder «kein Treffer».
@@ -55,26 +62,33 @@ export const laufStand = () => stand
  */
 export async function findeKurse(titel, gespeichert, jetzt, quelle = { holeChart, sucheSymbol }) {
     const { holeChart, sucheSymbol } = quelle
-    if (gespeichert?.kursSymbol && kursSymbolFuer(titel, gespeichert)) {
+    const kandidaten = kursSymbolKandidaten(titel.ticker, titel.region)
+    const perp = hatKryptoPerp(titel.listungen)
+    const tickerGilt = perp && kandidaten.length > 0
+    const passt = (chart) => !!titel.name && nameAehnlich(titel.name, chart.meta.name, titel.ticker)
+    // `kursSymbolFuer` verwirft ein gespeichertes Symbol, das nicht mehr gilt (fremde Region; RAS-01: `SAN.PA` neben dem Future).
+    if (gespeichert?.kursSymbol && kursSymbolFuer(titel, gespeichert, { perp }) === gespeichert.kursSymbol) {
         try {
             const chart = await holeChart(gespeichert.kursSymbol, jetzt)
             const zuordnung = gespeichert.zuordnung || 'ticker'
-            if (zuordnung !== 'ticker' || !titel.name || nameAehnlich(titel.name, chart.meta.name, titel.ticker)) return { chart, zuordnung }
+            if (tickerGilt) return { chart, zuordnung: passt(chart) ? 'name' : 'ticker' }
+            // Auch ein altes `name` wird nachgeprüft: bis RAS-04 reichte dafür der Ticker im Namen der Kursquelle.
+            if ((zuordnung !== 'ticker' && zuordnung !== 'name') || !titel.name || passt(chart)) return { chart, zuordnung }
         } catch (e) {
             if (!(e instanceof NichtGefunden)) throw e
         }
     }
-    for (const symbol of kursSymbolKandidaten(titel.ticker, titel.region)) {
+    for (const symbol of kandidaten) {
         let chart
         try { chart = await holeChart(symbol, jetzt) } catch (e) {
             if (e instanceof NichtGefunden) continue
             throw e
         }
         if (!WERTPAPIER_TYPEN.has(chart.meta.typ)) continue
-        if (!titel.name) return { chart, zuordnung: 'ticker' }
-        if (nameAehnlich(titel.name, chart.meta.name, titel.ticker)) return { chart, zuordnung: 'name' }
+        if (passt(chart)) return { chart, zuordnung: 'name' }
+        if (!titel.name || tickerGilt) return { chart, zuordnung: 'ticker' }
     }
-    if (titel.name) {
+    if (titel.name && !tickerGilt) {
         const treffer = await sucheSymbol(titel.name, titel.ticker)
         // Auch die Namenssuche darf einem Titel aus Hongkong keine US-Listung unterschieben.
         if (treffer && passtZurRegion(treffer.symbol, titel.region)) {
@@ -156,7 +170,10 @@ async function bearbeite(knex, titel, gespeichert, referenz, jetzt, wechselkurse
     await speichere(knex, titel.id, {
         ...kopf, kursSymbol: chart.meta.symbol, zuordnung, kategorie: b.kategorie, note: b.note,
         noten: JSON.stringify(b.noten),
+        // `quellenName`: wie die Kursquelle die Firma hinter `kursSymbol` nennt — daran prüft das Portfolio,
+        // ob Bitpandas Aktie gleichen Kürzels dieselbe Firma ist (RAS-04, `ersatzkursErlaubt`).
         kennzahlen: JSON.stringify({ ...k, listungVorTagen: b.listungVorTagen, waehrung, boerse: chart.meta.boerse,
+            quellenName: chart.meta.name ? String(chart.meta.name).slice(0, 120) : null,
             kursUsd: b.kursUsd, umsatz20Usd: b.umsatz20Usd, momentumTeile: b.momentumTeile, gedeckelt: b.gedeckelt }),
         huerden: JSON.stringify(b.huerden), grund: null,
     })

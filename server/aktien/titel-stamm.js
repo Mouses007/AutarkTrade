@@ -4,7 +4,7 @@
  * von `api.js`, damit der Selbsttest ohne Schlüsseldatei und KI-Schicht läuft.
  */
 import { leseStamm } from './stamm-speicher.js'
-import { kursSymbolFuer, nameAehnlich } from '../newcomer-radar/kursquelle-kern.js'
+import { kursSymbolFuer, hatKryptoPerp, nameAehnlich } from '../newcomer-radar/kursquelle-kern.js'
 
 /** Titel des Stamms samt Listungen und dem Symbol bei der Kursquelle. */
 export async function ladeTitel(knex, ticker) {
@@ -16,9 +16,14 @@ export async function ladeTitel(knex, ticker) {
         ? await knex('newcomer_titel').where('instrumentId', zeile.id).first('kursSymbol', 'zuordnung') : null
     // Kein Rückfall auf den blossen Ticker, wenn der Newcomer-Lauf nichts fand oder der Titel eine fremde Region trägt.
     // `zuordnung` sagt der Seite, ob der erste Handel der Kursquelle der Börsengang ist (FUN-F-014).
+    // RAS-01: mit einem Future an einer Krypto-Börse gilt dessen Ticker, auch gegen ein gespeichertes `SAN.PA`.
+    const perp = hatKryptoPerp(titel?.listungen)
+    const kursSymbol = kursSymbolFuer(zeile, gemerkt || null, { perp })
     return {
         titel: titel || { ticker, name: zeile.name, unterart: zeile.unterart, listungen: [] },
-        kursSymbol: kursSymbolFuer(zeile, gemerkt || null), zuordnung: gemerkt?.zuordnung || null,
+        // Die gespeicherte Zuordnung gehört zum gespeicherten Symbol — gilt ein anderes, ist sie unbekannt.
+        kursSymbol, zuordnung: (!gemerkt?.kursSymbol || gemerkt.kursSymbol === kursSymbol) ? gemerkt?.zuordnung || null : null,
+        perp,
     }
 }
 

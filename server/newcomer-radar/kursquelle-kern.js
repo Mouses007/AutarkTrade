@@ -8,7 +8,9 @@
  * ist nicht eindeutig: `SAN` ist bei Bitpanda Sanofi, an der NYSE Banco
  * Santander. Deshalb gilt ein Treffer nur, wenn der NAME passt — kennt der
  * Stamm keinen Namen (Titel nur an Krypto-Börsen), gilt der Ticker und die
- * Zuordnung heisst `ticker` statt `name`.
+ * Zuordnung heisst `ticker` statt `name`. Ausnahme (RAS-01): hat der Titel
+ * einen Future an einer Krypto-Börse, ist dessen Ticker massgebend, auch gegen
+ * den Namen — der stammt von Bitpanda und kann eine andere Firma meinen.
  *
  * Trägt der Titel eine Region ausserhalb der USA (Binance `HK_EQUITY`: BYD
  * Company), ist der blosse Ticker ein fremdes Papier (`BYD` = Boyd Gaming an
@@ -49,6 +51,14 @@ export function passtZurRegion(symbol, region) {
     return erlaubt ? erlaubt.includes(s.slice(punkt)) : true
 }
 
+/** Börsen, deren Aktien-Futures gehandelt werden. Ohne Region im Stamm sind das US-Titel. */
+export const KRYPTO_BOERSEN = ['binance', 'bitget', 'bitunix']
+
+/** Führt eine dieser Listungen (aktive Listungen eines Titels) einen Future an einer Krypto-Börse? */
+export function hatKryptoPerp(listungen) {
+    return (listungen || []).some((l) => l?.art === 'perp' && KRYPTO_BOERSEN.includes(l.handelsplatz))
+}
+
 /**
  * Welche Symbole der Kursquelle kommen für diesen Ticker in Frage, in dieser Reihenfolge?
  * Leere Liste = aus dem Ticker lässt sich keines ableiten (dann hilft nur die Namenssuche).
@@ -85,14 +95,27 @@ export function kursSymbolKandidaten(ticker, region = null) {
  *     (Bitpanda `SAN` ist Sanofi, `SAN` an der NYSE Banco Santander)
  *   - noch nie gelaufen: der Kandidat aus Ticker und Region, sonst `null`
  *
- * @param {{ticker: string, region?: string|null}} titel
+ *   - RAS-01: hat der Titel einen Aktien-Future an einer Krypto-Börse (`perp`)
+ *     und einen Ticker-Kandidaten, gilt der Kandidat — auch gegen ein
+ *     gespeichertes anderes Symbol. Der Stamm bündelt nach Ticker und hat den
+ *     Namen von Bitpanda; dort ist `SAN` Sanofi, der Future `SANUSDT` aber Banco
+ *     Santander. Ein über den Namen gefundenes `SAN.PA` wäre die Firma der
+ *     Bitpanda-Seite, gerechnet wird aber auf dem Future.
+ *
+ * @param {{ticker: string, region?: string|null, listungen?: object[]}} titel
  * @param {{kursSymbol?: string|null}|null} [zeile]  Zeile aus `newcomer_titel`, falls es eine gibt
+ * @param {{perp?: boolean}} [o]  `perp`: der Titel hat einen aktiven Future an einer Krypto-Börse;
+ *        ohne Angabe aus `titel.listungen` gelesen (`hatKryptoPerp`)
  * @returns {string|null}  `null` = kein Kurssymbol; der Aufrufer zeigt dann «unbekannt»
  */
-export function kursSymbolFuer(titel, zeile = null) {
-    if (zeile?.kursSymbol) return passtZurRegion(zeile.kursSymbol, titel?.region) ? zeile.kursSymbol : null
+export function kursSymbolFuer(titel, zeile = null, { perp = hatKryptoPerp(titel?.listungen) } = {}) {
+    const kandidat = kursSymbolKandidaten(titel?.ticker, titel?.region)[0] || null
+    if (zeile?.kursSymbol) {
+        if (perp && kandidat) return kandidat
+        return passtZurRegion(zeile.kursSymbol, titel?.region) ? zeile.kursSymbol : null
+    }
     if (zeile) return null
-    return kursSymbolKandidaten(titel?.ticker, titel?.region)[0] || null
+    return kandidat
 }
 
 /**
@@ -150,12 +173,15 @@ const initialen = (name) => roheWoerter(name).map((w) => w[0]).join('')
 /**
  * Lockerer als `nameGleich`, für den Fall, dass der TICKER schon passt und der
  * Name nur noch eine Verwechslung ausschliessen soll. Bitpanda schreibt
- * «TSMC», «AMD», «Pinduoduo», «British Petroleum»; die Kursquelle «Taiwan
- * Semiconductor Manufacturing Company Limited», «Advanced Micro Devices,
- * Inc.», «PDD Holdings Inc.», «BP p.l.c.». Es reicht EINES von:
+ * «TSMC», «AMD», «British Petroleum»; die Kursquelle «Taiwan Semiconductor
+ * Manufacturing Company Limited», «Advanced Micro Devices, Inc.», «BP p.l.c.».
+ * Es reicht EINES von:
  *   - `nameGleich`, oder beide Namen sind nach dem Bereinigen dasselbe Wort
  *   - ein Name ist das Kürzel des anderen (Anfangsbuchstaben)
- *   - der Ticker steht als Wort im Namen der Kursquelle
+ *   - der Ticker steht als Wort im Namen der Kursquelle UND die Namen teilen ein
+ *     weiteres Wort (RAS-04: der Ticker allein liess «Air Liquide» als C3.ai, Inc.
+ *     und «E.ON» als ON Semiconductor durch). Preis: «Pinduoduo» / «PDD Holdings
+ *     Inc.» gilt nicht mehr als belegt — unbekannt ist hier besser als falsch.
  *   - ein gemeinsames Wort ab fünf Buchstaben, das kein Allerweltswort ist
  *   - das erste Wort des einen ist der Anfang des ersten Worts des anderen (ExxonMobil / Exxon Mobil)
  * «Sanofi» gegen «Banco Santander» erfüllt keines davon.
@@ -168,10 +194,11 @@ export function nameAehnlich(stammName, quelleName, ticker = '') {
     if (x.length && x.join(' ') === y.join(' ')) return true
     // Kürzel in beide Richtungen; der Rest hinter dem Kürzel darf Rechtsform sein (… Company Limited).
     const kuerzel = (kurz, lang) => kurz.length === 1 && kurz[0].length >= 2 && initialen(lang).startsWith(kurz[0])
-    if (kuerzel(a, quelleName) || kuerzel(b.filter((w) => !FUELLWOERTER.has(w)), stammName)) return true
+    // Einzelne Buchstaben sind Reste einer Rechtsform («BP p.l.c.» → bp).
+    if (kuerzel(a, quelleName) || kuerzel(b.filter((w) => w.length > 1 && !FUELLWOERTER.has(w)), stammName)) return true
     const t = String(ticker || '').toLowerCase().replace(/-[a-z]{2}$/, '')
-    if (t.length >= 2 && b.includes(t)) return true
     const menge = new Set(y)
+    if (t.length >= 2 && b.includes(t) && x.some((w) => w !== t && w.length >= 2 && !ALLERWELT.has(w) && menge.has(w))) return true
     if (x.some((w) => w.length >= 5 && !ALLERWELT.has(w) && menge.has(w))) return true
     // Zusammengeschrieben gegen getrennt: das eine erste Wort ist der Anfang des anderen.
     // Fünf gleiche Anfangsbuchstaben reichen NICHT — Carlsberg/Carlsmed, Commerzbank/Commercial (Probelauf 14.11.2026).

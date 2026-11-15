@@ -68,7 +68,8 @@ export async function ladeTagesdaten(knex, titel, melde = () => { }, jetzt = Dat
     if (!titel.length) return aus
     // Vor jedem Abruf: steht das Kurssymbol fest, kann es der Lauf auch dann nutzen, wenn der Index ausfällt.
     const { je: gemerkt, zeilen } = await gemerkte(knex, titel.map((t) => t.id).filter(Boolean), jetzt)
-    for (const t of titel) aus.kursSymbole.set(t.symbol, kursSymbolFuer(t, (t.id && zeilen.get(t.id)) || null))
+    // Das Feld des Aktien-Radars sind Futures der Marktdatenquelle: ihr Ticker ist massgebend (RAS-01).
+    for (const t of titel) aus.kursSymbole.set(t.symbol, kursSymbolFuer(t, (t.id && zeilen.get(t.id)) || null, { perp: true }))
     try {
         const [haupt, zweit] = await Promise.all([holeChart(INDEX.haupt, jetzt), holeChart(INDEX.zweit, jetzt).catch(() => null)])
         aus.index = {

@@ -43,7 +43,9 @@ await knex('newcomer_titel').insert([
     // Der Newcomer-Lauf hat gesucht und nichts gefunden.
     { instrumentId: 2, kursSymbol: null, zuordnung: null, kennzahlen: '{}', grund: 'keinTreffer', stand: jetzt - 3600e3 },
     // Gefunden und frisch: kostet keinen Abruf.
-    { instrumentId: 3, kursSymbol: 'ASML.AS', zuordnung: 'suche', kennzahlen: frisch, stand: jetzt - 3600e3 },
+    { instrumentId: 3, kursSymbol: 'ASML', zuordnung: 'name', kennzahlen: frisch, stand: jetzt - 3600e3 },
+    // RAS-01: Stand eines früheren Laufs — über Bitpandas Namen «LVMH» die Pariser Listung, der Future MCUSDT ist Moelis.
+    { instrumentId: 6, kursSymbol: 'MC.PA', zuordnung: 'suche', kennzahlen: frisch, stand: jetzt - 3600e3 },
 ])
 const titel = [
     { symbol: 'BYDUSDT', id: 1, ticker: 'BYD', region: 'HK' },
@@ -51,14 +53,16 @@ const titel = [
     { symbol: 'ASMLUSDT', id: 3, ticker: 'ASML' },
     { symbol: 'NVDAUSDT', id: 4, ticker: 'NVDA' },
     { symbol: 'SAMSUNGUSDT', id: null, ticker: 'SAMSUNG', region: 'KR' },
+    { symbol: 'MCUSDT', id: 6, ticker: 'MC', region: null },
 ]
 const r = await ladeTagesdaten(knex, titel, () => { }, jetzt, abruf)
 
-gleich(Object.fromEntries(r.kursSymbole), { BYDUSDT: null, SANUSDT: null, ASMLUSDT: 'ASML.AS', NVDAUSDT: 'NVDA', SAMSUNGUSDT: null }, 'Kurssymbole: Unbekanntes bleibt null')
-gleich(gefragt.filter((s) => !Object.values(INDEX).includes(s)), ['NVDA'], 'abgerufen wird nur NVDA — weder BYD (Boyd Gaming) noch SAN (Banco Santander)')
+gleich(Object.fromEntries(r.kursSymbole), { BYDUSDT: null, SANUSDT: null, ASMLUSDT: 'ASML', NVDAUSDT: 'NVDA', SAMSUNGUSDT: null, MCUSDT: 'MC' }, 'Kurssymbole: Unbekanntes bleibt null; RAS-01: für den Future gilt sein Ticker, nicht das gespeicherte MC.PA')
+gleich(gefragt.filter((s) => !Object.values(INDEX).includes(s)), ['NVDA', 'MC'], 'abgerufen werden NVDA und MC — weder BYD (Boyd Gaming) noch SAN noch MC.PA (LVMH)')
+ok(r.je.get('MCUSDT')?.quelle === 'abruf', 'RAS-01: die gemerkten Kennzahlen von MC.PA zählen nicht für den Future MCUSDT')
 ok(!r.je.has('BYDUSDT'), 'BYD (HK): auch die gemerkten Kennzahlen des Falschtreffers zählen nicht')
 ok(!r.je.has('SANUSDT') && !r.je.has('SAMSUNGUSDT'), 'SAN mit keinTreffer und Titel mit Region KR: keine Tagesdaten')
-gleich([r.je.get('ASMLUSDT')?.quelle, r.je.get('NVDAUSDT')?.quelle, r.gemerkt, r.abgerufen], ['gemerkt', 'abruf', 1, 1], 'gültiger Stand wird genutzt, der Rest abgerufen')
+gleich([r.je.get('ASMLUSDT')?.quelle, r.je.get('NVDAUSDT')?.quelle, r.gemerkt, r.abgerufen], ['gemerkt', 'abruf', 1, 2], 'gültiger Stand wird genutzt, der Rest abgerufen')
 
 // FACH-H-013: Titel unter den Hürden weiten das Feld des Stärke-Rangs — mit gemerktem Stand, nie mit einem Abruf.
 {

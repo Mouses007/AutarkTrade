@@ -157,7 +157,8 @@ async function baue(symbol, wo) {
     const gemerkt = (await knex.schema.hasTable('newcomer_titel'))
         ? await knex('newcomer_titel').where('instrumentId', zeile.id).first('kursSymbol') : null
     // `null` = kein Kurssymbol (Lauf fand nichts, fremde Region) — Splits und Termine bleiben dann unbekannt.
-    const kursSymbol = kursSymbolFuer(zeile, gemerkt || null)
+    // `stammZeile` findet nur Futures der Krypto-Börsen: deren Ticker ist massgebend (RAS-01).
+    const kursSymbol = kursSymbolFuer(zeile, gemerkt || null, { perp: true })
     const [{ splits, grund }, zahlen] = await Promise.all([ladeSplits(kursSymbol), ladeTermine(kursSymbol)])
     return {
         ticker: zeile.ticker, name: zeile.name || null, unterart: zeile.unterart,

@@ -9217,6 +9217,7 @@
     "grund_gebremst": "Die Kursquelle bremst gerade. Bitte in einigen Minuten erneut versuchen.",
     "datenFehler": "Kennzahlen nicht abrufbar ({fehler}). Der Kursverlauf ist da.",
     "nameAbweichung": "Die Kursquelle führt unter {symbol} «{quelle}», im Stamm heisst der Titel «{stamm}». Kurs, Kennzahlen und Analysten auf dieser Seite gehören möglicherweise zu einer anderen Firma.",
+    "nameZweifelhaft": "Der Name «{stamm}» im Stamm stammt von Bitpanda und passt nicht zum Future dieses Titels: die Kursquelle führt unter {symbol} «{quelle}». Kurs, Kennzahlen, Zahlentermine und Analysten auf dieser Seite gehören zu «{quelle}» – wie der Future. Die Bitpanda-Aktie mit demselben Kürzel ist vermutlich eine andere Firma.",
     "oeffnen": "Titel-Seite öffnen"
   },
   "aktien": {

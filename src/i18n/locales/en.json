@@ -9217,6 +9217,7 @@
     "grund_gebremst": "The price source is throttling right now. Please try again in a few minutes.",
     "datenFehler": "Key figures unavailable ({fehler}). The price history is there.",
     "nameAbweichung": "The price source lists “{quelle}” under {symbol}; in the list this instrument is called “{stamm}”. Price, key figures and analysts on this page may belong to a different company.",
+    "nameZweifelhaft": "The name “{stamm}” in the master list comes from Bitpanda and does not match this title’s future: the price source lists “{quelle}” under {symbol}. Price, key figures, earnings dates and analysts on this page belong to “{quelle}” – like the future. The Bitpanda share with the same ticker is probably a different company.",
     "oeffnen": "Open instrument page"
   },
   "aktien": {

@@ -279,8 +279,9 @@ const grundText = computed(() => {
         <Kreisel v-if="laedt && !seite" />
         <Hinweis v-if="seite && grundText" art="warn">{{ grundText }}</Hinweis>
         <!-- Die Kursquelle nennt eine andere Firma als der Stamm: Kurs und Kennzahlen können die falschen sein. -->
+        <!-- Mit einem Future gilt dessen Ticker: dann ist der Name im Stamm (von Bitpanda) der zweifelhafte Teil (RAS-01). -->
         <Hinweis v-if="seite?.nameQuelle" art="warn">
-            {{ t('titel.nameAbweichung', { quelle: seite.nameQuelle, stamm: seite.titel?.name || ticker, symbol: seite.kursSymbol }) }}
+            {{ t(seite.nameZweifelhaft ? 'titel.nameZweifelhaft' : 'titel.nameAbweichung', { quelle: seite.nameQuelle, stamm: seite.titel?.name || ticker, symbol: seite.kursSymbol }) }}
         </Hinweis>
 
         <template v-if="seite && seite.ok">

@@ -233,19 +233,24 @@ export function bitpandaAktienNamen(quellenStand) {
  * der Future `AIUSDT` C3.ai; `AA` Anglo American statt Alcoa, `MC` LVMH. Der
  * Ticker allein belegt also nichts. Verlangt wird alles zusammen:
  *   - der Titel trägt im Stamm eine aktive Bitpanda-Listung,
- *   - Bitpandas Name der gehaltenen Aktie passt zum Namen des Titels,
- *   - der Newcomer-Lauf hat diesen Namen bei der Kursquelle unter genau dem
- *     Symbol gefunden, das der Ticker der Krypto-Börsen meint (`AI`, nicht
- *     `AI.PA`) — dort hängt der Future.
- * Fehlt eines (Aktien-Modus aus, Lauf noch nie gelaufen, Name unbekannt): kein Ersatzkurs.
+ *   - der Newcomer-Lauf hat bei der Kursquelle genau das Symbol gefunden, das
+ *     der Ticker der Krypto-Börsen meint (`AI`, nicht `AI.PA`) — dort hängt der Future,
+ *   - Bitpandas Name der gehaltenen Aktie passt zum Namen, den die KURSQUELLE
+ *     unter diesem Symbol führt (`quellenName`, vom Newcomer-Lauf gemerkt).
+ * RAS-04: Verglichen wurde zuvor mit dem Namen im Stamm — der stammt selbst von
+ * Bitpanda, die Prüfung verglich «Air Liquide» mit «Air Liquide» und liess den
+ * C3.ai-Future durch. Seit RAS-01 ist das Kurssymbol eines Titels mit Future
+ * stets der Ticker; über die Firma entscheidet hier allein der Name der Kursquelle.
+ * Fehlt eines (Aktien-Modus aus, Lauf noch nie gelaufen oder noch ohne gemerkten
+ * Namen der Kursquelle, Bitpanda-Name unbekannt): kein Ersatzkurs.
  *
- * @param {{titel: {ticker: string, name?: string|null, region?: string|null}, bitpandaListung: boolean,
- *          kursSymbol?: string|null, bitpandaName?: string|null}} o
+ * @param {{titel: {ticker: string, region?: string|null}, bitpandaListung: boolean,
+ *          kursSymbol?: string|null, quellenName?: string|null, bitpandaName?: string|null}} o
  */
-export function ersatzkursErlaubt({ titel, bitpandaListung, kursSymbol = null, bitpandaName = null } = {}) {
-    if (!titel?.ticker || !bitpandaListung || !titel.name || !bitpandaName || !kursSymbol) return false
+export function ersatzkursErlaubt({ titel, bitpandaListung, kursSymbol = null, quellenName = null, bitpandaName = null } = {}) {
+    if (!titel?.ticker || !bitpandaListung || !bitpandaName || !kursSymbol || !quellenName) return false
     if (!kursSymbolKandidaten(titel.ticker, titel.region).includes(String(kursSymbol).toUpperCase())) return false
-    return nameAehnlich(titel.name, bitpandaName, titel.ticker)
+    return nameAehnlich(bitpandaName, quellenName, titel.ticker)
 }
 
 /**
@@ -267,8 +272,9 @@ export async function stammKurseUsd(knex, tickers, namen = new Map(), { holePrei
         const quelle = (await marktdaten.fordere('ticker', { markt: 'futures' })).id
         const listungen = await knex('instrument_listungen').whereIn('instrumentId', ids).where('aktiv', 1).select('instrumentId', 'handelsplatz', 'symbol', 'art')
         const gemerkt = (await knex.schema.hasTable('newcomer_titel'))
-            ? new Map((await knex('newcomer_titel').whereIn('instrumentId', ids).select('instrumentId', 'kursSymbol')).map((z) => [z.instrumentId, z.kursSymbol]))
+            ? new Map((await knex('newcomer_titel').whereIn('instrumentId', ids).select('instrumentId', 'kursSymbol', 'kennzahlen')).map((z) => [z.instrumentId, z]))
             : new Map()
+        const quellenName = (z) => { try { return JSON.parse(z?.kennzahlen || 'null')?.quellenName || null } catch { return null } }
         const erlaubt = []
         for (const t of titel) {
             const eigene = listungen.filter((l) => l.instrumentId === t.id)
@@ -276,7 +282,7 @@ export async function stammKurseUsd(knex, tickers, namen = new Map(), { holePrei
             if (!future) continue
             const ok = ersatzkursErlaubt({
                 titel: t, bitpandaListung: eigene.some((l) => l.handelsplatz === 'bitpanda'),
-                kursSymbol: gemerkt.get(t.id), bitpandaName: namen.get(String(t.ticker).toUpperCase()),
+                kursSymbol: gemerkt.get(t.id)?.kursSymbol, quellenName: quellenName(gemerkt.get(t.id)), bitpandaName: namen.get(String(t.ticker).toUpperCase()),
             })
             if (ok) erlaubt.push({ ticker: t.ticker, symbol: future.symbol })
         }
