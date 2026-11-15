@@ -8,7 +8,11 @@
  * geprüft wird hier die Regel, nicht die Feldnamen jener Antwort.
  */
 import { readFileSync } from 'node:fs'
-import { klasseAusAsset, klasseAusStamm, aktienZeilenKurs, KLASSEN, bitpandaAktienArten, bitpandaAktienKuerzel, aktienKlasseVon, ohneAktienSeiten, aktienHinweis } from './aktien-art.js'
+import {
+    klasseAusAsset, klasseAusStamm, aktienZeilenKurs, KLASSEN, bitpandaAktienArten, bitpandaAktienKuerzel, aktienKlasseVon, ohneAktienSeiten, aktienHinweis,
+    gruppeGenannt, kennungenAusListe, klasseAusListe, bestimmeKlasse, gemerkteKlassen, trageKlassenNach,
+} from './aktien-art.js'
+import { holeBitpandaListe, bitpandaListeGemerkt, vergissBitpandaListe } from '../aktien/bitpanda-liste.js'
 import { bestandAm, veraenderungen, einkommen, fifo, bestandesrechnung } from './steuer-rechnung.js'
 import { steuerCsv } from './steuer.js'
 import knexLib from 'knex'
@@ -51,6 +55,85 @@ check('Gold steht nicht als Aktie im Stamm', klasseAusStamm(stamm, gold.pid) ===
 if (coin) check('Coin steht nicht im Stamm', klasseAusStamm(stamm, coin.pid) === null)
 check('das Kürzel allein reicht nicht', klasseAusStamm(stamm, 'AAPL') === null)
 check('ohne Stamm: unbekannt', klasseAusStamm(new Map(), aapl.pid) === null && klasseAusStamm(null, aapl.pid) === null)
+
+console.log('\nArt über Bitpandas öffentliche Liste — ohne Aktien-Modus, ohne Stamm (FUN-P-002)')
+{
+    const kennungen = kennungenAusListe(liste)
+    check('Liste → Kennungen nur für Aktien und ETFs', kennungen.get(aapl.pid)?.unterart === 'aktie' && !kennungen.has(gold.pid) && (!coin || !kennungen.has(coin.pid)), `${kennungen.size} Einträge`)
+    if (etf) check('ETF der Liste → etf', klasseAusListe(kennungen, null, etf.pid) === 'etf')
+    check('pid von Apple → aktie, auch ohne Kürzel', klasseAusListe(kennungen, null, aapl.pid) === 'aktie')
+    check('kurze id zählt nur mit passendem Kürzel', klasseAusListe(kennungen, 'AAPL', aapl.id) === 'aktie' && klasseAusListe(kennungen, 'BTC', aapl.id) === null && klasseAusListe(kennungen, null, aapl.id) === null)
+    check('das Kürzel allein reicht nicht', klasseAusListe(kennungen, 'AAPL', 'AAPL') === null && klasseAusListe(kennungen, 'AAPL') === null)
+    check('leere oder fehlende Liste: unbekannt', kennungenAusListe(null).size === 0 && klasseAusListe(new Map(), 'AAPL', aapl.pid) === null && klasseAusListe(null, 'AAPL', aapl.pid) === null)
+
+    // Werkszustand: Aktien-Modus aus → Stamm leer. Die private API nennt KEINE Gruppe (nachgebaute Antwort).
+    const leer = new Map()
+    const ohneGruppe = { id: aapl.pid, symbol: 'AAPL', name: 'Apple' }
+    check('vorher: ohne Gruppe und ohne Stamm blieb die Aktie ein Coin', (klasseAusAsset(ohneGruppe) || klasseAusStamm(leer, ohneGruppe.id, ohneGruppe.pid) || '') === '')
+    const e1 = bestimmeKlasse({ asset: ohneGruppe, id: aapl.pid, stamm: leer, liste: kennungen })
+    check('jetzt: die öffentliche Liste macht sie zur Aktie', e1.klasse === 'aktie' && e1.belegt === true)
+    check('Gruppe am Asset gilt weiter zuerst', bestimmeKlasse({ asset: { id: 'x', symbol: 'ZZZ', group: 'etf' }, id: 'x', stamm: leer, liste: leer }).klasse === 'etf')
+    check('Stamm gilt weiter', bestimmeKlasse({ id: aapl.pid, stamm, liste: leer }).klasse === 'aktie')
+    const c1 = bestimmeKlasse({ asset: { id: 'btc-id', symbol: 'BTC' }, id: 'btc-id', stamm: leer, liste: kennungen })
+    check('Coin mit Liste: keine Aktie, und das ist belegt', c1.klasse === null && c1.belegt === true)
+    const c2 = bestimmeKlasse({ asset: { id: 'btc-id', symbol: 'BTC' }, id: 'btc-id', stamm: leer, liste: leer })
+    check('ohne Gruppe, Stamm und Liste: unbekannt — NICHT belegt', c2.klasse === null && c2.belegt === false)
+    check('nennt Bitpanda eine Gruppe, ist «keine Aktie» belegt', gruppeGenannt({ group: 'cryptocoin' }) && !gruppeGenannt({ symbol: 'BTC' }) && !gruppeGenannt(null)
+        && bestimmeKlasse({ asset: { id: 'b', group: 'cryptocoin' }, id: 'b' }).belegt === true)
+
+    // Ein Abruf des Kontos (Netz hereingereicht): AAPL und T ohne Gruppe, BTC, eine Kennung ohne Antwort.
+    const antworten = { [aapl.pid]: { data: [ohneGruppe] }, 'btc-id': { data: [{ id: 'btc-id', symbol: 'BTC' }] }, 'kaputt': null }
+    let abrufe = []
+    const holeAsset = async (id) => { abrufe.push(id); if (antworten[id] === null) throw new Error('HTTP 500'); return antworten[id] || { data: [] } }
+    const ids = [aapl.pid, 'btc-id', 'kaputt']
+
+    // Lauf 1: die Liste war nicht abrufbar und der Stamm ist leer
+    let symbole = new Map(), klassen = new Map()
+    let r = await trageKlassenNach(ids, { symbole, klassen, stamm: leer, liste: kennungenAusListe(null), holeAsset })
+    check('Lauf ohne Liste: Kürzel gelernt, aber kein «keine Aktie» gemerkt', symbole.get(aapl.pid) === 'AAPL' && klassen.size === 0 && r.offen.length === 3, JSON.stringify([...klassen]))
+    // Lauf 2: die Liste ist da — dieselben IDs werden neu gefragt und jetzt richtig eingeordnet
+    abrufe = []
+    r = await trageKlassenNach(ids, { symbole, klassen, stamm: leer, liste: kennungen, holeAsset })
+    check('Lauf mit Liste: Aktie erkannt, Coin als Coin gemerkt', klassen.get(aapl.pid) === 'aktie' && klassen.get('btc-id') === '' && abrufe.length === 3, JSON.stringify([...klassen]))
+    check('gescheiterter Abruf: nichts gemerkt', !klassen.has('kaputt') && r.offen.join() === 'kaputt')
+    // Lauf 3: was belegt ist, wird nicht mehr gefragt
+    abrufe = []
+    await trageKlassenNach(ids, { symbole, klassen, stamm: leer, liste: kennungen, holeAsset })
+    check('Folgelauf fragt nur das Offene', abrufe.join() === 'kaputt')
+    // Kennung, zu der die private API nichts liefert: die Liste entscheidet trotzdem
+    symbole = new Map(); klassen = new Map()
+    await trageKlassenNach([aapl.pid], { symbole, klassen, stamm: leer, liste: kennungen, holeAsset: async () => ({ data: [] }) })
+    check('leere Antwort der privaten API: Art aus der Liste', klassen.get(aapl.pid) === 'aktie')
+
+    // Stand von vor dieser Fassung: '' wurde auch ohne Stamm gemerkt → einmal vergessen, Aktien bleiben
+    const alt = gemerkteKlassen({ klassen: { a: '', b: 'aktie', c: '' } })
+    check('alter Stand: gemerktes «keine Aktie» verfällt, erkannte Aktie bleibt', alt.size === 1 && alt.get('b') === 'aktie')
+    const neu = gemerkteKlassen({ klassen: { a: '', b: 'etf' }, klassenBelegt: true })
+    check('neuer Stand: belegtes «keine Aktie» bleibt gemerkt', neu.size === 2 && neu.get('a') === '' && gemerkteKlassen({}).size === 0 && gemerkteKlassen(null).size === 0)
+    // …und damit wird die Aktie, die im ersten Lauf als '' gemerkt wurde, beim nächsten Lauf erkannt
+    symbole = new Map([[aapl.pid, 'AAPL']]); klassen = gemerkteKlassen({ klassen: { [aapl.pid]: '' } })
+    await trageKlassenNach([aapl.pid], { symbole, klassen, stamm: leer, liste: kennungen, holeAsset })
+    check('früher als «keine Aktie» gemerkte Apple-Position wird nachträglich Aktie', klassen.get(aapl.pid) === 'aktie')
+}
+
+console.log('\nÖffentliche Liste: Abruf (Netz hereingereicht) und Speicher')
+{
+    const seite = (n) => ({ data: Array.from({ length: n }, (_, i) => ({ attributes: { pid: `p${i}`, id: String(i), symbol: `S${i}`, group: 'stock' } })) })
+    let rufe = []
+    const hole = async (url) => { rufe.push(url); return /page=1$/.test(url) ? seite(500) : seite(3) }
+    const alle = await holeBitpandaListe(hole)
+    check('blättert, bis eine Seite nicht voll ist', alle.length === 503 && rufe.length === 2 && rufe.every((u) => u.startsWith('https://api.bitpanda.com/v3/assets?')))
+    vergissBitpandaListe()
+    check('Abruf gescheitert und nichts gemerkt: null (unbekannt), nicht []', (await bitpandaListeGemerkt({ hole: async () => { throw new Error('aus') }, jetzt: 1000 })) === null)
+    check('leere Antwort gilt nicht als Liste', (await bitpandaListeGemerkt({ hole: async () => ({ data: [] }), jetzt: 1000 })) === null)
+    rufe = []
+    const l1 = await bitpandaListeGemerkt({ hole, jetzt: 2000 })
+    const l2 = await bitpandaListeGemerkt({ hole: async () => { throw new Error('darf nicht fragen') }, jetzt: 2000 + 3600e3 })
+    check('zwölf Stunden aus dem Speicher', l1.length === 503 && l2 === l1 && rufe.length === 2)
+    const l3 = await bitpandaListeGemerkt({ hole: async () => { throw new Error('aus') }, jetzt: 2000 + 13 * 3600e3 })
+    check('Abruf scheitert nach Ablauf: die alte Liste gilt weiter', l3 === l1)
+    vergissBitpandaListe()
+}
 
 console.log('\nBestand aus /portfolio')
 {

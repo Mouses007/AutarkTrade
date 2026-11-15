@@ -22,7 +22,8 @@ import { getDecryptedConfig as bitunixConfig, bitunixRequest, BITUNIX_SPOT_URL }
 import { getDecryptedPionexConfig, getBotOrders } from '../pionex-api.js'
 import { pionexRequest } from '../pionex-transport.js'
 import { ausBitgetSteuer, ausBitunixOrders, ausPionexFills, ausBitpandaOperationen, ausBitpandaPortfolio, ausEvm, ausBtc, saldiere } from './normal.js'
-import { klasseAusAsset, klasseAusStamm, ladeBitpandaStamm } from './aktien-art.js'
+import { ladeBitpandaStamm, kennungenAusListe, gemerkteKlassen, trageKlassenNach, bestimmeKlasse } from './aktien-art.js'
+import { bitpandaListeGemerkt } from '../aktien/bitpanda-liste.js'
 import { leseXpub, leseAdresse, erkenneAbleitung } from './btc.js'
 
 import { EVM_NETZE } from '../../shared/portfolio-adresse.js'
@@ -281,27 +282,22 @@ export async function holeBitpanda(seit, alterStand = {}) {
         for (const c of (await bitpandaHole(key, '/currencies')).data || []) symbole.set(c.id, c.symbol || c.code)
     } catch { /* Fiat ohne Namen → bleibt sichtbar als unbekannt */ }
     // Aktien und ETFs als eigene Art (`aktien-art.js`): Bitpandas Gruppe am
-    // Asset, sonst die Kennung im Titel-Stamm. Gemerkt in `stand.klassen`
-    // ('' = gefragt, keine Aktie); fehlt der Eintrag (Stand von vor dieser
-    // Fassung), wird die ID einmal neu gefragt.
-    const klassen = new Map(Object.entries(alterStand.klassen || {}))
+    // Asset, die Kennung im Titel-Stamm oder — unabhängig vom Aktien-Modus —
+    // in Bitpandas öffentlicher Asset-Liste. Gemerkt in `stand.klassen`
+    // ('' = gefragt, keine Aktie), aber nur, wenn das belegt ist; fehlt der
+    // Eintrag, wird die ID neu gefragt.
+    const klassen = gemerkteKlassen(alterStand)
     const stamm = await ladeBitpandaStamm(getKnex())
+    const liste = kennungenAusListe(await bitpandaListeGemerkt())
     const ids = new Set(portfolio.map((p) => p.asset_id).filter(Boolean))
     for (const o of ops) for (const t of o.transactions || []) if (t.asset_id) ids.add(t.asset_id)
-    for (const id of ids) {
-        if (symbole.has(id) && klassen.has(id)) continue
-        const d = await bitpandaHole(key, '/assets', { id }).catch(() => null)
-        // Abruf gescheitert: nichts merken, der nächste Lauf fragt wieder.
-        if (!d) continue
-        for (const a of d.data || []) {
-            symbole.set(a.id, a.symbol)
-            klassen.set(a.id, klasseAusAsset(a) || klasseAusStamm(stamm, a.id, a.pid) || '')
-        }
-        if (!klassen.has(id)) klassen.set(id, klasseAusStamm(stamm, id) || '')
-        await warte(120)
-    }
-    // Der Stamm kann seit dem Merken dazugelernt haben.
-    const klasseVon = (id) => klassen.get(id) || klasseAusStamm(stamm, id) || null
+    await trageKlassenNach(ids, {
+        symbole, klassen, stamm, liste,
+        holeAsset: (id) => bitpandaHole(key, '/assets', { id }),
+        pause: () => warte(120),
+    })
+    // Stamm und Liste können seit dem Merken dazugelernt haben.
+    const klasseVon = (id) => klassen.get(id) || bestimmeKlasse({ id, kuerzel: symbole.get(id), stamm, liste }).klasse || null
 
     let usdJeEur = null
     try { usdJeEur = 1 / (await fxHeute()).eur } catch { /* ohne Ersatzkurs */ }
@@ -319,7 +315,7 @@ export async function holeBitpanda(seit, alterStand = {}) {
         // Die Historie reicht ab Kontoeröffnung (gemessen: 2019); Folgeläufe
         // holen ab der jüngsten Bewegung nach — der Bestand bleibt nachrechenbar.
         bestand, bewegungen: ausBitpandaOperationen(ops, symbole), vollstaendig: true,
-        stand: { symbole: Object.fromEntries(symbole), klassen: Object.fromEntries(klassen), aktien },
+        stand: { symbole: Object.fromEntries(symbole), klassen: Object.fromEntries(klassen), klassenBelegt: true, aktien },
         hinweis: seit ? null : `Bitpanda: ${ops.length} Operationen gelesen.`,
     }
 }

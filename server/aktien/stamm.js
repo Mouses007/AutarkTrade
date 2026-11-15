@@ -38,10 +38,10 @@ import * as marktdaten from '../marktdaten/index.js'
 import { ordneAlle } from './einordnung.js'
 import { holeListen, speichereStamm, ausgefalleneListen } from './stamm-speicher.js'
 import { meldeNeueListungen } from './meldungen.js'
+import { holeOeffentlich, holeBitpandaListe } from './bitpanda-liste.js'
 
 export { leseStamm, stammZahlen, HANDELSPLAETZE } from './stamm-speicher.js'
 const TAKT_MS = 12 * 3600e3
-const BITPANDA_LISTE = 'https://api.bitpanda.com/v3/assets'
 
 /* ── Abruf: jede Funktion liefert die Roh-Einträge in der Form, die die Einordnung liest ── */
 
@@ -63,33 +63,13 @@ async function rohBitunix() {
     return (await holeBitunixPaare()).map((p) => ({ symbol: p.symbol, base: p.basis, quote: 'USDT', maxLeverage: p.maxLeverage, launchTime: p.launchTime }))
 }
 
-/** Öffentliche JSON-Liste mit Frist. Pionex und Bitpanda stehen nicht in der Host-Liste des Hype-Radars. */
-async function holeOeffentlich(url, timeout = 20000) {
-    const steuerung = new AbortController()
-    const wecker = setTimeout(() => steuerung.abort(), timeout)
-    try {
-        const antwort = await fetch(url, { signal: steuerung.signal, headers: { accept: 'application/json' } })
-        if (!antwort.ok) throw new Error(`HTTP ${antwort.status}`)
-        return await antwort.json()
-    } finally {
-        clearTimeout(wecker)
-    }
-}
-
 async function rohPionex() {
     const d = await holeOeffentlich('https://api.pionex.com/api/v1/common/symbols')
     return (d?.data?.symbols || []).filter((s) => s.enable !== false)
 }
 
-async function rohBitpanda() {
-    const alle = []
-    for (let seite = 1; seite <= 20; seite++) {
-        const zeilen = (await holeOeffentlich(`${BITPANDA_LISTE}?page_size=500&page=${seite}`))?.data || []
-        for (const z of zeilen) if (z?.attributes) alle.push(z.attributes)
-        if (zeilen.length < 500) break
-    }
-    return alle
-}
+/** Bitpandas öffentliche Liste — dieselbe, aus der das Portfolio die Art einer Position liest (`bitpanda-liste.js`). */
+const rohBitpanda = () => holeBitpandaListe()
 
 const ABRUFE = { binance: rohBinance, bitget: rohBitget, bitunix: rohBitunix, pionex: rohPionex, bitpanda: rohBitpanda }
 

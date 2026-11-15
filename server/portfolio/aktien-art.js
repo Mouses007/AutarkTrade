@@ -5,11 +5,19 @@
  * im Spot-Ticker). Für eine Aktie ist das falsch — es gibt kein solches Paar,
  * und heisst zufällig ein Coin gleich, bekäme die Aktie dessen Kurs.
  *
- * Erkannt wird eine Aktie auf zwei Wegen (ODER), nie über das Kürzel allein:
+ * Erkannt wird eine Aktie auf drei Wegen (ODER), nie über das Kürzel allein:
  *   1. Bitpanda nennt die Gruppe am Asset (`group`/`type`: stock, etf).
  *   2. Die Asset-Kennung steht im Titel-Stamm als Bitpanda-Listung
  *      (`instrument_listungen.symbol` = `pid` der öffentlichen Asset-Liste).
- * Was keiner der beiden Wege kennt, bleibt wie bisher ein Coin.
+ *      Der Stamm ist nur bei eingeschaltetem Aktien-Modus gefüllt.
+ *   3. Die Asset-Kennung steht in Bitpandas öffentlicher Asset-Liste als
+ *      Aktie/ETF (`aktien/bitpanda-liste.js`) — unabhängig vom Aktien-Modus,
+ *      sobald Bitpanda im Portfolio abgerufen wird (Audit FUN-P-002: ohne
+ *      diesen Weg hing die Erkennung im Werkszustand allein an Weg 1, einem
+ *      Feld, das für die private API nicht belegt ist).
+ * Was keiner der Wege kennt, bleibt wie bisher ein Coin. Ein «keine Aktie»
+ * wird nur gemerkt, wenn es belegt ist (`bestimmeKlasse`): lag weder Gruppe
+ * noch Stamm noch Liste vor, fragt der nächste Lauf wieder.
  *
  * Bewertet wird eine Aktien-Zeile so:
  *   1. Bitpandas eigene Bewertung der Position (`currency_balance`) — der
@@ -21,18 +29,129 @@
  * Nicht Teil dieses Moduls: Dividenden, Steuerbericht, ESTV-Kursliste.
  */
 import * as marktdaten from '../marktdaten/index.js'
+import { ausBitpanda } from '../aktien/einordnung.js'
 
 export const KLASSEN = ['aktie', 'etf']
 
 const GRUPPE = { stock: 'aktie', stocks: 'aktie', equity: 'aktie', share: 'aktie', etf: 'etf', etfs: 'etf' }
 
+const GRUPPEN_FELDER = ['group', 'asset_group', 'type', 'asset_type', 'category']
+
 /** Art aus einem Asset-Eintrag von Bitpanda (`group`, `type` …); unbekannt → null. Rein. */
 export function klasseAusAsset(a) {
-    for (const feld of ['group', 'asset_group', 'type', 'asset_type', 'category']) {
+    for (const feld of GRUPPEN_FELDER) {
         const k = GRUPPE[String(a?.[feld] ?? '').trim().toLowerCase()]
         if (k) return k
     }
     return null
+}
+
+/** Nennt der Asset-Eintrag überhaupt eine Gruppe (welche auch immer)? Nur dann ist «keine Aktie» eine Aussage von Bitpanda. Rein. */
+export function gruppeGenannt(a) {
+    return GRUPPEN_FELDER.some((feld) => String(a?.[feld] ?? '').trim() !== '')
+}
+
+/**
+ * Bitpandas öffentliche Asset-Liste → Kennung → `{ticker, unterart}`, nur Aktien und ETFs. Rein.
+ *
+ * Schlüssel ist die `pid` (eindeutig). Die kurze `id` («28») steht auch drin,
+ * zählt aber nur zusammen mit dem passenden Kürzel (`nurMitKuerzel`) — ob die
+ * private API sie je nennt, ist nicht belegt, und eine kurze Zahl allein soll
+ * nichts zur Aktie machen.
+ * @param {object[]|null} liste  `attributes` der Einträge von `/v3/assets`
+ */
+export function kennungenAusListe(liste) {
+    const aus = new Map()
+    for (const a of liste || []) {
+        const l = ausBitpanda(a)
+        if (!KLASSEN.includes(l.unterart) || !l.basis) continue
+        if (a.pid != null && a.pid !== '') aus.set(String(a.pid), { ticker: l.basis, unterart: l.unterart })
+        if (a.id != null && a.id !== '' && !aus.has(String(a.id))) aus.set(String(a.id), { ticker: l.basis, unterart: l.unterart, nurMitKuerzel: true })
+    }
+    return aus
+}
+
+/**
+ * Art über die öffentliche Liste: Kennung (`id`/`pid` des Assets) gegen `kennungenAusListe`. Rein.
+ * @param {Map} liste
+ * @param {string|null} kuerzel  Kürzel des Assets laut privater API, falls bekannt
+ */
+export function klasseAusListe(liste, kuerzel, ...kennungen) {
+    const k = String(kuerzel || '').toUpperCase()
+    for (const kennung of kennungen) {
+        const e = kennung != null ? liste?.get(String(kennung)) : null
+        if (!e || !KLASSEN.includes(e.unterart)) continue
+        if (e.nurMitKuerzel && e.ticker !== k) continue
+        return e.unterart
+    }
+    return null
+}
+
+/**
+ * Art eines Bitpanda-Assets aus allem, was vorliegt. Rein.
+ *
+ * @param {{asset?: object|null, id?: string, kuerzel?: string|null, stamm?: Map, liste?: Map}} o
+ *        `asset` = Eintrag der privaten API (kann fehlen), `stamm` aus `ladeBitpandaStamm`, `liste` aus `kennungenAusListe`
+ * @returns {{klasse: 'aktie'|'etf'|null, belegt: boolean}}
+ *        `belegt`: das Ergebnis darf gemerkt werden. Ein «keine Aktie» ist nur belegt, wenn Bitpanda
+ *        selbst eine Gruppe nennt oder Stamm bzw. Liste vorlagen — sonst hiesse «nichts gefunden» nur
+ *        «nichts zum Nachschlagen gehabt».
+ */
+export function bestimmeKlasse({ asset = null, id = null, kuerzel = null, stamm = null, liste = null } = {}) {
+    const kennungen = [id, asset?.id, asset?.pid]
+    const klasse = klasseAusAsset(asset) || klasseAusStamm(stamm, ...kennungen) || klasseAusListe(liste, kuerzel ?? asset?.symbol, ...kennungen)
+    return { klasse, belegt: !!klasse || gruppeGenannt(asset) || (stamm?.size || 0) > 0 || (liste?.size || 0) > 0 }
+}
+
+/**
+ * Die gemerkten Arten aus dem Stand des letzten Laufs (`''` = gefragt, keine Aktie). Rein.
+ *
+ * Ein Stand ohne `klassenBelegt` stammt aus der Fassung, die `''` auch dann
+ * merkte, wenn Stamm und Gruppe fehlten (Aktien-Modus aus). Diese `''` sind
+ * nichts wert und werden einmal neu gefragt; erkannte Aktien bleiben.
+ * @returns {Map<string, string>}
+ */
+export function gemerkteKlassen(alterStand = {}) {
+    const alle = Object.entries(alterStand?.klassen || {})
+    return new Map(alterStand?.klassenBelegt ? alle : alle.filter(([, k]) => k))
+}
+
+/**
+ * Kürzel und Art zu den Asset-Kennungen eines Bitpanda-Kontos nachtragen.
+ * `symbole` und `klassen` werden ergänzt. Das Netz kommt als `holeAsset` herein.
+ *
+ * Gefragt wird jede Kennung, zu der Kürzel ODER Art fehlt. Scheitert der
+ * Abruf, wird nichts gemerkt; ist das Ergebnis nicht belegt (`bestimmeKlasse`),
+ * auch nicht — der nächste Lauf fragt wieder.
+ *
+ * @param {Iterable<string>} ids
+ * @param {{symbole: Map, klassen: Map, stamm?: Map, liste?: Map,
+ *          holeAsset: (id: string) => Promise<{data?: object[]}|null>, pause?: () => Promise<void>}} o
+ * @returns {Promise<{gefragt: number, offen: string[]}>}  `offen` = Kennungen ohne belegte Art
+ */
+export async function trageKlassenNach(ids, { symbole, klassen, stamm = null, liste = null, holeAsset, pause = async () => {} }) {
+    let gefragt = 0
+    const offen = []
+    const merke = (kennung, asset) => {
+        const { klasse, belegt } = bestimmeKlasse({ asset, id: kennung, kuerzel: symbole.get(kennung), stamm, liste })
+        if (belegt) klassen.set(kennung, klasse || '')
+        return belegt
+    }
+    for (const id of ids) {
+        if (symbole.has(id) && klassen.has(id)) continue
+        gefragt++
+        const d = await holeAsset(id).catch(() => null)
+        // Abruf gescheitert: nichts merken, der nächste Lauf fragt wieder.
+        if (!d) { offen.push(id); continue }
+        for (const a of d.data || []) {
+            if (a?.id == null) continue
+            if (a.symbol) symbole.set(a.id, a.symbol)
+            merke(a.id, a)
+        }
+        if (!klassen.has(id) && !merke(id, null)) offen.push(id)
+        await pause()
+    }
+    return { gefragt, offen }
 }
 
 /**
