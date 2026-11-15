@@ -20,9 +20,9 @@ import { wartungsmargeMitQuelle } from './margin-rates.js'
 import { aktienKontext } from './aktien/kontext.js'
 import { marktSperre } from './strategie-markt.js'
 import { bereinigeSplits, bereinigeFunding, verdaechtigeSpruenge } from './aktien/splits.js'
-import { sitzungVon, handelstagBeginn, sitzungsBilanz, regimeWechsel } from '../shared/aktien-sitzung.js'
+import { sitzungVon, handelstagBeginn, sitzungsBilanz, regimeWechsel, einstiegRegulaer, sitzungsRegelAnwendbar } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, beruehrtZahlen, zahlenBilanz, terminListe } from '../shared/aktien-zahlen.js'
-import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, istSchlussEinstieg, riskPerUnit, fundingFor } from './fill-simulator.js'
+import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, einstiegsArtVon, riskPerUnit, fundingFor } from './fill-simulator.js'
 
 /**
  * Obergrenze, damit ein versehentlicher 5-Jahres-Lauf den Server nicht blockiert.
@@ -262,6 +262,11 @@ export async function runBacktest(opts) {
         }
     }
     const nurRegulaer = Boolean(aktie && risk.nurRegulaereSitzung)
+    // Ab 1d ist der Schalter nicht anwendbar (jede Tageskerze enthält die
+    // Sitzung): er bleibt ohne Wirkung, und das Ergebnis sagt es
+    // (`stats.aktien.nurRegulaerWirkt`) — bis 15.11.2026 sperrte er dort still
+    // jeden Einstieg (FUN-H-005).
+    const nurRegulaerWirkt = nurRegulaer && sitzungsRegelAnwendbar(timeframeMs(timeframe))
     // Zahlentermine des Titels: `null` = unbekannt (dann wird weder markiert noch gesperrt).
     const zahlen = aktie?.termine ? terminListe(aktie.termine) : null
     const meideZahlen = Boolean(zahlen && risk.meideZahlentermine)
@@ -624,10 +629,17 @@ export async function runBacktest(opts) {
             }
             const triggerKerze = kerze
 
+            // Wo in der Kerze der Einstieg liegt — bestimmt, ab wann Stop und
+            // Ziel zählen: 'schluss' ab der Folgekerze ganz, 'eroeffnung' ab
+            // dieser ganz, 'kerze' (Limit/Stop mitten drin) hier nur der Stop.
+            const einstiegsArt = einstiegsArtVon(ev, setup)
+
             // Aktien: auf Wunsch nur in der regulären US-Sitzung einsteigen.
-            // Massgebend ist der BEGINN der Auslösekerze — eine Stundenkerze ab
-            // 09:00 New Yorker Zeit zählt noch als vorbörslich.
-            if (nurRegulaer && sitzungVon(triggerKerze.t) !== 'regulaer') {
+            // Massgebend ist, wann gefüllt wird — dieselbe Regel wie in der
+            // Engine und im Chart (`einstiegRegulaer`): eine Stundenkerze ab
+            // 09:00 New Yorker Zeit enthält die Eröffnung und zählt, ausser der
+            // Einstieg liegt auf ihrer Eröffnung um 09:00.
+            if (nurRegulaerWirkt && !einstiegRegulaer(triggerKerze.t, timeframeMs(timeframe), einstiegsArt).regulaer) {
                 bump(funnel.entrySkipped, 'ausserhalb_sitzung')
                 setup.status = 'rejected'
                 setup.rejectReason = 'ausserhalb_sitzung'
@@ -651,11 +663,6 @@ export async function runBacktest(opts) {
                 bump(funnel.entrySkipped, fill.reason); continue
             }
             const sameBarStop = !fill.ok
-            // Wo in der Kerze der Einstieg liegt — bestimmt, ab wann Stop und
-            // Ziel zählen: 'schluss' ab der Folgekerze ganz, 'eroeffnung' ab
-            // dieser ganz, 'kerze' (Limit/Stop mitten drin) hier nur der Stop.
-            const einstiegsArt = ev.entryAtClose === true || istSchlussEinstieg(setup) ? 'schluss'
-                : ev.entryAtOpen ? 'eroeffnung' : 'kerze'
 
             // 3b. Risiko-Gates — dieselben wie im Live-Betrieb, zum selben
             //     Stichtag: dem Schluss der Auslösekerze (`risikoStichtag` in
@@ -811,6 +818,8 @@ export async function runBacktest(opts) {
             aktien: aktie ? {
                 ticker: aktie.ticker, boerse: aktie.boerse,
                 nurRegulaer,
+                // false bei gesetztem Schalter = auf dieser Zeiteinheit (ab 1d) nicht anwendbar, nichts gesperrt
+                nurRegulaerWirkt,
                 // Ergebnis je Sitzung des Einstiegs
                 sitzungen: sitzungsBilanz(trades),
                 // Splits im Zeitraum; `angewendet: false` = Sprung nicht in den Kerzen gefunden

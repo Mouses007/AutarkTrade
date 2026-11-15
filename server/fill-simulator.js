@@ -217,6 +217,18 @@ export function istSchlussEinstieg(setup) {
 }
 
 /**
+ * Wo in der Auslösekerze der Einstieg liegt: `schluss` (zum Kerzenschluss),
+ * `eroeffnung` (Markt zur Eröffnung) oder `kerze` (Limit/Stop irgendwo darin,
+ * Zeitpunkt unbekannt). Backtest und Engine fragen beide hier — danach
+ * richtet sich, ab wann Stop und Ziel zählen und, bei Aktien, ob der Einstieg
+ * in der regulären Sitzung liegt (`einstiegRegulaer`).
+ */
+export function einstiegsArtVon(ev, setup) {
+    return ev?.entryAtClose === true || istSchlussEinstieg(setup) ? 'schluss'
+        : ev?.entryAtOpen ? 'eroeffnung' : 'kerze'
+}
+
+/**
  * Einstiegszeit einer Position: Beginn der Auslösekerze, bei einem Einstieg
  * zum Schluss (`entryAtClose`) ihr Ende. Engine und Backtest nutzen dieselbe
  * Regel; bewertet wird die Position in beiden Fällen erst ab der Folgekerze.

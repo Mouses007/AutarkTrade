@@ -19,7 +19,7 @@
  *
  * Rein — kein Netz, kein DOM (Selbsttest `src/utils/__selftest-sitzungs-abschnitte.mjs`).
  */
-import { sitzungVon } from '../../../shared/aktien-sitzung.js'
+import { sitzungenDerKerze } from '../../../shared/aktien-sitzung.js'
 
 /** Bis zu dieser Kerzenlänge wird hinterlegt; ab 1d sagt eine Sitzung nichts mehr. */
 export const SITZUNG_BIS_MS = 4 * 3_600_000
@@ -28,21 +28,20 @@ export const SITZUNG_BIS_MS = 4 * 3_600_000
 export const ART = { vor: 'rand', nach: 'rand', nacht: 'nacht', wochenende: 'zu', feiertag: 'zu' }
 export const ARTEN = ['rand', 'nacht', 'zu']
 
-// Alle Sitzungsgrenzen liegen auf halben Stunden (09:30), der Versatz zu UTC ist ganzstündig.
-const RASTER_MS = 30 * 60_000
-
 /**
  * Art der Fläche hinter einer Kerze — `null`, wenn sie die reguläre Sitzung berührt.
+ * Welche Sitzungen eine Kerze überdeckt, sagt `sitzungenDerKerze` — dieselbe
+ * Regel, nach der Backtest und Engine den Schalter «nur reguläre Sitzung»
+ * entscheiden (`einstiegRegulaer`, FUN-H-005).
  * @param {number} t      Öffnungszeit in ms
  * @param {number} ivMs   Kerzenlänge in ms
  * @returns {'rand'|'nacht'|'zu'|null}
  */
 export function artDerKerze(t, ivMs) {
-    if (!(ivMs > RASTER_MS)) return ART[sitzungVon(t)] ?? null
     const zahl = {}
     let beste = null
-    for (let z = t; z < t + ivMs; z += RASTER_MS) {
-        const art = ART[sitzungVon(z)]
+    for (const sitzung of sitzungenDerKerze(t, ivMs)) {
+        const art = ART[sitzung]
         if (!art) return null
         zahl[art] = (zahl[art] || 0) + 1
         if (!beste || zahl[art] > zahl[beste]) beste = art

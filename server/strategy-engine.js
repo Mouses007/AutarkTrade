@@ -25,7 +25,7 @@ import { getStrategy, validateParams, validateRisk, AGENT_DEFAULTS, normalisiere
 import { getClosedCandles, getSymbolMeta, getLastPrice, timeframeMs, isValidTimeframe } from './market-data.js'
 import { evaluateRisk, startOfDayUtc, RISK_REASONS, rundeMenge, grenzenFuer } from './risk-engine.js'
 import { openPaperPosition, stepPaperPositions, getPaperEquity, closePaperPositionManually } from './execution/paper.js'
-import { entryIsValid, kostenAus, einstiegsPreis, einstiegsSorte, einstiegsZeit } from './fill-simulator.js'
+import { entryIsValid, kostenAus, einstiegsPreis, einstiegsSorte, einstiegsZeit, einstiegsArtVon } from './fill-simulator.js'
 import { agentenVeto } from './strategy-agents.js'
 // `instance.broker` nennt die Börse, deren Rundungsregeln der Schattenbetrieb
 // anlegt. Orders sendet die Engine seit S13 keine mehr (docs/SPAETER-SCHARFER-HANDEL.md).
@@ -39,7 +39,7 @@ import { aussortierteZeilen } from './strategie-aussortiert.js'
 import { zeitpunkt } from '../shared/strategieChart.js'
 import { aktienKontext } from './aktien/kontext.js'
 import { bereinigeSplits, positionUeberSplit, faelligeSplits, leseSplitVermerk, verdaechtigeSpruenge } from './aktien/splits.js'
-import { sitzungVon, handelstagBeginn } from '../shared/aktien-sitzung.js'
+import { handelstagBeginn, einstiegRegulaer } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, terminListe } from '../shared/aktien-zahlen.js'
 
 // Instanzen, deren „Marktdaten aus" schon im Log steht: alle 15 s dieselbe
@@ -894,12 +894,14 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     if (alter > 0) return beenden('reject_risk', 'zu_spaet_erkannt', `Auslöser ${alter} Kerzen alt`)
 
     // (a3) Aktien-Futures: Börsensitzung statt UTC-Tag. Auf Wunsch nur in der
-    // regulären US-Sitzung einsteigen — massgebend ist der Beginn der
-    // Auslösekerze, wie im Backtest (`ausserhalb_sitzung`).
+    // regulären US-Sitzung einsteigen — massgebend ist, wann gefüllt wird
+    // (`einstiegRegulaer`, dieselbe Funktion wie im Backtest und dieselbe
+    // Regel wie im Chart, FUN-H-005). Ab 1d ist der Schalter nicht anwendbar
+    // und bleibt ohne Wirkung.
     const aktie = await kontextVon(setup.symbol)
     if (aktie && instance.risk?.nurRegulaereSitzung) {
-        const sitzung = sitzungVon(Number(ev?.candleTime ?? ev?.triggeredAt) || now)
-        if (sitzung !== 'regulaer') return beenden('reject_risk', 'ausserhalb_sitzung', `Sitzung ${sitzung}`)
+        const urteil = einstiegRegulaer(Number(ev?.candleTime ?? ev?.triggeredAt) || now, timeframeMs(setup.timeframe), einstiegsArtVon(ev, setup))
+        if (!urteil.regulaer) return beenden('reject_risk', 'ausserhalb_sitzung', `Sitzung ${urteil.sitzung}`)
     }
     // (a4) …und auf Wunsch kein Einstieg rund um einen Zahlentermin (ein Tag
     // davor bis ein Tag danach). Sind die Termine unbekannt, wirkt die Sperre

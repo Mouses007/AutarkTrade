@@ -87,6 +87,67 @@ ok(gesperrt.trades.length > 5 && gesperrt.trades.every((t) => t.sitzung === 'reg
 ok(gesperrt.funnel.entrySkipped.ausserhalb_sitzung > 30, `Sperre zählt die ausgelassenen Einstiege (${gesperrt.funnel.entrySkipped.ausserhalb_sitzung})`)
 ok(gesperrt.stats.aktien.nurRegulaer === true && gesperrt.setups.some((s) => s.rejectReason === 'ausserhalb_sitzung'), 'Sperre steht im Ergebnis und am Setup')
 
+// ── Sitzungssperre nach Füllzeitpunkt statt Kerzenbeginn (FUN-H-005) ──
+{
+    const { nyTeile, kerzeBeruehrtRegulaer } = await import('../shared/aktien-sitzung.js')
+    ok(gesperrt.stats.aktien.nurRegulaerWirkt === true && aktie.stats.aktien.nurRegulaerWirkt === false, '1h: der Schalter wirkt und das Ergebnis sagt es')
+    // Dieselbe Strategie, aber Limit in der Auslösekerze (Zeitpunkt in der Kerze unbekannt) und beliebige Kerzenlänge.
+    const variante = (iv, zurEroeffnung) => ({
+        ...manifest, id: 'aktien_test_iv', supportedTimeframes: ['1h', '4h', '1d'],
+        detect({ candles: sicht, openSetups }) {
+            const jetzt = sicht[sicht.length - 1]
+            const idx = Math.round((jetzt.t - T0) / iv)
+            const events = []
+            for (const s of openSetups) {
+                if (idx !== s._ausloeser) continue
+                const risiko = jetzt.o * 0.01
+                events.push({ id: s.id, status: 'triggered', candleTime: jetzt.t, triggeredAt: jetzt.t, ...(zurEroeffnung ? { entryAtOpen: true } : {}),
+                    entry: jetzt.o, stopLoss: jetzt.o - risiko, takeProfit: jetzt.o + 2 * risiko })
+            }
+            const setups = idx >= 25 && idx % 7 === 0
+                ? [{ direction: 'long', entry: jetzt.c, stopLoss: jetzt.c * 0.99, takeProfit: jetzt.c * 1.02, obCandleTime: jetzt.t, _ausloeser: idx + 1,
+                    ...(zurEroeffnung ? { entryTrigger: 'market' } : {}) }]
+                : []
+            return { setups, events, diagnostics: {} }
+        },
+    })
+    const laufIv = (tf, iv, zurEroeffnung, aktieKontext, risk = {}) => {
+        const k = kerzen.map((c, i) => ({ ...c, t: T0 + i * iv }))   // dieselben Kurse, andere Kerzenlänge
+        return runBacktest({ strategyId: 'aktien_test_iv', strategie: variante(iv, zurEroeffnung), symbol: 'TESTUSDT', timeframe: tf, market: 'futures',
+            risk: { riskPerTradePct: 1, maxNotionalUsdt: 1e6, leverage: 5, minRR: 1, maintenanceMarginPct: 0.5, cooldownMinutes: 0, maxDailyLossPct: 25, ...risk },
+            startEquity: 10000, candles: k, marketMeta: {}, fundingVerlauf: [], fromTs: T0, toTs: T0 + k.length * iv, aktie: aktieKontext })
+    }
+    const an = { nurRegulaereSitzung: true }
+    const gleicheTrades = (a, b) => a.trades.length === b.trades.length && a.trades.every((t, i) => t.entryTime === b.trades[i].entryTime && t.netPnl === b.trades[i].netPnl && t.qty === b.trades[i].qty)
+
+    // 1h, Limit in der Kerze: die Kerze 09:00–10:00 New York enthält die Eröffnung und war bisher gesperrt
+    const limit = await laufIv('1h', H, false, AKTIE, an)
+    const neunUhr = limit.trades.filter((t) => nyTeile(t.entryTime).minuten === 9 * 60)
+    ok(limit.trades.length > 5 && limit.trades.every((t) => kerzeBeruehrtRegulaer(t.entryTime, H)), `1h Limit: jede Auslösekerze berührt die reguläre Sitzung (${limit.trades.length} Trades)`)
+    ok(neunUhr.length >= 1, `1h Limit: die Eröffnungskerze 09:00–10:00 ist handelbar (${neunUhr.length})`)
+    const offen = await laufIv('1h', H, true, AKTIE, an)
+    ok(offen.trades.length > 5 && offen.trades.every((t) => sitzungVon(t.entryTime) === 'regulaer') && offen.trades.length < limit.trades.length,
+        '1h zur Eröffnung der Kerze: der Einstiegszeitpunkt selbst liegt in der Sitzung (09:00 bleibt gesperrt)')
+
+    // 1d: nicht anwendbar — nichts gesperrt, und das Ergebnis meldet es
+    const tagOhne = await laufIv('1d', 24 * H, true, AKTIE)
+    const tagMit = await laufIv('1d', 24 * H, true, AKTIE, an)
+    ok(tagOhne.trades.length > 60 && gleicheTrades(tagMit, tagOhne), `1d: der Schalter sperrt nichts mehr (${tagMit.trades.length} Trades wie ohne)`)
+    ok(!tagMit.funnel.entrySkipped.ausserhalb_sitzung && tagMit.stats.aktien.nurRegulaer === true && tagMit.stats.aktien.nurRegulaerWirkt === false,
+        '1d: gesetzt, aber ohne Wirkung — steht im Ergebnis')
+
+    // 4h: Kerzen auf UTC; gesperrt wird, was die Sitzung nicht berührt, in Sommer- wie Winterzeit
+    const vier = await laufIv('4h', 4 * H, false, AKTIE, an)
+    ok(vier.trades.length > 5 && vier.trades.every((t) => kerzeBeruehrtRegulaer(t.entryTime, 4 * H)) && vier.funnel.entrySkipped.ausserhalb_sitzung > 5
+        && vier.stats.aktien.nurRegulaerWirkt === true, `4h Limit: nur Kerzen, die die Sitzung berühren (${vier.trades.length} Trades, ${vier.funnel.entrySkipped.ausserhalb_sitzung} gesperrt)`)
+
+    // Krypto: der Schalter ändert nichts, auf keiner Zeiteinheit
+    for (const [tf, iv] of [['1h', H], ['4h', 4 * H], ['1d', 24 * H]]) {
+        const a = await laufIv(tf, iv, false, null), b = await laufIv(tf, iv, false, null, an)
+        ok(a.trades.length > 20 && gleicheTrades(a, b) && JSON.stringify(a.funnel) === JSON.stringify(b.funnel) && b.stats.aktien === null, `Coin ${tf}: mit Schalter bitgleich`)
+    }
+}
+
 // Stichtag: Bitunix handelt erst seit 14.8.2026 rund um die Uhr
 const alt = reihe(600).map((k) => ({ ...k, t: k.t - 40 * 24 * H }))
 const frueh = await runBacktest({

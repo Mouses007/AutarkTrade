@@ -4,7 +4,8 @@
  *   node shared/__selftest-aktien-sitzung.mjs
  */
 import assert from 'node:assert/strict'
-import { nyTeile, feiertage, istHandelstag, sitzungVon, handelstagVon, handelstagBeginn, regimeWechsel, sitzungsBilanz, REGIME_STICHTAGE, verkuerzteTage, istVerkuerzt } from './aktien-sitzung.js'
+import { nyTeile, feiertage, istHandelstag, sitzungVon, handelstagVon, handelstagBeginn, regimeWechsel, sitzungsBilanz, REGIME_STICHTAGE, verkuerzteTage, istVerkuerzt,
+    sitzungenDerKerze, kerzeBeruehrtRegulaer, einstiegRegulaer, sitzungsRegelAnwendbar } from './aktien-sitzung.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -93,6 +94,59 @@ ok(regimeWechsel('bitget', utc(2026, 0, 1), utc(2026, 5, 1)).ganzDavor === false
 ok(regimeWechsel('bitget', utc(2025, 0, 1), utc(2026, 0, 1)).ganzDavor === true, 'Zeitraum ganz davor')
 ok(regimeWechsel('bitget', utc(2026, 5, 1), utc(2026, 9, 1)) === null && regimeWechsel('kraken', 0, 1) === null, 'danach oder unbekannte Börse: null')
 ok(REGIME_STICHTAGE.binance > REGIME_STICHTAGE.bitget && REGIME_STICHTAGE.bitunix > REGIME_STICHTAGE.binance, 'Reihenfolge der Stichtage')
+
+// ── Kerze und Sitzung: die Regel hinter «nur reguläre Sitzung» (FUN-H-005) ──
+{
+    const STD = 3_600_000
+    // Mittwoch 12.8.2026 (Sommer, New York = UTC−4) und Mittwoch 11.11.2026 (Winter, UTC−5)
+    const SO = utc(2026, 7, 12), WI = utc(2026, 10, 11)
+    const ny = (tag, stunde, minute = 0) => tag + (stunde + (tag === SO ? 4 : 5)) * STD + minute * 60_000
+    const urteil = (t, iv, art) => { const u = einstiegRegulaer(t, iv, art); return u.regulaer ? 'ja' : u.sitzung }
+
+    gleich(sitzungenDerKerze(ny(SO, 9), STD).join(), 'vor,regulaer', '1h ab 09:00: vorbörslich, dann regulär')
+    gleich(sitzungenDerKerze(ny(SO, 9, 15), 15 * 60_000).join(), 'vor', 'bis 30 Minuten: die Sitzung des Beginns')
+    ok(kerzeBeruehrtRegulaer(ny(SO, 9), STD) && !kerzeBeruehrtRegulaer(ny(SO, 8), STD) && !kerzeBeruehrtRegulaer(ny(SO, 16), STD), 'berührt: 09:00 ja, 08:00 und 16:00 nein')
+
+    for (const [name, tag] of [['Sommer', SO], ['Winter', WI]]) {
+        // 1h: die Eröffnungskerze war bis 15.11.2026 gesperrt
+        gleich(urteil(ny(tag, 9), STD, 'kerze'), 'ja', `${name} 1h 09:00–10:00, Limit in der Kerze: enthält die Eröffnung → regulär`)
+        gleich(urteil(ny(tag, 9), STD, 'eroeffnung'), 'vor', `${name} 1h 09:00, Einstieg zur Eröffnung der Kerze: 09:00 ist vorbörslich`)
+        gleich(urteil(ny(tag, 9), STD, 'schluss'), 'ja', `${name} 1h 09:00, Einstieg zum Schluss (10:00): regulär`)
+        gleich(urteil(ny(tag, 8), STD, 'kerze'), 'vor', `${name} 1h 08:00–09:00: vorbörslich`)
+        gleich(urteil(ny(tag, 15), STD, 'schluss'), 'ja', `${name} 1h 15:00, Schluss um 16:00 zählt zur Sitzung`)
+        gleich(urteil(ny(tag, 16), STD, 'kerze'), 'nach', `${name} 1h 16:00–17:00: nachbörslich`)
+        gleich(urteil(ny(tag, 16), STD, 'eroeffnung'), 'nach', `${name} 1h 16:00 zur Eröffnung: nachbörslich`)
+        gleich(urteil(ny(tag, 15, 45), 15 * 60_000, 'kerze'), 'ja', `${name} 15m 15:45: regulär`)
+        gleich(urteil(ny(tag, 9, 15), 15 * 60_000, 'kerze'), 'vor', `${name} 15m 09:15: vorbörslich`)
+    }
+    // Gleiche New Yorker Wanduhr → gleiches Urteil, Sommer wie Winter (jede halbe Stunde, alle drei Arten)
+    let gleichlauf = true
+    for (const iv of [15 * 60_000, STD, 2 * STD, 4 * STD]) for (const art of ['kerze', 'eroeffnung', 'schluss']) for (let m = 0; m < 24 * 60; m += 30) {
+        if (urteil(ny(SO, 0, m), iv, art) !== urteil(ny(WI, 0, m), iv, art)) gleichlauf = false
+    }
+    ok(gleichlauf, 'gleiche New Yorker Uhrzeit: Sommer und Winter dasselbe Urteil')
+
+    // 4h-Kerzen der Börse liegen auf UTC: Sommer 08–12, 12–16, 16–20 New York; Winter 07–11, 11–15, 15–19
+    gleich([12, 16, 20].map((h) => urteil(SO + h * STD, 4 * STD, 'kerze')).join(), 'ja,ja,nach', 'Sommer 4h (Limit): 08–12 und 12–16 regulär, 16–20 nachbörslich')
+    gleich([12, 16, 20].map((h) => urteil(WI + h * STD, 4 * STD, 'kerze')).join(), 'ja,ja,ja', 'Winter 4h (Limit): 07–11, 11–15, 15–19 berühren die Sitzung')
+    gleich([12, 16, 20].map((h) => urteil(SO + h * STD, 4 * STD, 'eroeffnung')).join(), 'vor,ja,nach', 'Sommer 4h zur Eröffnung: 08:00 vorbörslich, 12:00 regulär, 16:00 nachbörslich')
+    gleich([12, 16, 20].map((h) => urteil(WI + h * STD, 4 * STD, 'eroeffnung')).join(), 'vor,ja,ja', 'Winter 4h zur Eröffnung: 07:00 vorbörslich, 11:00 und 15:00 regulär')
+    gleich(urteil(WI + 20 * STD, 4 * STD, 'schluss'), 'nach', 'Winter 4h 15–19, Einstieg zum Schluss (19:00): nachbörslich')
+    gleich(urteil(SO + 4 * STD, 4 * STD, 'kerze'), 'nacht', 'Sommer 4h 00–04 New York: Nacht')
+    gleich(urteil(utc(2026, 7, 15, 14), STD, 'kerze'), 'wochenende', 'Samstag: Wochenende')
+    gleich(urteil(utc(2026, 10, 26, 15), STD, 'kerze'), 'feiertag', 'Thanksgiving: Feiertag')
+    gleich(urteil(utc(2026, 10, 27, 17), STD, 'kerze') + urteil(utc(2026, 10, 27, 18), STD, 'kerze'), 'janach', 'verkürzter Tag: 12:00 regulär, 13:00 nachbörslich')
+
+    // Ab 1d nicht anwendbar: nichts sperren, sondern melden
+    for (const [name, iv] of [['1d', 24 * STD], ['3d', 72 * STD], ['1w', 168 * STD]]) {
+        for (const t of [SO, WI, utc(2026, 7, 15), utc(2026, 10, 26)]) {
+            const u = einstiegRegulaer(t, iv, 'kerze')
+            ok(u.anwendbar === false && u.regulaer === true && u.sitzung === null, `${name}: nicht anwendbar, nichts gesperrt`)
+        }
+    }
+    ok(sitzungsRegelAnwendbar(12 * STD) && !sitzungsRegelAnwendbar(24 * STD) && !sitzungsRegelAnwendbar(0), 'anwendbar unter 1d')
+    ok(einstiegRegulaer(ny(SO, 10), STD).regulaer && einstiegRegulaer(ny(SO, 10), STD).anwendbar, 'Vorgabe der Art: Kerze')
+}
 
 // ── Auswertung ──
 const bilanz = sitzungsBilanz([

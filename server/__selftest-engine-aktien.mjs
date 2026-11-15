@@ -96,8 +96,9 @@ async function leeren() {
 registerStrategy({ id: 'test_aktie', name: 'Test Aktie', supportedTimeframes: ['1h'], params: [], warmupCandles: 50,
     detect({ candles, openSetups }) {
         const k = candles[candles.length - 1]
+        // `__zurEroeffnung`: Markt-Einstieg zur Eröffnung der Auslösekerze (sonst Limit irgendwo in der Kerze)
         return { setups: [], events: openSetups.map((s) => ({ id: s.id, status: 'triggered', triggeredAt: k.t, candleTime: k.t,
-            entry: s.entry, stopLoss: s.stopLoss, takeProfit: s.takeProfit })) }
+            entry: s.entry, stopLoss: s.stopLoss, takeProfit: s.takeProfit, ...(globalThis.__zurEroeffnung ? { entryAtOpen: true } : {}) })) }
     } })
 
 const RISK = { startEquityUsdt: 1000, riskPerTradePct: 1, maxNotionalUsdt: 100000, leverage: 5, maxConcurrentPositions: 3, cooldownMinutes: 0,
@@ -169,6 +170,20 @@ console.log('\nZahlentermine: Signal im Fenster → reject_risk')
     pruefe('…die Kerze ab 12:00 noch regulär → Einstieg', r.status === 'open' && Boolean(r.position), zeigt(r))
     r = await fall({ D: Date.UTC(2026, 10, 25, 20), risk: { nurRegulaereSitzung: true } })
     pruefe('Gegenprobe: am Mittwoch davor ist 14:00 New York regulär', r.status === 'open', zeigt(r))
+
+    // FUN-H-005: massgebend ist, wann gefüllt wird — nicht der Kerzenbeginn. Dienstag 10.11.2026 (Winter).
+    r = await fall({ D: Date.UTC(2026, 10, 10, 15), risk: { nurRegulaereSitzung: true } })
+    pruefe('Auslösekerze 09:00–10:00 New York (Limit in der Kerze): enthält die Eröffnung → Einstieg', r.status === 'open' && Boolean(r.position), zeigt(r))
+    r = await fall({ D: Date.UTC(2026, 10, 10, 14), risk: { nurRegulaereSitzung: true } })
+    pruefe('Auslösekerze 08:00–09:00: vorbörslich → gesperrt', r.grund === 'ausserhalb_sitzung' && /Sitzung vor/.test(r.lauf?.reason || ''), zeigt(r))
+    globalThis.__zurEroeffnung = true
+    r = await fall({ D: Date.UTC(2026, 10, 10, 15), risk: { nurRegulaereSitzung: true } })
+    pruefe('dieselbe Kerze, Einstieg zu ihrer Eröffnung um 09:00: vorbörslich → gesperrt', r.grund === 'ausserhalb_sitzung' && /Sitzung vor/.test(r.lauf?.reason || ''), zeigt(r))
+    r = await fall({ D: Date.UTC(2026, 10, 10, 16), risk: { nurRegulaereSitzung: true } })
+    pruefe('Einstieg zur Eröffnung der Kerze 10:00: regulär → Einstieg', r.status === 'open' && Boolean(r.position), zeigt(r))
+    r = await fall({ D: Date.UTC(2026, 10, 10, 15), symbol: 'BTCUSDT', aktie: null, risk: { nurRegulaereSitzung: true } })
+    pruefe('Coin zur selben Zeit: Schalter ohne Wirkung', r.status === 'open' && Boolean(r.position), zeigt(r))
+    globalThis.__zurEroeffnung = false
 }
 
 // ── 2. Tageslimit am New Yorker Handelstag ───────────────────────────────

@@ -234,6 +234,81 @@ export function handelstagBeginn(ms) {
     return beginn
 }
 
+/* ── Kerze und Sitzung: EINE Regel für Chart, Backtest und Engine ─── */
+
+// Alle Sitzungsgrenzen liegen auf halben Stunden (09:30), der Versatz zu UTC ist ganzstündig.
+const RASTER_MS = 30 * MIN
+
+/**
+ * Die Sitzungen, die eine Kerze überdeckt — je halbe Stunde eine, in
+ * Zeitfolge. Eine Kerze bis 30 Minuten hat genau eine (die ihres Beginns).
+ * @param {number} t     Öffnungszeit in ms
+ * @param {number} ivMs  Kerzenlänge in ms
+ * @returns {string[]}
+ */
+export function sitzungenDerKerze(t, ivMs) {
+    if (!(ivMs > RASTER_MS)) return [sitzungVon(t)]
+    const aus = []
+    for (let z = t; z < t + ivMs; z += RASTER_MS) aus.push(sitzungVon(z))
+    return aus
+}
+
+/**
+ * Berührt die Kerze die reguläre Sitzung? Die Regel des Charts
+ * (`src/utils/chart/sitzungsAbschnitte.js`): eine Kerze, die die Eröffnung
+ * enthält (1h ab 09:00, 4h ab 12:00 UTC), gehört zur regulären Sitzung.
+ */
+export function kerzeBeruehrtRegulaer(t, ivMs) {
+    return sitzungenDerKerze(t, ivMs).includes('regulaer')
+}
+
+/** Ab dieser Kerzenlänge sagt eine Sitzung nichts mehr: jede Tageskerze enthält sie (oder ist ein Wochenend-/Feiertag). */
+export const SITZUNGSREGEL_AB_MS_AUS = 86_400_000
+
+/** Ist der Schalter «nur reguläre Sitzung» auf dieser Zeiteinheit anwendbar? (unter 1d) */
+export function sitzungsRegelAnwendbar(ivMs) {
+    return ivMs > 0 && ivMs < SITZUNGSREGEL_AB_MS_AUS
+}
+
+/**
+ * Liegt ein Einstieg in der regulären US-Sitzung? Die EINE Regel hinter dem
+ * Risiko-Schalter `nurRegulaereSitzung` — Backtest und Engine fragen beide hier.
+ *
+ * Bis 15.11.2026 entschied der BEGINN der Auslösekerze (FUN-H-005): die
+ * Stundenkerze 09:00–10:00 mit der Eröffnung war gesperrt, auf 4h galt je nach
+ * Sommer-/Winterzeit Verschiedenes, auf 1d war alles gesperrt (die Tageskerze
+ * beginnt 00:00 UTC). Jetzt zählt, WANN gefüllt wird:
+ *
+ *   art 'eroeffnung'  Markt-Einstieg zur Eröffnung der Kerze — der Zeitpunkt
+ *                     steht fest: ihr Beginn muss in der Sitzung liegen.
+ *   art 'schluss'     Einstieg zum Kerzenschluss — der letzte Abschnitt der
+ *                     Kerze muss in der Sitzung liegen (Schluss um 16:00 zählt).
+ *   art 'kerze'       Limit/Stop irgendwo in der Kerze, Zeitpunkt unbekannt —
+ *                     die Kerze muss die Sitzung BERÜHREN, wie im Chart
+ *                     (`kerzeBeruehrtRegulaer`): was der Chart nicht hinterlegt,
+ *                     ist handelbar.
+ *
+ * Ab 1d ist die Frage sinnlos (`anwendbar: false`): der Schalter bleibt ohne
+ * Wirkung, und der Aufrufer meldet das, statt still alles zu sperren.
+ *
+ * @param {number} kerzeT  Öffnungszeit der Auslösekerze in ms
+ * @param {number} ivMs    Kerzenlänge in ms
+ * @param {'eroeffnung'|'schluss'|'kerze'} [art]
+ * @returns {{anwendbar: boolean, regulaer: boolean, sitzung: string|null}}
+ *          `sitzung` = die massgebende Sitzung, wenn nicht regulär (für die Begründung)
+ */
+export function einstiegRegulaer(kerzeT, ivMs, art = 'kerze') {
+    if (!sitzungsRegelAnwendbar(ivMs)) return { anwendbar: false, regulaer: true, sitzung: null }
+    if (art === 'eroeffnung' || art === 'schluss') {
+        // Schluss: der letzte Abschnitt der Kerze (bei 16:00 also 15:30–16:00), nicht der Folgezeitpunkt.
+        const sitzung = sitzungVon(art === 'schluss' ? kerzeT + ivMs - Math.min(ivMs, RASTER_MS) : kerzeT)
+        return { anwendbar: true, regulaer: sitzung === 'regulaer', sitzung: sitzung === 'regulaer' ? null : sitzung }
+    }
+    const liste = sitzungenDerKerze(kerzeT, ivMs)
+    const regulaer = liste.includes('regulaer')
+    return { anwendbar: true, regulaer, sitzung: regulaer ? null : liste[0] }
+}
+
 /* ── Stichtage, an denen die Börsen ihre Regeln geändert haben ────── */
 
 /**

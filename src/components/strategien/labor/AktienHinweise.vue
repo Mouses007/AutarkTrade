@@ -36,7 +36,11 @@ const summeTrades = computed(() => (props.aktien?.sitzungen || []).reduce((n, s)
     <div v-if="aktien" class="aktienHinweise">
         <Hinweis art="info" class="abstandUnten">
             {{ t('strategies.aktien.kopf', { ticker: aktien.ticker, boerse }) }}
-            <template v-if="aktien.nurRegulaer"> {{ t('strategies.aktien.nurRegulaer') }}</template>
+            <template v-if="aktien.nurRegulaer && aktien.nurRegulaerWirkt !== false"> {{ t('strategies.aktien.nurRegulaer') }}</template>
+        </Hinweis>
+        <!-- Schalter gesetzt, aber ab 1d nicht anwendbar (FUN-H-005): melden statt still nichts tun -->
+        <Hinweis v-if="aktien.nurRegulaer && aktien.nurRegulaerWirkt === false" art="warn" class="abstandUnten">
+            {{ t('strategies.aktien.nurRegulaerOhneWirkung') }}
         </Hinweis>
 
         <Hinweis v-if="angewendet.length" art="info" class="abstandUnten">

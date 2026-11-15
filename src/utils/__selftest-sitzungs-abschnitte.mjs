@@ -6,6 +6,7 @@
  */
 import { artDerKerze, sitzungsAbschnitte, zahlenMarken, SITZUNG_BIS_MS } from './chart/sitzungsAbschnitte.js'
 import { OVERLAYS, overlaysFuer, overlayAn } from './chart/overlays/liste.js'
+import { einstiegRegulaer, kerzeBeruehrtRegulaer } from '../../shared/aktien-sitzung.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -147,6 +148,23 @@ console.log('\nOverlay-Liste: Coins sehen die Aktien-Ebenen nicht')
     check('beide ab Werk an', overlayAn({}, 'zahlen') === true && overlayAn({}, 'sitzungen') === true)
     check('abschaltbar je Panel', overlayAn({ overlays: { sitzungen: false } }, 'sitzungen') === false)
     check('jede Aktien-Ebene ist gekennzeichnet', OVERLAYS.filter((o) => o.nurAktien).map((o) => o.id).join() === 'zahlen,sitzungen')
+}
+
+console.log('Chart und Schalter «nur reguläre Sitzung»: eine Regel (FUN-H-005)')
+{
+    // Drei Wochen samt Zeitumstellung (1.11.2026) und Thanksgiving, jede Zeiteinheit bis 4h
+    let abweichung = ''
+    let geprueft = 0
+    for (const iv of [5 * MIN, 15 * MIN, 30 * MIN, H, 2 * H, 4 * H]) {
+        for (let t = Date.UTC(2026, 9, 26); t < Date.UTC(2026, 10, 30); t += iv) {
+            const frei = artDerKerze(t, iv) === null
+            geprueft++
+            if (frei !== einstiegRegulaer(t, iv, 'kerze').regulaer || frei !== kerzeBeruehrtRegulaer(t, iv)) { abweichung = `${new Date(t).toISOString()} ${iv / MIN}m`; break }
+        }
+    }
+    check(`was der Chart nicht hinterlegt, lässt der Schalter zu – und nur das (${geprueft} Kerzen)`, !abweichung, abweichung)
+    check('ab 1d: der Chart hinterlegt nichts, der Schalter ist nicht anwendbar',
+        sitzungsAbschnitte([Date.UTC(2026, 7, 12)], 24 * H).length === 0 && einstiegRegulaer(Date.UTC(2026, 7, 12), 24 * H).anwendbar === false)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
