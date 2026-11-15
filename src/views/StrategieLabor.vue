@@ -28,7 +28,7 @@ import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/journal/zeit.js'
 import { Hinweis, Reiter } from '../components/basis'
-import { ladeStrategieMarkt, KRYPTO } from '../utils/strategien/markt.js'
+import { ladeStrategieMarkt, marktParams, KRYPTO } from '../utils/strategien/markt.js'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -151,7 +151,7 @@ async function laden() {
         const markt = await ladeStrategieMarkt()
         const [reg, inst] = await Promise.all([
             axios.get('/api/strategies/registry'),
-            axios.get('/api/strategies/instances', { params: { markt: markt.markt } }),
+            axios.get('/api/strategies/instances', { params: marktParams(markt.filter) }),
         ])
         registry.value = reg.data
         instanzen.value = inst.data

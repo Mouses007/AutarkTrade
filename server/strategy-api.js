@@ -35,6 +35,7 @@ import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliess
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
 import { neustartInstanz } from './strategie-neustart.js'
 import { anlageklasseVon } from './aktien/kontext.js'
+import { marktFilter, laeufeImMarkt, nurInstanzenImMarkt } from './strategie-markt.js'
 import { normMarkt } from './migrationen/aktien.js'
 import { sendeWennAus } from './quellen/aus.js'
 import { setupAus, positionAus, tradeAus, aussortiertAus } from '../shared/strategieChart.js'
@@ -294,6 +295,9 @@ async function historieSchreiben(knexOderTrx, instanceId, paramsVersion, params,
     }
 }
 
+/** So viele Läufe liest die Liste höchstens, bevor sie nach Markt teilt (`?markt=`). */
+const LAEUFE_LESEGRENZE = 2000
+
 export function setupStrategyRoutes(app) {
 
     // ── Registry: Manifeste treiben das gesamte Frontend-Formular ────────
@@ -315,7 +319,8 @@ export function setupStrategyRoutes(app) {
         try {
             const knex = getKnex()
             // `?markt=krypto|aktien` zeigt nur die Instanzen dieses Markts; ohne
-            // Angabe alle (Bibliothek und Regel-Editor zählen über beide).
+            // Angabe alle (Bibliothek und Regel-Editor lesen alle und teilen selbst:
+            // eine Regeländerung trifft die Instanzen BEIDER Märkte).
             let abfrage = knex('strategy_instances')
             if (req.query.markt === 'aktien') abfrage = abfrage.where('anlageklasse', 'aktien')
             else if (req.query.markt === 'krypto') abfrage = abfrage.where((q) => q.where('anlageklasse', 'krypto').orWhereNull('anlageklasse'))
@@ -1100,12 +1105,17 @@ export function setupStrategyRoutes(app) {
     app.get('/api/strategies/backtests', async (req, res) => {
         try {
             const knex = getKnex()
+            // `?markt=krypto|aktien`: nur die Läufe dieses Markts. Der Markt steht im Ergebnis
+            // (`stats.aktien`, `strategie-markt.js`) — darum erst lesen, dann teilen, dann kürzen.
+            const markt = marktFilter(req.query.markt)
+            const limit = begrenzeLimit(req.query.limit, 50, 200)
             let q = knex('strategy_backtests')
                 .select('id', 'strategyId', 'instanceId', 'label', 'symbol', 'timeframe', 'fromTs', 'toTs',
                     'stats', 'risk', 'ruleVersion', 'entscheidung', 'entschiedenAm', 'notiz', 'variantenGeprueft', 'createdAt')
-                .orderBy('id', 'desc').limit(begrenzeLimit(req.query.limit, 50, 200))
+                .orderBy('id', 'desc').limit(markt ? LAEUFE_LESEGRENZE : limit)
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
-            const [rows, fassungen] = await Promise.all([q, aktuelleRegelFassungen(knex)])
+            const [alle, fassungen] = await Promise.all([q, aktuelleRegelFassungen(knex)])
+            const rows = laeufeImMarkt(alle, markt).slice(0, limit)
             res.json(rows.map((r) => ({
                 ...r, objectId: String(r.id),
                 stats: parseJson(r.stats, {}), risk: parseJson(r.risk, {}),
@@ -1142,6 +1152,15 @@ export function setupStrategyRoutes(app) {
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
             else if (req.query.confirm !== 'true') {
                 return res.status(400).json({ error: 'Zum Löschen aller Läufe confirm=true angeben' })
+            }
+            // `?markt=`: «alle löschen» meint die Läufe, die die Liste dieses Markts zeigt —
+            // nicht auch die des anderen, die dort niemand sieht.
+            const markt = marktFilter(req.query.markt)
+            if (markt) {
+                const ids = laeufeImMarkt(await q.clone().select('id', 'stats'), markt).map((z) => z.id)
+                let n = 0
+                for (let i = 0; i < ids.length; i += 200) n += await knex('strategy_backtests').whereIn('id', ids.slice(i, i + 200)).delete()
+                return res.json({ ok: true, geloescht: n })
             }
             const n = await q.delete()
             res.json({ ok: true, geloescht: n })
@@ -1182,6 +1201,8 @@ export function setupStrategyRoutes(app) {
             let q = knex('strategy_trades').orderBy('exitTime', 'desc').limit(begrenzeLimit(req.query.limit, 100, 2000))
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
             if (req.query.symbol) q = q.where('symbol', String(req.query.symbol).toUpperCase())
+            // `?markt=`: nur Trades von Instanzen dieses Markts
+            q = nurInstanzenImMarkt(q, knex, marktFilter(req.query.markt))
             const rows = await q
             res.json(rows.map(normalisiereTrade))
         } catch (e) {
@@ -1209,6 +1230,8 @@ export function setupStrategyRoutes(app) {
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
             if (req.query.symbol) q = q.where('symbol', String(req.query.symbol).toUpperCase())
             if (req.query.status) q = q.whereIn('status', String(req.query.status).split(','))
+            // `?markt=`: nur Signale von Instanzen dieses Markts
+            q = nurInstanzenImMarkt(q, knex, marktFilter(req.query.markt))
             const rows = await q
             res.json(rows.map((r) => ({
                 ...r, objectId: String(r.id), confirmations: parseJson(r.confirmations, {}),
@@ -1228,6 +1251,7 @@ export function setupStrategyRoutes(app) {
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
             if (req.query.symbol) q = q.where('symbol', String(req.query.symbol).toUpperCase())
             if (req.query.timeframe) q = q.where('timeframe', String(req.query.timeframe))
+            q = nurInstanzenImMarkt(q, knex, marktFilter(req.query.markt))
             const rows = await q
             res.json(rows.map((r) => ({
                 ...r, candleTime: Number(r.candleTime) || 0, paramsVersion: Number(r.paramsVersion) || 1,

@@ -8881,6 +8881,17 @@
       "minPruefe": "wird geprüft …"
     }
   },
+  "aktienTrennung": {
+    "offenAndererMarkt": "Im Markt {markt}: {n} offene Position(en) – hier ausgeblendet.",
+    "alarmAndererMarkt": "Markt {markt}",
+    "instanzenAndererMarkt": "im Markt {markt}: {n}",
+    "flashNurKrypto": "Flash-News sucht Meldungen zu Krypto-Coins. Für Aktien stellt die Titel-Seite dieselbe Frage («Was den Kurs bewegt hat»).",
+    "flashZurTitelSeite": "Zur Titel-Seite von {ticker}",
+    "titelHinzu": "Titel hinzufügen",
+    "reiterTitel": "Offene Titel",
+    "reiterNeu": "Titel in neuem Tab öffnen",
+    "watchlistLeer": "Noch leer — unten «Titel hinzufügen» oder das Symbol des Charts oben hinzufügen."
+  },
   "markt": {
     "nurKrypto": "Der Marktradar zeigt Krypto-Daten. Das Umfeld für Aktien (Index, VIX, Sektoren, Zinsen) steht unter Research › Marktlage.",
     "umschalter": "Markt",

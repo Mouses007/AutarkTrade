@@ -40,7 +40,7 @@ import { appEinstellungen } from '../stores/settings.js'
 import { ladeSystemModus } from '../stores/system.js'
 import { hydrateLiveSettings } from '../stores/live.js'
 import { istModusAn, ersterAktiverModus, modeHome, pageById } from '../config/menu.js'
-import { marktAus } from '../config/markt.js'
+import { marktAus, zielImMarkt } from '../config/markt.js'
 import { starteApp, leseZeitzone, leseBildschirmTyp, ladeZeitraeume, setzeFilterwerte, schliesseMobilMenue, schalteMobilMenue } from '../utils/journal/app.js'
 import { wischErgebnis } from '../utils/menueWisch.js'
 import { ladeVerfuegbareTags } from '../utils/journal/tagebuch.js'
@@ -194,9 +194,13 @@ watch([appEinstellungen, () => route.fullPath], () => {
     // falschen Markt aufgerufen — oder bei abgeschaltetem Aktien-Teil — geht es
     // zur Startseite des Modus im aktiven Markt. Sonst stünde eine Aktien-Seite
     // unter dem Krypto-Menü.
-    const seite = pageById(String(route.name || ''))
-    const markt = marktAus(u)
-    if (seite?.markt && seite.markt !== markt) router.replace(modeHome(m, markt))
+    // Dasselbe gilt für reine Krypto-Seiten (Marktradar, Liquidationen …) im
+    // Aktien-Markt: `zielImMarkt` nennt das Gegenstück (Marktradar → Marktlage).
+    // Ausnahme: die Orderbuch-Wiedergabe eines eigenen Trades aus dem Journal
+    // (`/liquidity?replay=1`, Tagesansicht) — das Journal gilt in beiden Märkten.
+    if (route.name === 'liquidity' && route.query?.replay === '1') return
+    const ziel = zielImMarkt(pageById(String(route.name || '')), marktAus(u), u)
+    if (ziel) router.replace(ziel)
 }, { immediate: true })
 
 /* ── Zensur (nur Journal) ─────────────────────────────── */

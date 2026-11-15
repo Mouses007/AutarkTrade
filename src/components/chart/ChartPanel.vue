@@ -60,7 +60,7 @@ import { letzterStil, merkeStil } from '../../stores/zeichenStil.js'
 import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
 import { tabellenZeilen } from '../../utils/chart/fensterTabelle.js'
 import { atr } from '../../../shared/indicators.js'
-import { overlayAn as overlayAnFuer } from '../../utils/chart/overlays/liste.js'
+import { overlayAn as overlayAnFuer, istNurKrypto } from '../../utils/chart/overlays/liste.js'
 
 const props = defineProps({
     panel: { type: Object, required: true },     // { symbol, markt, interval, skala }
@@ -912,7 +912,9 @@ function marktNeu() {
 }
 
 // ── Journal und offene Positionen ────────────────────────────────────────
-const overlayAn = (name) => overlayAnFuer(props.panel, name)
+// Krypto-Ebenen (Liquidationen, Hebelzonen) ruhen bei einem Aktien-Future — auch wenn der Schalter
+// des Panels von einem Coin her noch «an» steht; die Kopfleiste bietet ihn dort nicht an.
+const overlayAn = (name) => overlayAnFuer(props.panel, name) && !(istNurKrypto(name) && aktie.value)
 
 // ── Aktien-Futures: Börsensitzungen und Quartalszahlen ───────────────────
 /*
@@ -951,7 +953,8 @@ function aktienNeu() {
     if (grund || marktHinweise.value.zahlen) hinweis('zahlen', grund ? t('chart.aktien.termineUnbekannt', { grund: t(grund) }) : null)
 }
 watch(() => [props.panel.symbol, props.panel.markt], () => { if (!props.ansicht) ladeAktienKontext(props.panel.symbol) }, { immediate: true })
-watch(aktie, aktienNeu)
+// Der Aktien-Kontext kommt nach dem Symbol: dann auch die Krypto-Ebenen neu bewerten (sie ruhen bei Aktien).
+watch(aktie, () => { aktienNeu(); ladeLiquidationen(); ladeHebelzonen() })
 
 /** Journal für den geladenen Zeitraum holen — entprellt, weil Nachladen und Live-Neuaufbau kurz hintereinander kommen.
  *  Die Strategie-Schicht ist seit 31.10.2026 aus dem Chart (sie gehört auf die Strategien-Seite). */

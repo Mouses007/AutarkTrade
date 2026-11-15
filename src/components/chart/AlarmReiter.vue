@@ -6,6 +6,11 @@
  * drei Knöpfe und ein Hinweistext über der Liste). Momentum- und LSOB-Alarme
  * über Watchlists gehören keinem Symbol und stehen deshalb immer in der Liste.
  * Unten ein Test der Push-Kanäle.
+ *
+ * Die Liste führt nur die Alarme des aktiven Markts (der Store lädt sie so,
+ * `stores/chartAlarme.js`). Ein eben angelegter Alarm, den der Server dem
+ * anderen Markt zuordnet (ein Coin im Aktien-Chart), bleibt bis zum Neuladen
+ * stehen und trägt den Vermerk «Markt Krypto» — sonst verschwände er wortlos.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -13,12 +18,16 @@ import axios from 'axios'
 import { alarme, beschreibe, trefferText, aendereAlarm, loescheAlarm } from '../../stores/chartAlarme.js'
 import { wischbar } from '../../utils/chart/alarmHinweise.js'
 import { Symbol, Knopf } from '../basis'
+import { aktienAn, aktiverMarkt } from '../../stores/markt.js'
+import { alarmImMarkt, andererMarkt } from '../../utils/chart/marktTrennung.js'
 
 const props = defineProps({
     symbol: { type: String, required: true },
     markt: { type: String, default: 'futures' },
     kurs: { type: Number, default: null },
     watchlists: { type: Array, default: () => [] },
+    /** Aktien-Markt: alle Schreibweisen des aktiven Titels (je Börse eine) — ein Alarm kennt nur ein Symbol. */
+    schreibweisen: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['neu', 'neuMomentum', 'neuLsob', 'bearbeite'])
 const { t } = useI18n()
@@ -42,7 +51,10 @@ const testStand = ref('')
 
 const MEHRFACH = ['momentum', 'lsob']
 const aufListen = (a) => MEHRFACH.includes(a.art) && a.watchlistIds?.length > 0
-const liste = computed(() => (alle.value ? alarme.value : alarme.value.filter((a) => a.symbol === props.symbol || aufListen(a))))
+const zumSymbol = (a) => a.symbol === props.symbol || (a.markt !== 'spot' && props.schreibweisen.includes(a.symbol))
+const liste = computed(() => (alle.value ? alarme.value : alarme.value.filter((a) => zumSymbol(a) || aufListen(a))))
+/** Gehört der Alarm zum anderen Markt (eben hier angelegt, vom Server anders eingeordnet)? */
+const fremd = (a) => aktienAn.value && !alarmImMarkt(a, aktiverMarkt.value)
 /** Wen der Alarm überwacht: das Symbol oder die Namen seiner Watchlists. */
 function ziel(a) {
     if (!aufListen(a)) return a.symbol
@@ -114,7 +126,7 @@ function loesche(a) {
         <div v-for="a in liste" :key="a.id" class="alarm" :class="{ aus: !a.aktiv }">
             <div class="zeile" @click="offen = offen === a.id ? null : a.id">
                 <span class="sym" :class="{ listen: aufListen(a) }">{{ ziel(a) }}<small v-if="a.markt === 'spot' && !aufListen(a)"> Spot</small></span>
-                <span class="was">{{ beschreibe(a) }}</span>
+                <span class="was">{{ beschreibe(a) }}<small v-if="fremd(a)"> · {{ t('aktienTrennung.alarmAndererMarkt', { markt: t('markt.' + andererMarkt(aktiverMarkt)) }) }}</small></span>
                 <span class="werkzeug" @click.stop>
                     <button type="button" :title="t(a.aktiv ? 'chart.alarm.ausschalten' : 'chart.alarm.einschalten')"
                         @click="aendereAlarm(a.id, { aktiv: !a.aktiv })" :aria-label="t(a.aktiv ? 'chart.alarm.ausschalten' : 'chart.alarm.einschalten')">

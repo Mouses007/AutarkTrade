@@ -6,11 +6,18 @@
  * geschlossener Seite, Meldung per Push/Mail. Hier geht es nur darum, eine
  * Auslösung auch auf der offenen Seite zu zeigen: als Banner, und als
  * Browser-Meldung, wenn der Tab im Hintergrund liegt.
+ *
+ * Mit eingeschaltetem Aktien-Teil lädt die Liste nur die Alarme des aktiven
+ * Markts (`?anlageklasse=`): im Aktien-Markt stehen weder Krypto-Alarme noch
+ * deren Hinweise. Verloren geht nichts — Push und Mail kommen vom Server, und
+ * nach dem Wechsel zurück zeigt der Rückblick (`RUECKBLICK_MS`) die Auslösungen.
+ * Ohne Aktien-Teil gibt es keinen Filter, alles wie zuvor.
  */
 import { ref } from 'vue'
 import axios from 'axios'
 import { sendNotification } from '../utils/notify.js'
 import { abrufFolge, findeNeue, hinweisSchluessel } from '../utils/chart/alarmHinweise.js'
+import { ermittleMarktFilter } from './markt.js'
 
 export const alarme = ref([])
 // Bis zu 50 Hinweise gemerkt; die Leiste zeigt fünf, der Rest ist darunter scrollbar.
@@ -67,7 +74,8 @@ function alsHinweis(a, v) {
 export async function ladeAlarme() {
     const nummer = folge.beginne()
     try {
-        const { data } = await axios.get('/api/chart/alarme')
+        const markt = await ermittleMarktFilter()
+        const { data } = await axios.get('/api/chart/alarme', markt ? { params: { anlageklasse: markt } } : undefined)
         if (!folge.uebernimm(nummer)) return
         const erg = findeNeue(data, gesehen, AB)
         gesehen = erg.gesehen

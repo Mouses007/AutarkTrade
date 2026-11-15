@@ -25,7 +25,7 @@ import Titelzeile from './Titelzeile.vue'
 import { appMode, seitenId } from '../../stores/ui.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { MODES, modeHome, pageById, istModusAn, modiGeordnet } from '../../config/menu.js'
-import { MAERKTE } from '../../config/markt.js'
+import { MAERKTE, modusImMarkt, zielImMarkt } from '../../config/markt.js'
 import { aktienAn, aktiverMarkt, speichereMarkt } from '../../stores/markt.js'
 
 defineProps({
@@ -40,7 +40,8 @@ const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'en
 const route = useRoute()
 // Auf der Startseite (/start) ist kein Modus aktiv.
 const aktiverModus = computed(() => (route.meta?.mode === 'uebersicht' ? null : appMode.value))
-const modi = computed(() => modiGeordnet(MODES.filter((m) => istModusAn(m.id, appEinstellungen.value))))
+// Ein Modus ohne Seite im aktiven Markt (Live-Analyse im Aktien-Markt) fehlt in der Leiste.
+const modi = computed(() => modiGeordnet(MODES.filter((m) => istModusAn(m.id, appEinstellungen.value) && modusImMarkt(m.id, aktiverMarkt.value))))
 
 /* Überall dieselben Namen wie am Desktop und bei den Modus-Schaltern — die
    Leiste rollt am Telefon ohnehin waagrecht. */
@@ -62,7 +63,8 @@ function wechsle(m, e) {
  * Markt-Umschalter Krypto ↔ Aktien (nur mit `modusAktienAn`). Wie beim
  * Moduswechsel ein voller Seitenaufruf, damit Abrufe und Timer des alten
  * Markts enden. Steht man auf einer Seite, die nur der andere Markt hat
- * (Hype-Radar ↔ Aktien), geht es zur Startseite des Modus im neuen Markt.
+ * (Hype-Radar ↔ Aktien, Marktradar ↔ Marktlage), geht es zu ihrem Gegenstück
+ * oder zur Startseite des Modus im neuen Markt (`zielImMarkt`).
  */
 const marktWechselt = ref(false)
 async function waehleMarkt(markt) {
@@ -70,8 +72,8 @@ async function waehleMarkt(markt) {
     marktWechselt.value = true
     try {
         await speichereMarkt(markt)
-        const seite = pageById(seitenId.value)
-        if (seite?.markt && seite.markt !== markt) window.location.href = modeHome(seite.mode, markt)
+        const ziel = zielImMarkt(pageById(seitenId.value), markt, appEinstellungen.value)
+        if (ziel) window.location.href = ziel
         else window.location.reload()
     } catch {
         marktWechselt.value = false

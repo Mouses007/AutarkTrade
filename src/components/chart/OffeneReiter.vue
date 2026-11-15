@@ -9,6 +9,11 @@
  * der Reiter die Tabelle neu. Der uPnL läuft dazwischen mit dem Live-Kurs mit
  * (miniTicker wie die Watchlist, ohne Binance-Stream alle 5 s per REST); ohne
  * Kurs gilt der Wert der Börse.
+ *
+ * Mit eingeschaltetem Aktien-Teil zeigt die Liste nur die Positionen des
+ * aktiven Markts (`teilePositionen`); die des anderen Markts werden gezählt
+ * und in einer Zeile genannt — echtes Geld verschwindet nicht kommentarlos.
+ * Kennt der Titel-Stamm die Symbole nicht, bleibt die Liste ungeteilt.
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,17 +25,25 @@ import { incomingPollingActive } from '../../stores/journal/offenePositionen.js'
 import { positionenAus, schaltePosition } from '../../stores/chartPositionen.js'
 import { overlayAn } from '../../utils/chart/overlays/liste.js'
 import { Symbol } from '../basis'
+import { aktienAn, aktiverMarkt } from '../../stores/markt.js'
+import { holeAktienSymbole } from '../../stores/journal/anlageklasse.js'
+import { teilePositionen, andererMarkt } from '../../utils/chart/marktTrennung.js'
 
 const props = defineProps({ panel: { type: Object, required: true } })
 const emit = defineEmits(['waehle', 'neuerTab', 'overlay'])
 const { t } = useI18n()
 
-const liste = ref([])
+const alle = ref([])
 const laedt = ref(true)
+// Aktien-Symbole je Börse aus dem Titel-Stamm; null = unbekannt (dann keine Trennung)
+const aktienSymbole = ref(null)
+const geteilt = computed(() => teilePositionen(alle.value, aktienAn.value ? aktiverMarkt.value : '', aktienSymbole.value))
+const liste = computed(() => geteilt.value.eigene)
 let uhr = null
 
 async function lade() {
-    try { liste.value = (await ladeAlleOffenen()).sort((a, b) => (b.einstiegT || 0) - (a.einstiegT || 0)) } catch { /* bleibt */ }
+    try { alle.value = (await ladeAlleOffenen()).sort((a, b) => (b.einstiegT || 0) - (a.einstiegT || 0)) } catch { /* bleibt */ }
+    if (aktienAn.value) aktienSymbole.value = await holeAktienSymbole()
     laedt.value = false
 }
 onMounted(() => { lade(); uhr = setInterval(() => { if (!document.hidden) lade() }, 15_000) })
@@ -95,6 +108,7 @@ const aus = (p) => positionenAus.value.has(String(p.id))
             {{ t('chart.offen.imChart') }}
         </label>
         <div v-if="!laedt && !liste.length" class="leer">{{ t('chart.offen.leer') }}</div>
+        <div v-if="geteilt.andere" class="leer">{{ t('aktienTrennung.offenAndererMarkt', { n: geteilt.andere, markt: t('markt.' + andererMarkt(aktiverMarkt)) }) }}</div>
         <div v-for="p in liste" :key="p.id" class="zeile" :class="{ aktiv: p.symbol === panel.symbol, aus: aus(p) }" @click="emit('waehle', p.symbol)"
             @mousedown.middle.prevent @auxclick.middle.prevent="emit('neuerTab', p.symbol)">
             <div class="kopf">

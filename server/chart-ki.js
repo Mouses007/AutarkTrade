@@ -48,6 +48,7 @@ import { holeHebelzonen } from './hebelzonen.js'
 import { baueZeitrahmen, zeitrahmenText, zeitrahmenTabelle, zeitrahmenFuer, ZEITRAHMEN_KERZEN } from './chart-zeitrahmen.js'
 import { leseMomentumGrenze } from './momentum-grenze.js'
 import { pruefeEinordnung } from './coin-radar/einordnung.js'
+import { anlageklasseVon } from './aktien/kontext.js'
 import { tradesAusZeilen } from './chart-journal.js'
 import { sendeWennAus, istAus } from './quellen/aus.js'
 import { ohneUnsichtbares } from '../shared/unsichtbar.js'
@@ -688,10 +689,13 @@ export async function ladeChartDaten({ symbol, interval, markt = 'futures', anza
     kerzen = kerzen.slice(-anzahl)
     const vonT = kerzen[0]?.t ?? Date.now()
     const knex = getKnex()
+    // Aktien-Future: keine geschätzten Liquidationszonen in die Eingabe — das Modell aus Open Interest
+    // ist für Coins gebaut und sagt bei Aktien nichts (`docs/RECHERCHE-AKTIEN.md`). Coins: unverändert.
+    const istAktie = markt !== 'spot' && (await anlageklasseVon([symbol]).catch(() => ({ klasse: 'krypto' }))).klasse === 'aktien'
     const [zeichnungenRoh, hebel, tagesZeilen, s] = await Promise.all([
         // Feste Reihenfolge (neueste zuerst); welche in die Analyse kommen, entscheidet `waehleNutzer`
         knex('chart_zeichnungen').where('symbol', symbol).orderBy('geaendertAm', 'desc').orderBy('id', 'desc').catch(() => []),
-        markt === 'spot' ? null : holeHebelzonen(symbol).catch(() => null),
+        markt === 'spot' || istAktie ? null : holeHebelzonen(symbol).catch(() => null),
         knex('trades').select('dateUnix', 'broker', 'trades')
             .where('dateUnix', '>=', Math.floor(vonT / 1000) - 7 * 86400).catch(() => []),
         knex('settings').select('language', 'timeZone').where('id', 1).first().catch(() => null),

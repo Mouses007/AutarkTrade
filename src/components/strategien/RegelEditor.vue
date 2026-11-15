@@ -25,7 +25,7 @@
  */
 import { ref, computed, onBeforeMount } from 'vue'
 import axios from 'axios'
-import { ladeStrategieMarkt } from '../../utils/strategien/markt.js'
+import { ladeStrategieMarkt, istAndererMarkt } from '../../utils/strategien/markt.js'
 import { useI18n } from 'vue-i18n'
 import ZahlOderParam from '../ZahlOderParam.vue'
 import StrategieChart from './StrategieChart.vue'
@@ -59,7 +59,8 @@ const speichert = ref(false)
 // ── Backtest direkt aus dem Editor ──────────────────────────────────────
 const test = ref({ symbol: 'BTCUSDT', timeframe: props.start.rules?.timeframes?.[0] || '1h', tage: 180 })
 // Im Aktien-Markt testet der Editor auf einem Aktien-Future.
-ladeStrategieMarkt().then((m) => { if (test.value.symbol === 'BTCUSDT') test.value.symbol = m.symbol })
+const marktFilterWert = ref('')
+ladeStrategieMarkt().then((m) => { marktFilterWert.value = m.filter; if (test.value.symbol === 'BTCUSDT') test.value.symbol = m.symbol })
 const testLaeuft = ref(false)
 const testErgebnis = ref(null)
 // Marktdaten abgeschaltet: der Server antwortet 200 mit `{ aus: true, … }`.
@@ -264,6 +265,10 @@ onBeforeMount(async () => {
     }
 })
 const betroffene = computed(() => instanzen.value.filter((i) => i.strategyId === entwurf.value.strategyId && !Number(i.archiviert)))
+// Die Warnung zählt bewusst über BEIDE Märkte — die Änderung trifft alle. Instanzen des
+// anderen Markts tragen dessen Namen, damit im Aktien-Markt keine Krypto-Instanz namenlos auftaucht.
+const betroffenName = (i) => (istAndererMarkt(i, marktFilterWert.value)
+    ? `${i.name} (${t('markt.' + (i.anlageklasse === 'aktien' ? 'aktien' : 'krypto'))})` : i.name)
 const speicherFrage = ref(false)
 
 /** Alle Referenzen, die in einem Vergleich stehen dürfen. */
@@ -1022,7 +1027,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                     </div>
 
                     <Hinweis v-if="speicherFrage" art="warn" class="abstandOben3">
-                        {{ t('strategien.editor.betroffen', { n: betroffene.length, namen: betroffene.map((i) => i.name).join(', ') }) }}
+                        {{ t('strategien.editor.betroffen', { n: betroffene.length, namen: betroffene.map(betroffenName).join(', ') }) }}
                         <div class="knopfZeile abstandOben">
                             <Knopf art="haupt" klein @click="sichern(true)">{{ t('strategien.editor.trotzdemSpeichern') }}</Knopf>
                             <Knopf klein @click="speicherFrage = false">{{ t('common.cancel') }}</Knopf>

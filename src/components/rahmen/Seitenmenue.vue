@@ -25,7 +25,7 @@ import { appMode, seitenId, bildschirmTyp } from '../../stores/ui.js'
 import { sideMenuEingeklappt, schalteSideMenu } from '../../stores/app/rahmen.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { PAGES, pagesForMode, istModusAn } from '../../config/menu.js'
-import { seiteImMarkt } from '../../config/markt.js'
+import { seiteImMarkt, modusImMarkt } from '../../config/markt.js'
 import { aktiverMarkt } from '../../stores/markt.js'
 import { gewaehlteBoerse, BOT_BROKERS } from '../../stores/filters.js'
 import { useIstTelefon } from '../../utils/geraet.js'
@@ -50,7 +50,9 @@ const GRUPPEN = {
 }
 
 /** Der Modus `start` (Chart) zeigt das Journal-Menü. */
-const menueModus = computed(() => (appMode.value === 'start' ? 'journal' : appMode.value))
+// Ein gemerkter Modus, den der aktive Markt nicht hat (Live-Analyse im Aktien-Markt, etwa auf der
+// Einstellungsseite nach dem Umschalten), zeigt ebenfalls das Journal-Menü statt eines leeren.
+const menueModus = computed(() => (appMode.value === 'start' || !modusImMarkt(appMode.value, aktiverMarkt.value) ? 'journal' : appMode.value))
 const istJournalMenue = computed(() => menueModus.value === 'journal')
 
 const kiAn = computed(() => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0)

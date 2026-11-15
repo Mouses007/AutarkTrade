@@ -21,6 +21,7 @@ import { zeitzoneAus } from '../shared/zeitzone.js'
 import { logWarn } from './logger.js'
 import { ladeLlmConfig, ladeLlmConfigFuerAufgabe, callLLMJson, merkeKiGuthaben, istGuthabenFehler } from './llm.js'
 import { sucheXZuCoin, rechercheThema, X_STANDARDMODELL } from './news-recherche.js'
+import { anlageklasseVon } from './aktien/kontext.js'
 import { basisCoin, quellenListe, webTextUmnummerieren, baueEingabe, pruefeFlashAntwort, systemText, FLASH_STUNDEN } from './flash-news-kern.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
@@ -167,6 +168,11 @@ export function setupFlashNewsRoutes(app) {
         if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'symbol ungültig' })
         if (!stunden) return res.status(400).json({ error: `Zeitraum nur ${FLASH_STUNDEN.join(', ')} Stunden` })
         try {
+            // Flash-News sucht nach einem Krypto-Coin (X-Suche und Web-Frage sind so gestellt). Für ein
+            // Aktien-Future käme bezahlter Unsinn zurück — die Recherche zu Aktien steht auf der Titel-Seite.
+            if ((await anlageklasseVon([symbol])).klasse === 'aktien') {
+                return res.status(400).json({ error: `${symbol} ist ein Aktien-Future — Flash-News sucht Krypto-Meldungen. Für Aktien: Titel-Seite, «Was den Kurs bewegt hat».`, grund: 'aktie' })
+            }
             res.json(await erzeugeFlashNews({ symbol, stunden }))
         } catch (e) {
             logWarn('flash-news', `${symbol} ${stunden}h: ${e.message}`)

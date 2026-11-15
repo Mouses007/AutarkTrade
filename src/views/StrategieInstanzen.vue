@@ -24,7 +24,7 @@ import { apiFehlerText } from '../utils/apiError.js'
 import { logError } from '../utils/logger.js'
 import { geld, rText, prozent, tonVon } from '../utils/strategien/format.js'
 import { Knopf, Pille, Symbol, Hinweis } from '../components/basis'
-import { ladeStrategieMarkt } from '../utils/strategien/markt.js'
+import { ladeStrategieMarkt, marktParams } from '../utils/strategien/markt.js'
 
 const { t, te } = useI18n()
 const route = useRoute()
@@ -58,7 +58,7 @@ async function laden() {
         marktVorgaben = await ladeStrategieMarkt()
         const [reg, inst, status, zw] = await Promise.all([
             axios.get('/api/strategies/registry'),
-            axios.get('/api/strategies/instances', { params: { markt: marktVorgaben.markt } }),
+            axios.get('/api/strategies/instances', { params: marktParams(marktVorgaben.filter) }),
             axios.get('/api/strategies/engine/status'),
             axios.get('/api/strategies/positions/zwischenstand').catch(() => ({ data: {} })),
         ])

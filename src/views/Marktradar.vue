@@ -41,8 +41,6 @@ import { useIstTelefon } from '../utils/geraet.js'
 import { oeffneLivetradingFenster } from '../utils/livetradingFenster.js'
 import { sendNotification } from '../utils/notify.js'
 import { KACHELN, sortiereKacheln } from '../config/marktradar.js'
-import { aktiverMarkt } from '../stores/markt.js'
-import Hinweis from '../components/basis/Hinweis.vue'
 import PultAnsicht from '../components/marktradar/PultAnsicht.vue'
 import { PULT_KACHELN } from '../config/marktradar-pult.js'
 import { useKachelRaster } from '../composables/useKachelRaster.js'
@@ -276,7 +274,6 @@ watch(() => daten.funding, (d) => {
 
 <template>
     <div class="radarWrap">
-        <Hinweis v-if="aktiverMarkt === 'aktien'" art="info">{{ t('markt.nurKrypto') }}</Hinweis>
         <div class="liveHeader">
             <div class="liveTitle">
                 <span class="liveSymbol">{{ t('marktradar.title') }}</span>

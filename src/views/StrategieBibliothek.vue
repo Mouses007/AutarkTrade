@@ -24,6 +24,7 @@ import RegelEditor from '../components/strategien/RegelEditor.vue'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import { apiFehlerText } from '../utils/apiError.js'
 import { logError } from '../utils/logger.js'
+import { ladeStrategieMarkt, zaehleInstanzen } from '../utils/strategien/markt.js'
 import { Knopf, Pille, Symbol, Hinweis } from '../components/basis'
 
 const { t } = useI18n()
@@ -79,6 +80,7 @@ async function laden() {
         registry.value = reg.data
         eigene.value = regeln.data
         instanzen.value = inst.data
+        marktFilterWert.value = (await ladeStrategieMarkt()).filter
         vorlagen.value = bl.data.vorlagen || []
         versteckteVorlagen.value = bl.data.versteckteVorlagen || []
         entwuerfe.value = ew.data || []
@@ -95,7 +97,12 @@ onBeforeMount(async () => {
 })
 
 const eingebaute = computed(() => registry.value.strategies.filter((s) => s.eingebaut))
-const instanzenVon = (sid) => instanzen.value.filter((i) => i.strategyId === sid && !Number(i.archiviert)).length
+// Gezählt wird je Markt: die Zahl gilt dem aktiven Markt, die Instanzen des anderen
+// stehen daneben mit Namen des Markts (eine Strategie gehört beiden).
+const marktFilterWert = ref('')
+const instanzenVon = (sid) => zaehleInstanzen(instanzen.value, sid, marktFilterWert.value).eigene.length
+const instanzenAndere = (sid) => zaehleInstanzen(instanzen.value, sid, marktFilterWert.value).andere.length
+const andererMarktName = computed(() => t('markt.' + (marktFilterWert.value === 'aktien' ? 'krypto' : 'aktien')))
 
 // ── Was ist offen? ──────────────────────────────────────────────────────
 const id = computed(() => String(route.params.id || ''))
@@ -300,6 +307,7 @@ const kurzSatz = (s) => s.description || s.saetze?.find((x) => x.titel === 'Ausl
                                             <span>{{ (s.rules.timeframes || []).join(', ') }}</span>
                                             <span v-if="quelleText(s)">{{ quelleText(s) }}</span>
                                             <span>{{ t('strategien.bibliothek.instanzen', { n: instanzenVon(s.strategyId) }) }}</span>
+                                            <span v-if="instanzenAndere(s.strategyId)">{{ t('aktienTrennung.instanzenAndererMarkt', { n: instanzenAndere(s.strategyId), markt: andererMarktName }) }}</span>
                                         </div>
                                         <div v-if="kurzSatz(s)" class="at-gedaempft klein">{{ kurzSatz(s) }}</div>
                                     </td>
@@ -333,6 +341,7 @@ const kurzSatz = (s) => s.description || s.saetze?.find((x) => x.titel === 'Ausl
                                             <span>{{ s.id }} · v{{ s.version }}</span>
                                             <span>{{ (s.supportedTimeframes || []).join(', ') }}</span>
                                             <span>{{ t('strategien.bibliothek.instanzen', { n: instanzenVon(s.id) }) }}</span>
+                                            <span v-if="instanzenAndere(s.id)">{{ t('aktienTrennung.instanzenAndererMarkt', { n: instanzenAndere(s.id), markt: andererMarktName }) }}</span>
                                         </div>
                                         <div v-if="s.description" class="at-gedaempft klein">{{ s.description }}</div>
                                     </td>
@@ -354,6 +363,7 @@ const kurzSatz = (s) => s.description || s.saetze?.find((x) => x.titel === 'Ausl
                     <Pille ton="neutral">{{ t('strategien.bibliothek.eingebaut') }} · v{{ eingebauteOffen.version }}</Pille>
                     <Pille v-for="tf in eingebauteOffen.supportedTimeframes" :key="tf" ton="neutral">{{ tf }}</Pille>
                     <Pille ton="neutral">{{ t('strategien.bibliothek.instanzen', { n: instanzenVon(eingebauteOffen.id) }) }}</Pille>
+                    <Pille v-if="instanzenAndere(eingebauteOffen.id)" ton="neutral">{{ t('aktienTrennung.instanzenAndererMarkt', { n: instanzenAndere(eingebauteOffen.id), markt: andererMarktName }) }}</Pille>
                 </div>
                 <div class="knopfzeile abstandUnten">
                     <Knopf klein art="haupt" :to="`${LABOR}?strategie=${eingebauteOffen.id}`">{{ t('strategien.bibliothek.imLabor') }}</Knopf>

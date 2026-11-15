@@ -11,16 +11,23 @@
  * `flash-news.js`); beim Öffnen und beim Symbolwechsel wird nur der letzte
  * Stand gelesen, falls es einen gibt (GET, kostenlos). Links kommen aus der
  * Quellenliste des Servers, nie aus dem Modelltext.
+ *
+ * Bei einem Aktien-Future gibt es hier nichts abzurufen: die Suche fragt nach
+ * einem Krypto-Coin. Der Reiter sagt das und verweist auf die Titel-Seite,
+ * die dieselbe Frage für Aktien stellt (der Server lehnt den Abruf ebenfalls ab).
  */
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { Symbol, Knopf } from '../basis'
+import { aktieVon } from '../../utils/chart/aktienKontext.js'
 
 const props = defineProps({
     panel: { type: Object, required: true },
 })
 const { t } = useI18n()
+// Aktien-Future im Panel (null bei Coins und solange nichts bekannt ist)
+const aktie = computed(() => aktieVon(props.panel))
 
 const ZEITRAEUME = [1, 6, 24]
 const ZEIT_SCHLUESSEL = 'chartFlashStunden'
@@ -74,7 +81,11 @@ function uhr(ms) {
 </script>
 
 <template>
-    <div class="flashReiter">
+    <div v-if="aktie" class="flashReiter">
+        <div class="hinweis">{{ t('aktienTrennung.flashNurKrypto') }}</div>
+        <a class="textKnopf" :href="'/aktien?titel=' + encodeURIComponent(aktie.ticker)">{{ t('aktienTrennung.flashZurTitelSeite', { ticker: aktie.ticker }) }}</a>
+    </div>
+    <div v-else class="flashReiter">
         <div class="zeitraum" role="group" :aria-label="t('chart.news.zeitraum')">
             <span>{{ t('chart.news.zeitraum') }}</span>
             <button v-for="n in ZEITRAEUME" :key="n" type="button" :class="{ an: stunden === n }" :aria-pressed="stunden === n"

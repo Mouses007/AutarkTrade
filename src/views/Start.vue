@@ -13,11 +13,14 @@ import Pille from '../components/basis/Pille.vue'
 import { appEinstellungen } from '../stores/settings.js'
 import { appMode } from '../stores/ui.js'
 import { MODES, modeHome, istModusAn } from '../config/menu.js'
+import { modusImMarkt } from '../config/markt.js'
+import { aktiverMarkt } from '../stores/markt.js'
 import { setzeSeitenId } from '../utils/journal/app.js'
 
 const { t } = useI18n()
 const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'entdecken', agent: 'agent', lernen: 'lernen', portfolio: 'muenzen' }
-const modi = computed(() => MODES.filter((m) => istModusAn(m.id, appEinstellungen.value)))
+// Wie die Kopfleiste: nur Modi, die der aktive Markt hat.
+const modi = computed(() => MODES.filter((m) => istModusAn(m.id, appEinstellungen.value) && modusImMarkt(m.id, aktiverMarkt.value)))
 const version = __APP_VERSION__
 
 function waehle(m) {
@@ -40,7 +43,7 @@ onMounted(() => setzeSeitenId())
         </section>
 
         <section class="kacheln">
-            <a v-for="m in modi" :key="m.id" class="kachel" :href="modeHome(m.id)" @click="waehle(m)">
+            <a v-for="m in modi" :key="m.id" class="kachel" :href="modeHome(m.id, aktiverMarkt)" @click="waehle(m)">
                 <span class="kreis"><Symbol :name="SYMBOL[m.id] || 'info'" :groesse="24" /></span>
                 <span class="titel">
                     {{ t(m.titleKey) }}

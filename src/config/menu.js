@@ -28,7 +28,11 @@
  *
  * `markt` (krypto | aktien) bindet eine Seite an eine Seite des Markt-
  * Umschalters (`config/markt.js`): das Seitenmenü zeigt sie nur dort. Fehlt
- * das Feld, gilt die Seite in beiden Märkten.
+ * das Feld, gilt die Seite in beiden Märkten. `gegenstueck` nennt je Markt die
+ * Seite, die dort dieselbe Frage beantwortet (Marktradar ↔ Marktlage): dorthin
+ * führen Umleitung und Markt-Umschalter (`zielImMarkt`). Ein Modus, dessen
+ * Seiten alle zum anderen Markt gehören, fehlt in der Kopfleiste
+ * (`modusImMarkt`); `ersatzJeMarkt` am Modus sagt, wohin seine Adressen dann führen.
  *
  * `nurDesktop` blendet die Seite auf Telefonen aus. Kein Geschmacksurteil,
  * sondern eine Platzfrage: ein Arbeitsplatz aus elf Kacheln, Orderbuch und
@@ -64,21 +68,25 @@ export const PAGES = [
     // steht vorn und ist zugleich die Startseite des Modus (siehe MODES unten) —
     // er beantwortet in einem Blick, in welcher Lage man sitzt. Danach die
     // Nachrichten, dann die Werkzeuge, die einen einzelnen Markt sezieren.
-    { id: 'marktradar', mode: 'live', path: '/marktradar', symbol: 'tacho', titleKey: 'nav.marktradar', group: 'liveAnalyze' },
-    { id: 'nachrichten', mode: 'live', path: '/nachrichten', symbol: 'zeitung', titleKey: 'nav.nachrichten', group: 'liveAnalyze' },
-    { id: 'openinterest', mode: 'live', path: '/openinterest', symbol: 'ebenen', titleKey: 'nav.openInterest', group: 'liveAnalyze' },
-    { id: 'liquidity', mode: 'live', path: '/liquidity', symbol: 'live', titleKey: 'nav.liquidity', group: 'liveAnalyze' },
-    { id: 'liquidations', mode: 'live', path: '/liquidations', symbol: 'flamme', titleKey: 'nav.liquidations', group: 'liveAnalyze' },
+    // Alle Seiten dieses Modus sind Krypto (`markt: 'krypto'`): Funding,
+    // Liquidationen, Open Interest, BTC-Dominanz und die Krypto-Feeds sagen über
+    // Aktien nichts. Im Aktien-Markt beantwortet `/aktien-marktlage` die Frage
+    // des Marktradars; der Modus selbst fehlt dort in der Kopfleiste.
+    { id: 'marktradar', mode: 'live', path: '/marktradar', symbol: 'tacho', titleKey: 'nav.marktradar', group: 'liveAnalyze', markt: 'krypto', gegenstueck: { aktien: '/aktien-marktlage' } },
+    { id: 'nachrichten', mode: 'live', path: '/nachrichten', symbol: 'zeitung', titleKey: 'nav.nachrichten', group: 'liveAnalyze', markt: 'krypto' },
+    { id: 'openinterest', mode: 'live', path: '/openinterest', symbol: 'ebenen', titleKey: 'nav.openInterest', group: 'liveAnalyze', markt: 'krypto' },
+    { id: 'liquidity', mode: 'live', path: '/liquidity', symbol: 'live', titleKey: 'nav.liquidity', group: 'liveAnalyze', markt: 'krypto' },
+    { id: 'liquidations', mode: 'live', path: '/liquidations', symbol: 'flamme', titleKey: 'nav.liquidations', group: 'liveAnalyze', markt: 'krypto' },
     // Eigene Gruppe, weil Handeln etwas anderes ist als Analysieren: die
     // Seiten darüber beantworten „wie steht der Markt", diese hier begleitet
     // die Stunden, in denen man tatsächlich Geld riskiert.
     // `mobilFlag`: Nur-Desktop-Sperre lässt sich per Einstellung fürs Telefon
     // aufheben (Chart & Analyse → Live-Trading-Fenster → „Live-Trading auf dem Handy").
-    { id: 'livetrading', mode: 'live', path: '/livetrading', symbol: 'fadenkreuz', titleKey: 'nav.livetrading', group: 'liveTrade', flag: 'livetradingAn', nurDesktop: true, mobilFlag: 'livetradingMobil' },
+    { id: 'livetrading', mode: 'live', path: '/livetrading', symbol: 'fadenkreuz', titleKey: 'nav.livetrading', group: 'liveTrade', flag: 'livetradingAn', nurDesktop: true, mobilFlag: 'livetradingMobil', markt: 'krypto' },
     // Archiv und Auswertung sind bewusst NICHT `nurDesktop`: nachlesen und
     // auswerten geht am Telefon, nur das Handeln selbst braucht Platz.
-    { id: 'liveSessions', mode: 'live', path: '/live-sessions', symbol: 'verlauf', titleKey: 'nav.liveSessions', group: 'liveTrade', flag: 'livetradingAn' },
-    { id: 'liveAuswertung', mode: 'live', path: '/live-auswertung', symbol: 'torte', titleKey: 'nav.liveAuswertung', group: 'liveTrade', flag: 'livetradingAn' },
+    { id: 'liveSessions', mode: 'live', path: '/live-sessions', symbol: 'verlauf', titleKey: 'nav.liveSessions', group: 'liveTrade', flag: 'livetradingAn', markt: 'krypto' },
+    { id: 'liveAuswertung', mode: 'live', path: '/live-auswertung', symbol: 'torte', titleKey: 'nav.liveAuswertung', group: 'liveTrade', flag: 'livetradingAn', markt: 'krypto' },
 
     // ── Entdecken ───────────────────────────────────────────
     /*
@@ -110,7 +118,7 @@ export const PAGES = [
      * Ebenfalls nicht `nurDesktop` — eine Rangliste mit Kennzahlen liest sich
      * auf 375 Pixeln als Kartenliste einwandfrei.
      */
-    { id: 'coinRadar', mode: 'research', path: '/coin-radar', symbol: 'live', titleKey: 'nav.coinRadar', menuKey: 'coinradar.tab_rangliste', menuSymbol: 'listeNummer', group: 'coinGruppe', markt: 'krypto' },
+    { id: 'coinRadar', mode: 'research', path: '/coin-radar', symbol: 'live', titleKey: 'nav.coinRadar', menuKey: 'coinradar.tab_rangliste', menuSymbol: 'listeNummer', group: 'coinGruppe', markt: 'krypto', gegenstueck: { aktien: '/aktien-radar' } },
     { id: 'coinVerlauf', mode: 'research', path: '/coin-radar/verlauf', symbol: 'verlauf', titleKey: 'coinradar.tab_verlauf', group: 'coinGruppe', markt: 'krypto' },
     // Abverkaufs-Wache: gepumpte Perps, die zu kippen beginnen (`server/coin-radar/abverkauf.js`).
     { id: 'coinAbverkauf', mode: 'research', path: '/coin-radar/abverkauf', symbol: 'pfeilSchraegAb', titleKey: 'coinradar.tab_abverkauf', group: 'coinGruppe', markt: 'krypto' },
@@ -121,9 +129,9 @@ export const PAGES = [
      */
     // Newcomer-Radar zuerst: er ist die Frage, der Stamm das Nachschlagewerk dazu.
     { id: 'newcomerRadar', mode: 'research', path: '/newcomer-radar', symbol: 'entdecken', titleKey: 'nav.newcomerRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
-    { id: 'aktienRadar', mode: 'research', path: '/aktien-radar', symbol: 'listeNummer', titleKey: 'nav.aktienRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
+    { id: 'aktienRadar', mode: 'research', path: '/aktien-radar', symbol: 'listeNummer', titleKey: 'nav.aktienRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/coin-radar' } },
     // Das Umfeld (Index, Schwankung, Sektoren) — nach den Radaren, damit der Newcomer-Radar die Startseite bleibt.
-    { id: 'aktienMarktlage', mode: 'research', path: '/aktien-marktlage', symbol: 'tacho', titleKey: 'nav.aktienMarktlage', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
+    { id: 'aktienMarktlage', mode: 'research', path: '/aktien-marktlage', symbol: 'tacho', titleKey: 'nav.aktienMarktlage', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/marktradar' } },
     { id: 'aktienStamm', mode: 'research', path: '/aktien', symbol: 'gebaeude', titleKey: 'nav.aktienStamm', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
 
     // ── Strategien ──────────────────────────────────────────
@@ -178,7 +186,7 @@ export const MODES = [
     // Einstellungen und im localStorage bestehender Installationen.
     { id: 'journal', titleKey: 'modes.journal', symbol: 'journal', home: '/journal', enabled: true },
     { id: 'start', titleKey: 'modes.start', symbol: 'chart', home: '/chart', enabled: true, flag: 'startseiteAn' },
-    { id: 'live', titleKey: 'modes.live', symbol: 'live', home: '/marktradar', enabled: true, flag: 'modusLiveAn' },
+    { id: 'live', titleKey: 'modes.live', symbol: 'live', home: '/marktradar', enabled: true, flag: 'modusLiveAn', ersatzJeMarkt: { aktien: '/aktien-marktlage' } },
     /*
      * Entdecken: was es noch nicht ins Journal geschafft hat. Bislang ein
      * Platzhalter, jetzt von Hype-Radar und Coin-Radar bewohnt.

@@ -45,6 +45,12 @@
  * Verlauf (`geometrieEndet`, `profilGeaendert`, `watchlistLeer`,
  * `boxUngueltig`, `zeichnungWeg`). Nur `ausgeloest` räumt „Ausgelöste
  * entfernen" ab; Wiedereinschalten löscht den Grund (Audit FUN-F2B-003).
+ *
+ * Markt (Krypto | Aktien): jeder Alarm trägt `anlageklasse`, gesetzt beim
+ * Anlegen und bei jedem Wechsel von Symbol oder Watchlists (Regel rein in
+ * `chart-alarm-markt.js`). `GET /api/chart/alarme?anlageklasse=aktien` filtert
+ * die Liste; ohne Angabe kommt alles. Der Takt prüft weiter ALLE aktiven
+ * Alarme — der Markt-Umschalter der Oberfläche schaltet keinen Alarm ab.
  */
 import { leseMomentumGrenze } from './momentum-grenze.js'
 import { getKnex } from './database.js'
@@ -64,6 +70,9 @@ import { sendeAnGeraete } from './esp32-push.js'
 import { leseEinstellungen } from './hype-radar/einstellungen.js'
 import { melde } from './benachrichtigungen.js'
 import { logWarn } from './logger.js'
+import { anlageklasseVon } from './aktien/kontext.js'
+import { normMarkt } from './migrationen/aktien.js'
+import { alarmKlasse, artImMarkt, listenFilter } from './chart-alarm-markt.js'
 
 const TAKT_MS = 5000
 const FUEHRUNG_KEY = 'chart_alarme'
@@ -88,7 +97,7 @@ function parse(text, ersatz) {
 
 function alarmZeile(r) {
     return {
-        id: r.id, symbol: r.symbol, markt: r.markt, art: r.art,
+        id: r.id, symbol: r.symbol, markt: r.markt, art: r.art, anlageklasse: normMarkt(r.anlageklasse),
         bedingung: parse(r.bedingung, {}), zeichnungId: r.zeichnungId == null ? null : Number(r.zeichnungId),
         kanaele: parse(r.kanaele, null), einmalig: Number(r.einmalig) === 1, aktiv: Number(r.aktiv) === 1,
         letzterPreis: r.letzterPreis == null ? null : Number(r.letzterPreis), letzteZeit: Number(r.letzteZeit) || 0,
@@ -251,6 +260,24 @@ async function pruefeMehrfachFelder(roh, knex, teilweise, aus, art) {
         return { fehler: `Zu viele Paare (${symbole.size} Symbole × Zeiteinheiten = ${paare.length}) — höchstens ${MAX_SYMBOLE} Symbole und ${MAX_PAARE} Paare, sonst reicht das Börsengewicht nicht` }
     }
     return { daten }
+}
+
+/**
+ * Markt eines Alarms aus seinen Feldern (`chart-alarm-markt.js`): Watchlists
+ * entscheiden vor dem Symbol. `{ klasse }` oder `{ fehler }`.
+ */
+async function bestimmeKlasse({ symbol, markt, watchlistIds, art }, knex) {
+    const ids = parse(watchlistIds, [])
+    let watchlistKlassen = []
+    let symbolKlasse = null
+    if (Array.isArray(ids) && ids.length) {
+        watchlistKlassen = (await knex('chart_watchlists').whereIn('id', ids).select('anlageklasse')).map((w) => w.anlageklasse)
+    } else if (symbol && markt !== 'spot') {
+        symbolKlasse = (await anlageklasseVon([symbol])).klasse
+    }
+    const erg = alarmKlasse({ markt, symbolKlasse, watchlistKlassen })
+    if (erg.klasse && !artImMarkt(art, erg.klasse)) return { fehler: `Alarm-Art ${art} gibt es für Aktien nicht` }
+    return erg
 }
 
 async function watchlistKarte(knex) {
@@ -684,6 +711,10 @@ export function setupChartAlarmRoutes(app) {
             let q = getKnex()('chart_alarme').orderBy('id', 'desc')
             const symbol = String(req.query.symbol || '').toUpperCase()
             if (symbol) q = q.where('symbol', symbol)
+            // Je Markt (`?anlageklasse=aktien`); Zeilen ohne Angabe sind Krypto (wie `zeileImMarkt`).
+            const filter = listenFilter(req.query.anlageklasse)
+            if (filter === 'aktien') q = q.where('anlageklasse', 'aktien')
+            else if (filter === 'krypto') q = q.where((b) => b.whereNot('anlageklasse', 'aktien').orWhereNull('anlageklasse'))
             res.json((await q.limit(MAX_ALARME)).map(alarmZeile))
         } catch (e) { res.status(500).json({ error: e.message }) }
     })
@@ -707,6 +738,10 @@ export function setupChartAlarmRoutes(app) {
                 const quelle = letztePreise[daten.markt].quelle === 'bitget' ? 'Bitget' : 'Binance'
                 return res.status(400).json({ error: `${daten.symbol} gibt es bei ${quelle} ${daten.markt === 'spot' ? 'Spot' : 'Futures'} nicht — die Alarme laufen auf ${quelle}-Kursen` })
             }
+            // Markt des Alarms: Watchlists bzw. Titel-Stamm — nicht der Markt, in dem die Oberfläche steht.
+            const markt = await bestimmeKlasse(daten, knex)
+            if (markt.fehler) return res.status(400).json({ error: markt.fehler })
+            daten.anlageklasse = markt.klasse
             const momentum = MEHRFACH.includes(daten.art)
             const [zeile] = await knex('chart_alarme').insert({
                 // Ein Momentum-Alarm über eine Watchlist soll weiterlaufen; je Kerze meldet er ohnehin nur einmal.
@@ -729,6 +764,15 @@ export function setupChartAlarmRoutes(app) {
             const { fehler, daten } = await pruefeEingabe({ ...req.body, art: alt.art, id }, knex, true)
             if (fehler) return res.status(400).json({ error: fehler })
             delete daten.art
+            // Symbol oder Watchlists gewechselt: der Alarm kann damit den Markt wechseln.
+            if (daten.symbol !== undefined || daten.watchlistIds !== undefined || daten.markt !== undefined) {
+                const markt = await bestimmeKlasse({
+                    symbol: daten.symbol ?? alt.symbol, markt: daten.markt ?? alt.markt,
+                    watchlistIds: daten.watchlistIds ?? alt.watchlistIds, art: alt.art,
+                }, knex)
+                if (markt.fehler) return res.status(400).json({ error: markt.fehler })
+                daten.anlageklasse = markt.klasse
+            }
             // Volumenprofil: Höhe und Signatur stammen vom Anlegen — ein Ändern von Dringlichkeit
             // oder Sperrfrist schickt sie nicht mit und darf sie nicht löschen.
             if (daten.bedingung && alt.art === 'linie') {

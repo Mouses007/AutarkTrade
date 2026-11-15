@@ -23,3 +23,16 @@ export async function ermittleMarkt() {
     if (da && Object.keys(da).length) return marktAus(da)
     try { return marktAus(await dbGetSettings()) } catch { return 'krypto' }
 }
+
+/**
+ * Der Markt als Filter für Listen: `krypto` | `aktien` — oder `''`, solange
+ * der Aktien-Teil aus ist. Dann wird nichts getrennt, und was im Aktien-Markt
+ * angelegt wurde, verschwindet nicht hinter einem Filter, den niemand sieht.
+ */
+export async function ermittleMarktFilter() {
+    let e = appEinstellungen.value
+    if (!e || !Object.keys(e).length) {
+        try { e = await dbGetSettings() } catch { return '' }
+    }
+    return istAktienAn(e) ? marktAus(e) : ''
+}

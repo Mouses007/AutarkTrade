@@ -11,6 +11,7 @@
  */
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { ladeStrategieMarkt, marktParams } from '../../../utils/strategien/markt.js'
 import { useI18n } from 'vue-i18n'
 import { Knopf, Pille, Hinweis } from '../../basis'
 import { apiFehlerText } from '../../../utils/apiError.js'
@@ -41,11 +42,14 @@ const strategieDa = (l) => l.strategieBekannt !== false && props.registry.strate
 const veraltet = (l) => Number(l.ruleVersion) > 0 && Number(l.currentRuleVersion) > 0
     && Number(l.ruleVersion) !== Number(l.currentRuleVersion)
 
+// Jeder Markt führt seine eigenen Läufe (`?markt=`); ohne Aktien-Teil kein Filter.
+let markt = {}
 async function laden() {
     try {
+        markt = marktParams((await ladeStrategieMarkt()).filter)
         const [bt, rl] = await Promise.all([
-            axios.get('/api/strategies/backtests', { params: { limit: 200 } }),
-            axios.get('/api/rangliste/laeufe').catch(() => ({ data: [] })),
+            axios.get('/api/strategies/backtests', { params: { limit: 200, ...markt } }),
+            axios.get('/api/rangliste/laeufe', { params: markt }).catch(() => ({ data: [] })),
         ])
         laeufe.value = bt.data
         ranglisten.value = rl.data || []
@@ -82,7 +86,8 @@ async function laufLoeschen(l) {
 
 async function alleLaeufeLoeschen() {
     try {
-        await axios.delete('/api/strategies/backtests?confirm=true')
+        // Nur die Läufe des Markts, den die Liste zeigt.
+        await axios.delete('/api/strategies/backtests', { params: { confirm: 'true', ...markt } })
         alleLoeschenFrage.value = false
         await laden()
     } catch (e) {

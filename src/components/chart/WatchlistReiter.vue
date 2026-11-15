@@ -25,6 +25,16 @@ const props = defineProps({
     watchlists: { type: Array, default: () => [] },
     aktivesSymbol: { type: String, default: '' },
     aktiverMarkt: { type: String, default: 'futures' },
+    /**
+     * Aktien-Markt: alle Schreibweisen des aktiven Titels (Bitget `NVDASTOCKUSDT`,
+     * sonst `NVDAUSDT`) — ein Eintrag kennt keine Börse und soll trotzdem als
+     * aktiv gelten. Leer = nur das aktive Symbol selbst (Krypto, wie bisher).
+     */
+    schreibweisen: { type: Array, default: () => [] },
+    /** Unter welchem Symbol der aktive Titel in die Liste kommt (Schreibweise der Marktdatenquelle); leer = das aktive Symbol. */
+    listenSymbol: { type: String, default: '' },
+    /** Aktien-Markt: Beschriftungen sprechen von Titeln statt von Coins. */
+    aktien: { type: Boolean, default: false },
 })
 const emit = defineEmits(['waehle', 'neuerTab', 'aendere', 'neu', 'loesche'])
 const { t } = useI18n()
@@ -43,7 +53,9 @@ const ABFRAGE_MS = 15_000
 
 const liste = computed(() => props.watchlists.find((w) => w.id === listeId.value) || props.watchlists[0] || null)
 const symbole = computed(() => liste.value?.symbole || [])
-const enthaeltAktives = computed(() => symbole.value.some((s) => s.symbol === props.aktivesSymbol && s.markt === props.aktiverMarkt))
+/** Zeigt der aktive Chart diesen Eintrag? */
+const istAktiv = (s) => s.markt === props.aktiverMarkt && (s.symbol === props.aktivesSymbol || props.schreibweisen.includes(s.symbol))
+const enthaeltAktives = computed(() => symbole.value.some(istAktiv))
 
 // Erst umstellen, wenn Listen da sind — die leere Liste vor dem Laden darf die gemerkte Wahl nicht löschen.
 watch(() => props.watchlists, (w) => {
@@ -130,7 +142,7 @@ function aenderung(s) {
 
 function fuegeHinzu() {
     if (!liste.value || enthaeltAktives.value) return
-    emit('aendere', liste.value.id, [...symbole.value, { symbol: props.aktivesSymbol, markt: props.aktiverMarkt }])
+    emit('aendere', liste.value.id, [...symbole.value, { symbol: props.listenSymbol || props.aktivesSymbol, markt: props.aktiverMarkt }])
 }
 
 /*
@@ -189,7 +201,7 @@ function loescheListe() {
         </button>
         <div class="zeilen">
             <div v-for="(s, i) in symbole" :key="s.markt + s.symbol" class="zeile"
-                :class="{ an: s.symbol === aktivesSymbol && s.markt === aktiverMarkt }" @click="emit('waehle', s)"
+                :class="{ an: istAktiv(s) }" @click="emit('waehle', s)"
                 @mousedown.middle.prevent @auxclick.middle.prevent="emit('neuerTab', s)">
                 <span class="sym"><span class="symName">{{ s.symbol }}<small v-if="s.markt === 'spot'"> Spot</small></span>
                     <span v-if="boersen(s).length" class="boersen">
@@ -207,9 +219,9 @@ function loescheListe() {
                     <button type="button" class="mini" :aria-label="t('common.remove')" :title="t('common.remove')" @click="entferne(s)"><Symbol name="schliessen" /></button>
                 </span>
             </div>
-            <div v-if="!symbole.length" class="leer">{{ t('chart.watchlistLeer') }}</div>
+            <div v-if="!symbole.length" class="leer">{{ t(aktien ? 'aktienTrennung.watchlistLeer' : 'chart.watchlistLeer') }}</div>
             <button type="button" class="coinHinzu" :class="{ an: sucheOffen }" :disabled="!liste" @click="oeffneSuche">
-                <Symbol :name="sucheOffen ? 'schliessen' : 'plus'" /> {{ t(sucheOffen ? 'chart.watchlistSucheZu' : 'chart.watchlistCoinHinzu') }}
+                <Symbol :name="sucheOffen ? 'schliessen' : 'plus'" /> {{ t(sucheOffen ? 'chart.watchlistSucheZu' : aktien ? 'aktienTrennung.titelHinzu' : 'chart.watchlistCoinHinzu') }}
             </button>
             <SymbolSuche ref="suche" ohne-knopf eingebettet @waehle="ausSuche" />
         </div>

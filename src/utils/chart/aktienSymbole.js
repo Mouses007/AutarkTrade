@@ -89,3 +89,59 @@ export function standardAktien(liste, boersen) {
         watchlist: (ziele.length ? ziele : [erstes]).map((z) => ({ symbol: z.symbol, markt: 'futures' })),
     }
 }
+
+/**
+ * Der Titel, der dieses Future-Symbol an IRGENDEINER Börse trägt — oder null
+ * (Coin, unbekannt, leerer Stamm). Ein Watchlist-Eintrag, ein offener Reiter
+ * und ein Alarm kennen nur das Symbol, nicht die Börse; Bitget schreibt
+ * gleichnamige Titel anders (`NVDASTOCKUSDT` statt `NVDAUSDT`).
+ */
+export function titelVon(liste, symbol) {
+    const s = String(symbol || '').toUpperCase()
+    if (!s) return null
+    return (liste || []).find((t) => Object.values(t.symbole || {}).includes(s)) || null
+}
+
+/** Alle Schreibweisen desselben Titels, das gefragte Symbol zuerst. Für einen Coin nur es selbst. */
+export function schreibweisen(liste, symbol) {
+    const s = String(symbol || '').toUpperCase()
+    const titel = titelVon(liste, s)
+    return [...new Set([s, ...Object.values(titel?.symbole || {})])].filter(Boolean)
+}
+
+/** Meinen zwei Symbole denselben Titel (oder dasselbe Symbol)? */
+export function gleicherTitel(liste, a, b) {
+    return !!a && !!b && schreibweisen(liste, a).includes(String(b).toUpperCase())
+}
+
+/**
+ * Was ein Panel lädt, wenn ein Symbol ohne Börse gewählt wird (Watchlist,
+ * offener Reiter, Alarm-Hinweis, offene Position): die Schreibweise der Börse
+ * des Panels. Führt diese Börse den Titel nicht, wechselt das Panel auf die
+ * erste wählbare Börse, die ihn führt (`boerse` im Ergebnis). Ein Symbol, das
+ * kein Aktien-Titel ist, bleibt, wie es ist.
+ *
+ * @param {object[]} liste        Ergebnis von `ladeAktienSymbole`
+ * @param {string} symbol         wie es im Eintrag steht
+ * @param {string} panelBoerse    Börse, aus der das Panel lädt (`boerseFuer`)
+ * @param {string[]} boersen      wählbare Börsen in Vorzugsreihenfolge
+ * @returns {{symbol: string, boerse?: string}}
+ */
+export function symbolFuerPanel(liste, symbol, panelBoerse, boersen) {
+    const s = String(symbol || '').toUpperCase()
+    const titel = titelVon(liste, s)
+    if (!titel) return { symbol: s }
+    if (titel.symbole[panelBoerse]) return { symbol: titel.symbole[panelBoerse] }
+    const ziel = symbolBei(titel, boersen)
+    return ziel ? { symbol: ziel.symbol, boerse: ziel.boerse } : { symbol: s }
+}
+
+/**
+ * Schreibweise für Watchlist und Reiter: die der Vorzugs-Börse (die
+ * Marktdatenquelle — von dort kommen die Kurse der Liste und die Alarme).
+ */
+export function listenSymbol(liste, symbol, boersen) {
+    const s = String(symbol || '').toUpperCase()
+    const titel = titelVon(liste, s)
+    return (titel && symbolBei(titel, boersen)?.symbol) || s
+}

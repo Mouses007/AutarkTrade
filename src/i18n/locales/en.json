@@ -8881,6 +8881,17 @@
       "minPruefe": "being checked …"
     }
   },
+  "aktienTrennung": {
+    "offenAndererMarkt": "In the {markt} market: {n} open position(s) – hidden here.",
+    "alarmAndererMarkt": "{markt} market",
+    "instanzenAndererMarkt": "in the {markt} market: {n}",
+    "flashNurKrypto": "Flash news searches for reports on crypto coins. For stocks, the stock page asks the same question (“What moved the price”).",
+    "flashZurTitelSeite": "Open the stock page for {ticker}",
+    "titelHinzu": "Add stock",
+    "reiterTitel": "Open stocks",
+    "reiterNeu": "Open stock in a new tab",
+    "watchlistLeer": "Still empty — use “Add stock” below or add the chart's symbol above."
+  },
   "markt": {
     "nurKrypto": "The market radar shows crypto data. The environment for stocks (index, VIX, sectors, rates) is under Research › Market conditions.",
     "umschalter": "Market",

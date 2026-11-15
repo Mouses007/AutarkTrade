@@ -12,8 +12,11 @@ export const OVERLAYS = [
     { id: 'journal', vorgabe: true },
     // Kosten Abrufe (Orderbuch alle 10 s, Gewicht 10) oder sind ein Modell —
     // deshalb ab Werk aus.
-    { id: 'liquidationen', vorgabe: false },
-    { id: 'hebelzonen', vorgabe: false },
+    // `nurKrypto`: bei einem Aktien-Future nicht angeboten und nicht gezeichnet. Die
+    // Liquidations-Aufzeichnung führt nur Coins, und geschätzte Hebelzonen sagen bei
+    // Aktien nichts (`docs/RECHERCHE-AKTIEN.md`) — Aktien sind keine umetikettierten Coins.
+    { id: 'liquidationen', vorgabe: false, nurKrypto: true },
+    { id: 'hebelzonen', vorgabe: false, nurKrypto: true },
     { id: 'orderbuch', vorgabe: false },
     // Nur Datenbank, kein Fremdabruf — deshalb ab Werk an.
     // Nur bei Aktien-Futures angeboten (`overlaysFuer`): Quartalszahlen als Marker,
@@ -22,9 +25,14 @@ export const OVERLAYS = [
     { id: 'sitzungen', vorgabe: true, nurAktien: true },
 ]
 
-/** Die Overlays, die ein Panel anbietet: die Aktien-Ebenen nur, wenn sein Symbol ein Aktien-Future ist. */
+/** Die Overlays, die ein Panel anbietet: die Aktien-Ebenen nur bei einem Aktien-Future, die Krypto-Ebenen nur bei einem Coin. */
 export function overlaysFuer(istAktie) {
-    return OVERLAYS.filter((o) => !o.nurAktien || istAktie)
+    return OVERLAYS.filter((o) => (istAktie ? !o.nurKrypto : !o.nurAktien))
+}
+
+/** Gilt dieses Overlay nur für Coins? Ein gespeichertes «an» zählt dann bei einem Aktien-Future nicht. */
+export function istNurKrypto(id) {
+    return OVERLAYS.find((o) => o.id === id)?.nurKrypto === true
 }
 
 export function overlayAn(panel, id) {

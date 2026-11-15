@@ -47,7 +47,7 @@ import { api, vorlagenInhalt, standardLayout, vervollstaendige, passeAnRaster, P
 import { passePanelAn, vorgabeBoerse, waehlbareBoersen, INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE, boerseFuer } from '../utils/chart/kerzenQuelle.js'
 import { ladeMarktdaten } from '../utils/marktdaten.js'
 import { ermittleMarkt } from '../stores/markt.js'
-import { ladeAktienSymbole, standardAktien, vorzug } from '../utils/chart/aktienSymbole.js'
+import { ladeAktienSymbole, standardAktien, vorzug, titelVon, schreibweisen, gleicherTitel, symbolFuerPanel, listenSymbol } from '../utils/chart/aktienSymbole.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
 import { incomingPollingActive } from '../stores/journal/offenePositionen.js'
 import { fuehreZusammen } from '../utils/chart/layoutZusammenfuehren.js'
@@ -270,6 +270,34 @@ const standVon = (id) => layouts.value.find((l) => l.id === id)?.geaendertAm
 
 /** Markt dieses Seitenaufrufs (krypto | aktien) — ein Wechsel lädt die Seite neu. */
 let chartMarkt = 'krypto'
+/*
+ * Aktien-Markt: die ladbaren Titel mit ihrem Symbol je Börse. Watchlist, offene
+ * Reiter und Alarme kennen nur ein Symbol, keine Börse — und Bitget schreibt
+ * gleichnamige Titel anders (`NVDASTOCKUSDT`). Mit dieser Liste lädt jedes Panel
+ * die Schreibweise SEINER Börse (`symbolFuerPanel`). Im Krypto-Markt bleibt sie
+ * leer, und alles läuft wie zuvor.
+ */
+const aktienTitel = ref([])
+// Für Beschriftungen («Titel» statt «Coin»); gesetzt, sobald der Markt des Seitenaufrufs feststeht.
+const imAktienMarkt = ref(false)
+const boersenVorzug = () => vorzug(vorgabeBoerse(), waehlbareBoersen())
+/** Meinen zwei Einträge (Symbol + Markt) denselben Coin bzw. denselben Titel? */
+function gleichesZiel(a, b) {
+    if (!a || !b || a.markt !== b.markt) return false
+    return a.symbol === b.symbol || (a.markt !== 'spot' && aktienTitel.value.length > 0 && gleicherTitel(aktienTitel.value, a.symbol, b.symbol))
+}
+/** Symbol eines Panels auf die Schreibweise seiner Börse bringen (nur Aktien-Markt, nur Futures). */
+function passeAktienSymbolAn(p, boerseFest = false) {
+    if (!p || p.markt === 'spot' || !aktienTitel.value.length) return
+    const ziel = symbolFuerPanel(aktienTitel.value, p.symbol, boerseFuer(p), boersenVorzug())
+    // Börse ausdrücklich gewählt, führt den Titel aber nicht: nichts verbiegen — der Chart sagt es selbst.
+    if (ziel.boerse && boerseFest) return
+    Object.assign(p, ziel)
+}
+// Für die Watchlist: alle Schreibweisen des aktiven Titels (Hervorhebung) und die, unter der er in die Liste kommt.
+const aktiveSchreibweisen = computed(() => (aktivesPanel.value?.markt === 'spot' ? [] : schreibweisen(aktienTitel.value, aktivesPanel.value?.symbol)))
+const aktivesListenSymbol = computed(() => (aktivesPanel.value?.markt === 'spot' || !aktienTitel.value.length
+    ? aktivesPanel.value?.symbol || '' : listenSymbol(aktienTitel.value, aktivesPanel.value?.symbol, boersenVorzug())))
 
 async function lade() {
     try {
@@ -277,8 +305,10 @@ async function lade() {
         await ladeMarktdaten()
         // Jeder Markt hat eigene Layouts und Watchlists; ein leerer Aktien-Chart startet mit Aktien.
         chartMarkt = await ermittleMarkt()
+        imAktienMarkt.value = chartMarkt === 'aktien'
+        if (chartMarkt === 'aktien') aktienTitel.value = await ladeAktienSymbole()
         const start = chartMarkt === 'aktien'
-            ? standardAktien(await ladeAktienSymbole(), vorzug(vorgabeBoerse(), waehlbareBoersen()))
+            ? standardAktien(aktienTitel.value, boersenVorzug())
             : { panel: undefined, watchlist: STANDARD_WATCHLIST }
         let liste = await api.layouts(chartMarkt)
         if (!liste.length) liste = [await api.layoutNeu(t('chart.layoutStandard'), standardLayout(start.panel), true, chartMarkt)]
@@ -336,14 +366,15 @@ const coinTabs = computed(() => {
     return Array.isArray(t) && t.length ? t : [{ symbol: aktivesPanel.value?.symbol || 'BTCUSDT', markt: aktivesPanel.value?.markt || 'futures' }]
 })
 const coinTabAktiv = computed(() => Math.min(Number(daten.value?.coinTabAktiv) || 0, coinTabs.value.length - 1))
-const tabName = (tab) => String(tab.symbol).replace(/USDT$/, '') + (tab.markt === 'spot' ? ' · Spot' : '')
+// Aktien-Titel heissen im Reiter nach ihrem Ticker — die Bitget-Schreibweise gäbe «NVDASTOCK».
+const tabName = (tab) => ((tab.markt !== 'spot' && titelVon(aktienTitel.value, tab.symbol)?.ticker) || String(tab.symbol).replace(/USDT$/, '')) + (tab.markt === 'spot' ? ' · Spot' : '')
 function setzeTabs(liste, aktiv) {
     daten.value.coinTabs = liste
     daten.value.coinTabAktiv = aktiv
 }
 function oeffneCoinTab(symbol, markt) {
     const liste = [...coinTabs.value]
-    let i = liste.findIndex((t) => t.symbol === symbol && t.markt === markt)
+    let i = liste.findIndex((t) => gleichesZiel(t, { symbol, markt }))
     if (i < 0) {
         liste.push({ symbol, markt })
         while (liste.length > COIN_TABS_MAX) liste.shift()
@@ -473,7 +504,7 @@ watch(() => [aktivesPanel.value?.symbol, aktivesPanel.value?.markt], ([symbol, m
     if (!symbol || !bereit.value) return
     if (neuerTabWartet) { neuerTabWartet = false; oeffneCoinTab(symbol, markt); return }
     const liste = [...coinTabs.value]
-    const i = liste.findIndex((t) => t.symbol === symbol && t.markt === markt)
+    const i = liste.findIndex((t) => gleichesZiel(t, { symbol, markt }))
     if (i >= 0) { if (i !== coinTabAktiv.value) daten.value.coinTabAktiv = i; return }
     liste[coinTabAktiv.value] = { symbol, markt }
     setzeTabs(liste, coinTabAktiv.value)
@@ -777,6 +808,8 @@ function setzePanel(patch) {
             ...(d.sync.interval && patch.interval ? { interval: patch.interval } : {}),
         }
         Object.assign(p, eigen)
+        // Aktien-Markt: jedes Panel lädt die Schreibweise seiner eigenen Börse.
+        if (patch.symbol || patch.boerse) passeAktienSymbolAn(p, i === aktivIndex.value && !!patch.boerse)
     }
 }
 
@@ -1312,7 +1345,7 @@ watch(sichtbareAnzahl, async () => {
                 @layout-neu="layoutNeu" @layout-umbenennen="layoutUmbenennen" @layout-loeschen="layoutLoeschen"
                 @seitenleiste="daten.seitenleiste.offen = !daten.seitenleiste.offen" @foto="foto" @teilen="teilenOffen = true" />
 
-            <div v-if="!vollbild" class="coinTabs" :class="{ zieht: tabZieht !== null }" role="tablist" :aria-label="t('chart.coinTabs.titel')"
+            <div v-if="!vollbild" class="coinTabs" :class="{ zieht: tabZieht !== null }" role="tablist" :aria-label="t(imAktienMarkt ? 'aktienTrennung.reiterTitel' : 'chart.coinTabs.titel')"
                 @touchmove="tabTouchBewegt">
                 <div v-for="(tab, i) in coinTabs" :key="tab.symbol + '|' + tab.markt" class="coinTab"
                     :class="{ an: i === coinTabAktiv, gezogen: i === tabZieht, zielVor: tabZieht !== null && i === tabZiel && i !== tabZieht && i !== tabZieht + 1,
@@ -1324,8 +1357,8 @@ watch(sichtbareAnzahl, async () => {
                     <button v-if="coinTabs.length > 1" type="button" class="coinTabZu" :title="t('chart.coinTabs.schliessen')"
                         :aria-label="t('chart.coinTabs.schliessen')" @click.stop="schliesseCoinTab(i)"><Symbol name="schliessen" /></button>
                 </div>
-                <button v-if="coinTabs.length < COIN_TABS_MAX" type="button" class="coinTabNeu" :title="t('chart.coinTabs.neu')"
-                    :aria-label="t('chart.coinTabs.neu')" @click="neuerCoinTab"><Symbol name="plus" /></button>
+                <button v-if="coinTabs.length < COIN_TABS_MAX" type="button" class="coinTabNeu" :title="t(imAktienMarkt ? 'aktienTrennung.reiterNeu' : 'chart.coinTabs.neu')"
+                    :aria-label="t(imAktienMarkt ? 'aktienTrennung.reiterNeu' : 'chart.coinTabs.neu')" @click="neuerCoinTab"><Symbol name="plus" /></button>
             </div>
 
             <!-- Alarm-Hinweis: zwei Wege — den Coin öffnen (Tab + Zeiteinheit) oder nur schliessen -->
@@ -1413,6 +1446,7 @@ watch(sichtbareAnzahl, async () => {
                         <aside v-if="schublade === 'favoriten'" class="schublade rechts" :aria-label="t('chart.schublade.favoriten')">
                             <div class="reiterTitel">{{ t('chart.schublade.favoriten') }}</div>
                             <WatchlistReiter :watchlists="watchlists" :aktives-symbol="aktivesPanel.symbol" :aktiver-markt="aktivesPanel.markt"
+                                :schreibweisen="aktiveSchreibweisen" :listen-symbol="aktivesListenSymbol" :aktien="imAktienMarkt"
                                 @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); schublade = null"
                                 @neuer-tab="(s) => coinInNeuemTab(s.symbol, s.markt)" @aendere="watchlistAendern"
                                 @neu="watchlistNeu" @loesche="watchlistLoeschen" />
@@ -1488,6 +1522,7 @@ watch(sichtbareAnzahl, async () => {
                     <div class="reiterTitel">{{ t('chart.reiter.' + daten.seitenleiste.reiter) }}</div>
                     <WatchlistReiter v-if="daten.seitenleiste.reiter === 'watchlist'" :watchlists="watchlists"
                         :aktives-symbol="aktivesPanel.symbol" :aktiver-markt="aktivesPanel.markt"
+                                :schreibweisen="aktiveSchreibweisen" :listen-symbol="aktivesListenSymbol" :aktien="imAktienMarkt"
                         @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); mobilReiter = null"
                         @neuer-tab="(s) => coinInNeuemTab(s.symbol, s.markt)" @aendere="watchlistAendern"
                         @neu="watchlistNeu" @loesche="watchlistLoeschen" />
@@ -1500,7 +1535,7 @@ watch(sichtbareAnzahl, async () => {
                         @aendere="(z, patch) => zeichnungAendern(z.symbol, z.id, patch)"
                         @loesche="(z) => zeichnungLoeschen(z.symbol, z.id)" />
                     <FlashNewsReiter v-else-if="daten.seitenleiste.reiter === 'news'" :panel="aktivesPanel" />
-                    <AlarmReiter v-else-if="daten.seitenleiste.reiter === 'alarme'" :symbol="aktivesPanel.symbol"
+                    <AlarmReiter v-else-if="daten.seitenleiste.reiter === 'alarme'" :symbol="aktivesPanel.symbol" :schreibweisen="aktiveSchreibweisen"
                         :markt="aktivesPanel.markt" :kurs="aktuellerKurs" :watchlists="watchlists"
                         @neu="alarmBeiPreis" @neu-momentum="alarmMomentum" @neu-lsob="alarmLsob()" @bearbeite="alarmBearbeiten" />
                     <KiReiter v-else-if="daten.seitenleiste.reiter === 'ki'" :panel="aktivesPanel"
