@@ -10,7 +10,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { anzeige } from '@/utils/journal/zeit.js'
+import dayjs, { anzeige } from '@/utils/journal/zeit.js'
 import { logWarn } from '@/utils/logger.js'
 import { Symbol, Knopf } from '@/components/basis'
 
@@ -92,7 +92,7 @@ async function archiviereGewaehlte() {
 }
 
 function datum(wert) {
-    return wert ? anzeige(wert).format('DD.MM.YYYY HH:mm') : ''
+    return wert ? anzeige(dayjs(wert)).format('DD.MM.YYYY HH:mm') : ''
 }
 
 onMounted(lade)
