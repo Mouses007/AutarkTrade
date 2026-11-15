@@ -24,7 +24,7 @@ import Dialog from '../basis/Dialog.vue'
 import Knopf from '../basis/Knopf.vue'
 import Hinweis from '../basis/Hinweis.vue'
 import Kreisel from '../basis/Kreisel.vue'
-import { rechneKaufzettel, zettelHinweise, zettelText, istSpot, GEBUEHR_VORGABE } from '../../../shared/kaufzettel.js'
+import { rechneKaufzettel, zettelHinweise, zettelText, istSpot, wartungsmargeAusHebel, GEBUEHR_VORGABE } from '../../../shared/kaufzettel.js'
 import { aktienHandelsUrl } from '../../utils/boersenLinks.js'
 
 const props = defineProps({
@@ -55,18 +55,28 @@ const listungen = computed(() => [...(daten.value?.titel?.listungen || [])]
     .sort((a, b) => RANG[a.art] - RANG[b.art] || a.handelsplatz.localeCompare(b.handelsplatz)))
 const schluessel = (l) => `${l.handelsplatz}|${l.art}|${l.symbol}`
 
+/**
+ * Lädt den Titel EINMAL je Ticker. Hängt nur an `offen` und `ticker` — nie an
+ * `listungen`: das ist ein `computed` über `geladen` und liefert nach jedem
+ * Laden ein neues Array, der Zettel lud darum in einer Endlosschleife
+ * (Audit 15.11.2026, FUN-F-001).
+ */
 async function ladeTitel() {
-    if (props.seite || laedt.value) return
+    if (props.seite || laedt.value || geladen.value) return
+    const fuer = props.ticker
     laedt.value = true
     ladeFehler.value = ''
     try {
-        const { data } = await axios.get(`/api/aktien/titel/${encodeURIComponent(props.ticker)}`, { timeout: 40000 })
+        const { data } = await axios.get(`/api/aktien/titel/${encodeURIComponent(fuer)}`, { timeout: 40000 })
+        if (fuer !== props.ticker) return
         if (data?.ok) geladen.value = data
         else ladeFehler.value = t('kaufzettel.ladeFehler')
     } catch (e) {
-        ladeFehler.value = e.response?.data?.error || e.message
+        if (fuer === props.ticker) ladeFehler.value = e.response?.data?.error || e.message
     } finally {
         laedt.value = false
+        // Der Ticker hat während des Ladens gewechselt: die Antwort gehörte zum alten.
+        if (fuer !== props.ticker && offen.value) ladeTitel()
     }
 }
 
@@ -85,6 +95,7 @@ const einheit = ref(m.einheit === 'prozent' ? 'prozent' : 'usdt')
 const konto = ref(Number(m.konto) > 0 ? Number(m.konto) : '')
 const hebel = ref(Number(m.hebel) >= 1 ? Number(m.hebel) : 3)
 const gebuehr = ref(GEBUEHR_VORGABE.perp)
+const mmrPct = ref(2.5)
 const kopiert = ref(false)
 
 const listung = computed(() => listungen.value.find((l) => schluessel(l) === platz.value) || null)
@@ -97,24 +108,24 @@ const kursPasst = computed(() => kurs.value != null && !!listung.value
 function belegeVor() {
     if (!listung.value) return
     gebuehr.value = GEBUEHR_VORGABE[listung.value.art] ?? GEBUEHR_VORGABE.perp
+    mmrPct.value = Number((wartungsmargeAusHebel(listung.value.maxHebel) * 100).toFixed(2))
     if (spot.value) richtung.value = 'long'
     else if (listung.value.maxHebel && hebel.value > listung.value.maxHebel) hebel.value = listung.value.maxHebel
     // Kurs einer anderen Währung wäre eine falsche Vorbelegung — dann lieber leer.
     einstieg.value = kursPasst.value ? Number(kurs.value) : ''
 }
 
+watch(() => props.ticker, () => { geladen.value = null; ladeFehler.value = ''; platz.value = ''; stop.value = ''; ziel.value = '' })
+watch([offen, () => props.ticker], ([auf]) => { if (auf) ladeTitel() }, { immediate: true })
+// Vorbelegung, sobald Listungen da sind — lädt nichts.
 watch([offen, listungen], ([auf]) => {
-    if (!auf) return
-    ladeTitel()
-    if (!listung.value && listungen.value.length) {
-        platz.value = schluessel(listungen.value[0])
-        stop.value = ''
-        ziel.value = ''
-        belegeVor()
-    }
+    if (!auf || listung.value || !listungen.value.length) return
+    platz.value = schluessel(listungen.value[0])
+    stop.value = ''
+    ziel.value = ''
+    belegeVor()
 }, { immediate: true })
 watch(platz, belegeVor)
-watch(() => props.ticker, () => { geladen.value = null; platz.value = ''; stop.value = ''; ziel.value = '' })
 watch([betrag, einheit, konto, hebel], () => {
     try { localStorage.setItem(MERK, JSON.stringify({ betrag: betrag.value, einheit: einheit.value, konto: konto.value, hebel: hebel.value })) } catch { /* privater Modus */ }
 })
@@ -124,7 +135,7 @@ const r = computed(() => rechneKaufzettel({
     art: listung.value?.art, richtung: richtung.value,
     einstieg: einstieg.value, stop: stop.value, ziel: ziel.value,
     betrag: betrag.value, einheit: einheit.value, konto: konto.value,
-    hebel: hebel.value, maxHebel: listung.value?.maxHebel, gebuehrPct: gebuehr.value,
+    hebel: hebel.value, maxHebel: listung.value?.maxHebel, gebuehrPct: gebuehr.value, mmrPct: mmrPct.value,
 }))
 // Leere Pflichtfelder sind kein Fehler, den man anschreien muss — nur falsche Eingaben.
 const LEISE = ['einstiegFehlt', 'stopFehlt', 'betragFehlt']
@@ -255,6 +266,10 @@ async function kopiere() {
                     <span>{{ t('kaufzettel.gebuehr') }}</span>
                     <input v-model.number="gebuehr" type="number" min="0" max="1" step="0.01" class="at-feld">
                 </label>
+                <label v-if="!spot" class="feld" :title="t('kaufzettel.wartungsmargeTipp')">
+                    <span>{{ t('kaufzettel.wartungsmarge') }}</span>
+                    <input v-model.number="mmrPct" type="number" min="0.05" max="50" step="0.05" class="at-feld">
+                </label>
             </div>
 
             <p v-if="einstieg !== '' && kursPasst" class="klein">{{ t('kaufzettel.kursVorbelegt', { kurs: preis(kurs) }) }}</p>
@@ -269,7 +284,7 @@ async function kopiere() {
                 <div><dt>{{ t('kaufzettel.verlustStop') }}</dt><dd class="ab">{{ geld(r.verlustStop) }}<small>{{ prozent(r.stopPct) }}<template v-if="r.kontoRisikoPct != null"> · {{ t('kaufzettel.vomKonto', { pct: zahl(r.kontoRisikoPct, 2) }) }}</template></small></dd></div>
                 <div><dt>{{ t('kaufzettel.gewinnZiel') }}</dt><dd :class="{ auf: r.gewinnZiel > 0 }">{{ r.gewinnZiel == null ? '—' : geld(r.gewinnZiel) }}<small v-if="r.zielPct != null">{{ prozent(r.zielPct) }}</small></dd></div>
                 <div><dt>{{ t('kaufzettel.rr') }}</dt><dd>{{ r.rr == null ? '—' : `1 : ${zahl(r.rr, 2)}` }}</dd></div>
-                <div v-if="!r.spot"><dt>{{ t('kaufzettel.liq') }}</dt><dd :class="{ ab: r.liqVorStop }">{{ preis(r.liq) }}<small>{{ t('kaufzettel.liqAnnahme') }}</small></dd></div>
+                <div v-if="!r.spot"><dt>{{ t('kaufzettel.liq') }}</dt><dd :class="{ ab: r.liqVorStop }">{{ preis(r.liq) }}<small>{{ t('kaufzettel.liqAnnahme', { mmr: zahl(r.mmrPct, 2) }) }}</small></dd></div>
             </dl>
             <p v-else-if="!fehler.length" class="klein">{{ t('kaufzettel.eingabenFehlen') }}</p>
 

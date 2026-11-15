@@ -571,7 +571,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         partialTpPct: p.partialTpPct,
         // Wartungsmarge je Symbol (0 in der Instanz = von der Börse holen),
         // damit Papierbetrieb und Backtest denselben Liquidationspreis rechnen.
-        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie) }),
+        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: instance.risk.leverage }),
     })
 
     // ── 2. Erkennen ──────────────────────────────────────────────────────
@@ -1156,7 +1156,7 @@ async function pflegeOffenePositionen() {
                 maxHoldMs: ((instance.params.maxHoldCandles ?? regeln?.maxHoldCandles ?? 0) || 0) * timeframeMs(pflegeTf),
                 partialTpR: instance.params.partialTpR,
                 partialTpPct: instance.params.partialTpPct,
-                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie) }),
+                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: instance.risk.leverage }),
             })
         } catch (e) {
             // Ohne Marktdaten steht es schon einmal bei der Instanz im Log (`ausGemeldet`).

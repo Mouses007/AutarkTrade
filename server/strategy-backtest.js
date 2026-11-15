@@ -383,7 +383,7 @@ export async function runBacktest(opts) {
     // Wartungsmarge je Symbol von der Börse, sofern nicht bewusst überschrieben.
     // Eine Pauschale für alle Coins liess Alt-Coin-Positionen im Backtest weit
     // über den Punkt hinaus laufen, an dem die Börse geschlossen hätte.
-    const { pct: wartungsmargePct, quelle: wartungsmargeQuelle } = await wartungsmargeMitQuelle(symbol, risk.maintenanceMarginPct, { aktie: Boolean(aktie) })
+    const { pct: wartungsmargePct, quelle: wartungsmargeQuelle } = await wartungsmargeMitQuelle(symbol, risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: risk.leverage })
     // Zeitausstieg in Millisekunden — der Detector zählt in Kerzen
     // Regelstrategien tragen Break-Even/Zeitausstieg in der Regelwurzel —
     // dieselbe Auflösung wie in der Engine, sonst schliesst der Papierbetrieb

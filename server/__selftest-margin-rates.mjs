@@ -14,7 +14,7 @@
  */
 import { readFileSync } from 'node:fs'
 import axios from 'axios'
-import { parseBinanceKlammern, parseBybitRisikolimit, holeMarginRate, MMR_VORGABE } from './margin-rates.js'
+import { parseBinanceKlammern, parseBybitRisikolimit, holeMarginRate, wartungsmargeMitQuelle, MMR_VORGABE } from './margin-rates.js'
 import { _setzeLeser } from './quellen/freigabe.js'
 import { BAPI_KLAMMERN_URL } from './marktdaten/binance.js'
 
@@ -160,6 +160,21 @@ _setzeLeser(async () => true)
     const e = await holeMarginRate('SOLUSDT', 'binance')
     pruefe('an: unbekannt bei Binance → Bybit als Ersatz', e?.quelle === 'bybit' && e?.ersatz === true)
     pruefe('an: Tabelle gecacht (kein zweiter bapi-Abruf)', abrufe.filter(u => u === BAPI_KLAMMERN_URL).length === 1)
+}
+
+// ── Aktien-Future: Wartungsmarge nie über der halben Anfangsmarge des Hebels (FUN-H-002) ──
+{
+    // Die Attrappe von oben nennt für jedes Symbol 0,5 % («boerse»).
+    const ohne = await wartungsmargeMitQuelle('NVDAUSDT', 0, { aktie: true })
+    pruefe('Aktie ohne Hebel: Satz der Börse', ohne.pct === 0.5 && ohne.quelle === 'boerse', JSON.stringify(ohne))
+    const klein = await wartungsmargeMitQuelle('NVDAUSDT', 0, { aktie: true, hebel: 50 })
+    pruefe('Aktie 50×: 0,5 % liegt unter 1 % — bleibt', klein.pct === 0.5 && klein.quelle === 'boerse')
+    const gross = await wartungsmargeMitQuelle('NVDAUSDT', 0, { aktie: true, hebel: 200 })
+    pruefe('Aktie 200×: 0,25 % aus dem Hebel', gross.pct === 0.25 && gross.quelle === 'ausHebel', JSON.stringify(gross))
+    const eigen = await wartungsmargeMitQuelle('NVDAUSDT', 2.5, { aktie: true, hebel: 200 })
+    pruefe('eigene Vorgabe wird nicht gedeckelt', eigen.pct === 2.5 && eigen.quelle === 'vorgabe')
+    const coin = await wartungsmargeMitQuelle('BTCUSDT', 0, { hebel: 200 })
+    pruefe('Krypto: Hebel ändert nichts', coin.pct === 0.4 && coin.quelle === 'boerse', JSON.stringify(coin))
 }
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)

@@ -1,7 +1,7 @@
 /** Selbsttest: Kaufzettel (shared/kaufzettel.js). */
 // Die Tage bis zum Zahlentermin zählen in Ortszeit — fest, damit der Test überall gleich läuft.
 process.env.TZ = 'Europe/Zurich'
-import { rechneKaufzettel, zettelHinweise, zettelText, GEBUEHR_VORGABE } from './kaufzettel.js'
+import { rechneKaufzettel, zettelHinweise, zettelText, wartungsmargeAusHebel, GEBUEHR_VORGABE } from './kaufzettel.js'
 
 let ok = 0, fehler = 0
 const pruefe = (text, bedingung, detail = '') => {
@@ -36,6 +36,25 @@ const nah = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(
     pruefe('… auch Short', s.liqVorStop)
     const u = rechneKaufzettel({ art: 'perp', richtung: 'long', einstieg: 100, stop: 95, betrag: 50, hebel: 50 })
     pruefe('Hebel, den die Wartungsmarge nicht trägt', u.liqVorStop)
+}
+// --- Wartungsmarge je Handelsplatz (Audit 15.11.2026, FUN-H-002) --------------------
+{
+    pruefe('ohne Hebelgrenze 2,5 %', wartungsmargeAusHebel() === 0.025 && wartungsmargeAusHebel(0) === 0.025)
+    pruefe('kleiner Hebel bleibt bei 2,5 %', wartungsmargeAusHebel(10) === 0.025 && wartungsmargeAusHebel(20) === 0.025)
+    pruefe('50× → 1 %, 100× → 0,5 %', nah(wartungsmargeAusHebel(50), 0.01) && nah(wartungsmargeAusHebel(100), 0.005))
+    // Der Fall aus dem Audit: Long 200, Stop 198, 30× an einem Platz mit 50×
+    const basis = { art: 'perp', richtung: 'long', einstieg: 200, stop: 198, betrag: 50 }
+    const alt = rechneKaufzettel({ ...basis, hebel: 30 })
+    pruefe('ohne Listung: 30× warnt weiter (2,5 %)', alt.liqVorStop && nah(alt.mmrPct, 2.5))
+    const bitunix = rechneKaufzettel({ ...basis, hebel: 30, maxHebel: 50 })
+    pruefe('Platz mit 50×: 30× ohne Liquidations-Warnung', bitunix.ok && !bitunix.liqVorStop && nah(bitunix.mmrPct, 1) && bitunix.liq < 198, `liq ${bitunix.liq}`)
+    const voll = rechneKaufzettel({ ...basis, hebel: 50, maxHebel: 50 })
+    pruefe('50× am 50×-Platz: Liquidation rund 1 % unter dem Einstieg, nicht darauf', voll.liq < 198.5 && voll.liq > 197.5, `liq ${voll.liq}`)
+    const eigen = rechneKaufzettel({ ...basis, hebel: 30, maxHebel: 50, mmrPct: 2.5 })
+    pruefe('eigene Wartungsmarge schlägt die Schätzung', eigen.liqVorStop && nah(eigen.mmrPct, 2.5))
+    pruefe('leeres/ungültiges Feld = Schätzung', nah(rechneKaufzettel({ ...basis, hebel: 30, maxHebel: 50, mmrPct: '' }).mmrPct, 1)
+        && nah(rechneKaufzettel({ ...basis, hebel: 30, maxHebel: 50, mmrPct: -1 }).mmrPct, 1))
+    pruefe('Spot ohne Wartungsmarge', rechneKaufzettel({ art: 'token-spot', richtung: 'long', einstieg: 100, stop: 90, betrag: 50 }).mmrPct === null)
 }
 // --- Spot ---------------------------------------------------------------------------
 {

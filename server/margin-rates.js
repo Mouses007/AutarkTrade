@@ -302,11 +302,23 @@ export async function wartungsmargePctFuer(symbol, override = 0, opt = {}) {
 
 /**
  * Wartungsmarge mit ihrer Herkunft: `vorgabe` (aus dem Formular), `boerse`
- * (abgerufen) oder `pauschal` (Abruf gescheitert, Rückfall). Bis 01.11.2026
+ * (abgerufen), `pauschal`/`pauschalAktie` (Abruf gescheitert, Rückfall) oder
+ * `ausHebel` (Aktien-Future, aus dem Hebel der Instanz gedeckelt). Bis 01.11.2026
  * stand im Backtest auch beim Rückfall „boerse" — eine Annahme, die sich als
  * Messung ausgab.
  */
-export async function wartungsmargeMitQuelle(symbol, override = 0, { aktie = false } = {}) {
+export async function wartungsmargeMitQuelle(symbol, override = 0, { aktie = false, hebel = 0 } = {}) {
+    const r = await wartungsmargeRoh(symbol, override, aktie)
+    // Aktien-Future: der abgerufene Satz ist der von Binance (2,5 %), gehandelt
+    // wird aber bei Bitunix/Bitget mit bis zu 50×/100×. Wer mit Hebel L handelt,
+    // sitzt an einem Platz, der L zulässt — dessen Wartungsmarge liegt unter der
+    // Anfangsmarge 1/L, üblich bei der Hälfte. Ohne diese Grenze war jede
+    // Aktien-Position ab 40× sofort liquidiert (Audit 15.11.2026, FUN-H-002).
+    const grenze = aktie && Number(hebel) >= 1 ? 50 / Number(hebel) : Infinity
+    return r.quelle !== 'vorgabe' && r.pct > grenze ? { pct: grenze, quelle: 'ausHebel' } : r
+}
+
+async function wartungsmargeRoh(symbol, override, aktie) {
     const eigen = Number(override)
     if (Number.isFinite(eigen) && eigen > 0) return { pct: eigen, quelle: 'vorgabe' }
     try {

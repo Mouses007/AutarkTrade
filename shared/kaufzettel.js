@@ -13,14 +13,30 @@
  *     ist ein Fehler, keine stille Umdeutung,
  *   - Spot (`token-spot`, `broker-spot`) hat keinen Hebel und kein Short —
  *     Marge = Nominalwert, keine Liquidation,
- *   - Aktien-Futures rechnen mit 2,5 % Wartungsmarge, solange die Börse
- *     nichts Genaueres nennt (wie `MMR_VORGABE_AKTIEN` in `server/margin-rates.js`).
+ *   - die Wartungsmarge eines Aktien-Futures hängt am Handelsplatz: höchstens
+ *     2,5 % (Binance, `MMR_VORGABE_AKTIEN` in `server/margin-rates.js`), und nie
+ *     mehr als der halbe Kehrwert des erlaubten Hebels (`wartungsmargeAusHebel`).
+ *     Das ist eine Schätzung — der Zettel zeigt sie als änderbares Feld.
  */
 import { rechnePosition, MAX_HEBEL } from './tradeRechner.js'
 import { sitzungVon } from './aktien-sitzung.js'
 
 export const ARTEN = ['perp', 'token-spot', 'broker-spot']
 export const MMR_AKTIEN_FUTURE = 0.025
+
+/**
+ * Geschätzte Wartungsmarge (Bruch) eines Aktien-Futures aus dem höchsten Hebel,
+ * den der Platz zulässt. Eine Börse mit 50× verlangt 2 % Anfangsmarge — ihre
+ * Wartungsmarge muss darunter liegen; üblich ist die Hälfte (0,5 / Hebel).
+ * Bis 15.11.2026 galten 2,5 % für jeden Platz: bei Bitunix (50×) und Bitget
+ * (100×) meldete der Zettel ab 40× «Liquidation = Einstieg» (Audit FUN-H-002).
+ *
+ * @param {number} [maxHebel]  ohne Angabe bleibt es bei 2,5 %
+ */
+export function wartungsmargeAusHebel(maxHebel) {
+    const h = Number(maxHebel)
+    return h >= 1 ? Math.min(MMR_AKTIEN_FUTURE, 0.5 / h) : MMR_AKTIEN_FUTURE
+}
 /** Taker-Gebühr je Seite in Prozent, als Vorbelegung. Spot ist eine Annahme — das Feld bleibt änderbar. */
 export const GEBUEHR_VORGABE = { perp: 0.06, 'token-spot': 0.1, 'broker-spot': 0.1 }
 export const ZAHLEN_VORLAUF_TAGE = 2
@@ -51,6 +67,7 @@ const zahl = (v) => {
  * @param {number} [o.hebel]         nur Futures
  * @param {number} [o.maxHebel]      Grenze der Listung, falls bekannt
  * @param {number} [o.gebuehrPct]    je Seite, in Prozent
+ * @param {number} [o.mmrPct]        Wartungsmarge in Prozent; leer = Schätzung aus `maxHebel`
  * @returns {{ok: boolean, fehler: string[], warnungen: string[], spot: boolean, richtung: string, hebel: number,
  *            menge?: number, nominal?: number, marge?: number, verlustStop?: number, gewinnZiel?: number|null,
  *            rr?: number|null, liq?: number|null, liqVorStop?: boolean, stopPct?: number, zielPct?: number|null,
@@ -83,10 +100,12 @@ export function rechneKaufzettel(o = {}) {
 
     const gebuehrPct = o.gebuehrPct === '' || o.gebuehrPct == null || !Number.isFinite(Number(o.gebuehrPct)) || Number(o.gebuehrPct) < 0
         ? GEBUEHR_VORGABE[art] : Number(o.gebuehrPct)
+    const mmrEigen = o.mmrPct === '' || o.mmrPct == null ? NaN : Number(o.mmrPct)
+    const mmr = mmrEigen > 0 && mmrEigen < 100 ? mmrEigen / 100 : wartungsmargeAusHebel(maxHebel)
     const r = rechnePosition({
         einstieg: e, stop: s, ziel: z,
         eingabe: { modus: 'risiko', betrag: zahl(o.betrag), einheit, hebel, konto: zahl(o.konto), gebuehrPct },
-        mmr: spot ? 0 : MMR_AKTIEN_FUTURE,
+        mmr: spot ? 0 : mmr,
     })
     // Spot: wer ohne Kredit kauft, wird nicht liquidiert.
     const liqVorStop = !spot && r.liqVorStop
@@ -101,7 +120,7 @@ export function rechneKaufzettel(o = {}) {
         liq: spot ? null : r.liq, liqVorStop,
         stopPct: r.stopPct, zielPct: r.zielPct,
         kontoRisikoPct: r.kontoRisikoPct, margeKontoPct: r.margeKontoPct,
-        gebuehrPct,
+        gebuehrPct, mmrPct: spot ? null : mmr * 100,
     }
 }
 
