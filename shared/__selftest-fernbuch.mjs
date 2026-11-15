@@ -9,7 +9,7 @@
  * seit" bricht an einer Aufnahmelücke ab, statt über sie hinweg zu behaupten.
  */
 import {
-    fernSchritt, fernFrame, summiereFrames, spaltenAus, profilAus, viertelAus, anzeigeStufe,
+    fernSchritt, fernFrame, summiereFrames, spaltenAus, haengeSpaltenAn, profilAus, viertelAus, anzeigeStufe,
     mischeFrames, kodiereStunde, dekodiereStunde, runde, FERN_FRAME_MS,
 } from './fernBuch.js'
 import { pruefeBuchkarteAnfrage } from '../server/chart-buchkarte.js'
@@ -72,6 +72,27 @@ const fr = (t, b, a = [], s = 50, extra = {}) => ({ t, s, mid: 64_000, seit: 0, 
     check('Viertel: gewichtet ergibt dieselbe Stundenspalte', ausViertel[0].z.find(([z]) => z === 1200)[1] === 1000 && Math.abs(b2 - b) < 0.05, `${b2}`)
     const gemischt = spaltenAus([...v.slice(0, 3), ...frames.slice(45)], { ivMs: 3_600_000, stufe: 50 })
     check('Viertel + Minuten gemischt: Gewichte stimmen', Math.abs(gemischt[0].z.find(([z]) => z === 1100)[1] - b) < 0.05)
+}
+{
+    // RUK-01: Stunde 13 mit Viertelmengen 100/100/100/10, Stunde 14 läuft. Der Browser lädt ab 14:00 nach,
+    // die Route liest ein Viertel Vorlauf (13:45) mit — daraus darf keine Spalte 13:00 mit Menge 10 werden.
+    const H = 3_600_000, Q = 900_000
+    const vf = [0, 1, 2, 3].map((i) => ({ t: 13 * H + i * Q, s: 50, w: 15, b: [[1200, i === 3 ? 10 : 100]], a: [] }))
+        .concat([{ t: 14 * H, s: 50, w: 1, b: [[1200, 10]], a: [] }])
+    const voll = spaltenAus(vf, { ivMs: H, stufe: 50 })
+    const von = 14 * H
+    const vorlauf = vf.filter((f) => f.t >= von - Q)
+    const roh = spaltenAus(vorlauf, { ivMs: H, stufe: 50 })
+    const sauber = spaltenAus(vorlauf, { ivMs: H, stufe: 50, ab: Math.floor(von / H) * H })
+    const menge = (liste, t) => liste.find((sp) => sp.t === t)?.z[0][1]
+    check('Nachladen: volle Stunde 13 = 77.5', menge(voll, 13 * H) === 77.5, menge(voll, 13 * H))
+    check('Nachladen: Server gibt mit `ab` keine Spalte vor `von` aus', sauber.length === 1 && sauber[0].t === von, JSON.stringify(sauber.map((x) => x.t)))
+    check('Nachladen: Browser behält die fertige Spalte auch gegen eine Teilspalte (77.5 statt 10)',
+        menge(roh, 13 * H) === 10 && menge(haengeSpaltenAn(voll, roh, von), 13 * H) === 77.5)
+    const neu = haengeSpaltenAn(voll, [{ t: 14 * H, z: [[1200, 30]] }, { t: 15 * H, z: [[1200, 40]] }], von)
+    check('Nachladen: laufende Spalte ersetzt, neue angehängt', neu.length === 3 && menge(neu, 14 * H) === 30 && menge(neu, 15 * H) === 40)
+    check('Nachladen: leere Antwort lässt alles stehen', haengeSpaltenAn(voll, [], von).length === 2)
+    check('Nachladen: erstes Laden (ohne `von`) übernimmt alles', haengeSpaltenAn([], voll, undefined).length === 2)
 }
 check('Anzeigestufe: 25 000 USD Spanne, Schritt 50, ≤ 300 Zeilen → 100', anzeigeStufe(25_000, 50, 300) === 100, anzeigeStufe(25_000, 50, 300))
 check('Anzeigestufe: nie feiner als der Schritt', anzeigeStufe(100, 50, 300) === 50)

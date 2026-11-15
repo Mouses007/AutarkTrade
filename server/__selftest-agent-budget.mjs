@@ -84,6 +84,57 @@ const basis = { provider: 'anthropic', model: 'attrappe', maxTokens: AGENT_MIN_T
     p('kein Verweis auf die Einstellungen', !/Einstellung/i.test(r.answer), r.answer)
 }
 
+{   // RUK-03: der Wiederholungsabruf scheitert (z. B. 400, Ausgabegrenze des Modells) → Meldung statt Fehler
+    let n = 0
+    const ereignisse = []
+    const r = await runAgentLoop('Frage', [], {
+        ...basis,
+        rufeModell: async () => { n++; if (n === 1) return { text: '', toolCalls: [], usage }; throw new Error('HTTP 400 max_tokens') },
+    }, (e) => ereignisse.push(e)).catch((e) => ({ fehler: e.message }))
+    p('Wiederholung scheitert: kein Fehler nach aussen', !r.fehler, JSON.stringify(r).slice(0, 160))
+    p('Wiederholung scheitert: Meldung «keinen Text geliefert»', /keinen Text geliefert/.test(r.answer || '') && ereignisse.some((e) => e.type === 'answer'), r.answer)
+    p('Wiederholung scheitert: kein weiterer Abruf', n === 2, String(n))
+    // Gegenprobe: scheitert ein späterer Abruf (nach gelungener Wiederholung mit Werkzeug), bleibt es ein Fehler
+    let m = 0
+    const g = await runAgentLoop('Frage', [], {
+        ...basis,
+        rufeModell: async () => {
+            m++
+            if (m === 1) return { text: '', toolCalls: [], usage }
+            if (m === 2) return { text: '', toolCalls: [{ id: 'a', name: 'gibt_es_nicht', params: {} }], usage }
+            throw new Error('Anbieter 500')
+        },
+    }, () => {}).catch((e) => ({ fehler: e.message }))
+    p('Fehler nach gelungener Wiederholung wird weitergereicht', g.fehler === 'Anbieter 500', JSON.stringify(g).slice(0, 160))
+}
+
+{   // RUK-07: leere Antwort in der letzten Runde → Meldung, kein Abschlussabruf, kein «Token-Budget erreicht»
+    let n = 0
+    const ohneTools = []
+    const r = await runAgentLoop('Frage', [], {
+        ...basis,
+        rufeModell: async (_m, c) => {
+            n++
+            if (c.ohneTools) ohneTools.push(n)
+            return n < 10 ? { text: '', toolCalls: [{ id: 'w' + n, name: 'gibt_es_nicht', params: {} }], usage } : { text: '', toolCalls: [], usage }
+        },
+    }, () => {})
+    p('letzte Runde leer: genau zehn Abrufe, kein Abschlussabruf', n === 10 && ohneTools.length === 0, `${n} / ${ohneTools.length}`)
+    p('letzte Runde leer: Meldung «keinen Text geliefert»', /keinen Text geliefert/.test(r.answer), r.answer)
+    p('letzte Runde leer: weder «Token-Budget» noch «erhöhter Antwortlänge»', !/Token-Budget|erhöhter/.test(r.answer), r.answer)
+    // Gegenprobe: zehn Runden nur Werkzeuge → der Abschlussabruf bleibt
+    let k = 0, abschluss = 0
+    const z = await runAgentLoop('Frage', [], {
+        ...basis,
+        rufeModell: async (_m, c) => {
+            k++
+            if (c.ohneTools) { abschluss++; return { text: 'Zusammenfassung', toolCalls: [], usage } }
+            return { text: '', toolCalls: [{ id: 'w' + k, name: 'gibt_es_nicht', params: {} }], usage }
+        },
+    }, () => {})
+    p('zehn Werkzeugrunden: Abschlussabruf bleibt', abschluss === 1 && z.answer === 'Zusammenfassung', `${abschluss} ${z.answer}`)
+}
+
 {   // Eine höher eingestellte Antwortlänge wird nicht gesenkt
     const aufrufe = []
     await runAgentLoop('Frage', [], {

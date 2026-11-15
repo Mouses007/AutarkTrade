@@ -102,12 +102,16 @@ export function anzeigeStufe(spanne, schritt, zeilen = 160) {
  * eine, die die ganze Stunde stand, kräftig — und auf `stufe` bündeln. Bids
  * und Asks zusammen: die Seite ergibt sich aus der Lage zum Kurs.
  * Nur Zonen in [lo, hi] (der Preisbereich, den der Chart braucht).
+ * `ab` (RUK-01): Spalten, die vor diesem Zeitpunkt beginnen, entfallen. Die
+ * Route liest eine Viertelstunde Vorlauf mit; daraus entstünde sonst die Spalte
+ * DAVOR aus nur ihrem letzten Viertel.
  * @returns [{ t, z: [[zeile, menge]] }] mit zeile = round(preis / stufe)
  */
-export function spaltenAus(frames, { ivMs, stufe, lo = 0, hi = Infinity, maxSpalten = 1500 }) {
+export function spaltenAus(frames, { ivMs, stufe, lo = 0, hi = Infinity, maxSpalten = 1500, ab = -Infinity }) {
     const gruppen = new Map()
     for (const f of frames) {
         const t = Math.floor(f.t / ivMs) * ivMs
+        if (t < ab) continue
         let g = gruppen.get(t)
         if (!g) gruppen.set(t, g = { n: 0, m: new Map() })
         const w = f.w || 1
@@ -123,6 +127,18 @@ export function spaltenAus(frames, { ivMs, stufe, lo = 0, hi = Infinity, maxSpal
     }
     const aus = [...gruppen].sort((x, y) => x[0] - y[0]).slice(-maxSpalten)
     return aus.map(([t, g]) => ({ t, z: [...g.m].map(([z, q]) => [z, runde(q / g.n)]) }))
+}
+
+/**
+ * Nachgeladene Spalten an die vorhandenen hängen (Browser, RUK-01). `von` ist
+ * der Beginn der letzten vorhandenen Spalte: nur sie und Jüngeres wird ersetzt.
+ * Eine ältere Spalte in der Antwort stammt aus dem Vorlauf der Route und trägt
+ * nur einen Teil der Kerze — sie darf die fertige Spalte nicht überschreiben.
+ */
+export function haengeSpaltenAn(alt, neu, von, max = 1500) {
+    const frisch = (neu || []).filter((sp) => von == null || sp.t >= von)
+    const ab = frisch[0]?.t ?? Infinity
+    return [...(alt || []).filter((sp) => sp.t < ab), ...frisch].slice(-max)
 }
 
 /**

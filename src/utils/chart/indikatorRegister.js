@@ -1058,12 +1058,20 @@ let laufNr = 0
  * den Werksvorgaben, wird aber gesäubert (er kann von einem älteren Stand sein).
  * `kontext.aktie`: das Panel zeigt einen Aktien-Future — dann gelten zusätzlich
  * die Vorgaben `neuAktie` der Definition (VWAP: Anker US-Eröffnung); der eigene
- * Standard geht auch ihnen vor. Ohne Kontext bleibt alles wie bisher.
+ * Standard geht auch ihnen vor, ausser er trägt dort nur die Werksvorgabe
+ * (RUK-05). Ohne Kontext bleibt alles wie bisher.
  */
 export function neueInstanz(typ, eigen = null, kontext = null) {
     // `neu`: Vorgaben nur für neu angelegte Instanzen (gespeicherte behalten ihr Bild)
-    const werk = { ...vorgaben(typ), ...(INDIKATOREN[typ]?.neu || {}), ...(kontext?.aktie ? INDIKATOREN[typ]?.neuAktie || {} : {}) }
+    const grund = vorgaben(typ)
+    const aktie = kontext?.aktie ? INDIKATOREN[typ]?.neuAktie || {} : {}
+    const werk = { ...grund, ...(INDIKATOREN[typ]?.neu || {}), ...aktie }
     const params = eigen?.params ? saubereParams(typ, { ...werk, ...eigen.params }) : werk
+    // RUK-05: «Als Standard speichern» legt ALLE Parameter ab, also auch den nie angefassten
+    // Anker `session`. Trägt der eigene Standard an einer `neuAktie`-Stelle nur die
+    // Werksvorgabe, gilt auf dem Aktien-Future die Aktien-Vorgabe; ein bewusst anders
+    // gewählter Wert (week, month …) bleibt.
+    if (eigen?.params) for (const k of Object.keys(aktie)) if (params[k] === grund[k]) params[k] = aktie[k]
     return { id: `${typ}-${Date.now().toString(36)}-${(laufNr++).toString(36)}`, typ, params, farben: { ...(eigen?.farben || {}) }, sichtbar: true }
 }
 

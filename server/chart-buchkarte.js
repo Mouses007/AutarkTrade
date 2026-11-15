@@ -118,7 +118,8 @@ export function setupChartBuchkarteRoutes(app) {
             if (!frames.length) return res.json({ verfuegbar: false, grund: 'keineAufnahme', symbole: FERN_SYMBOLE })
             const letzt = frames[frames.length - 1]
             const stufe = anzeigeStufe(Number.isFinite(a.hi) ? a.hi - a.lo : letzt.mid * 0.3, letzt.s, 300)
-            const spalten = spaltenAus(frames, { ivMs: a.iv, stufe, lo: a.lo, hi: a.hi })
+            // RUK-01: der Viertelstunden-Vorlauf aus `framesVon` darf keine Spalte vor der von `von` bilden
+            const spalten = spaltenAus(frames, { ivMs: a.iv, stufe, lo: a.lo, hi: a.hi, ab: Math.floor(a.von / a.iv) * a.iv })
             let profil = null
             if (a.mitProfil) {
                 // „Steht seit" braucht Vorlauf: mit grober Auflösung zurück bis 24 h, auch wenn der Chart weniger zeigt

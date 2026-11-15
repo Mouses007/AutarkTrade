@@ -12,7 +12,7 @@
  * Aufruf: node server/__selftest-news-takt.mjs
  */
 import {
-    sollBerichtLaufen, tagesbeginn, istOhneInhalt,
+    sollBerichtLaufen, tagesbeginn, istAmSelbenTag, istOhneInhalt,
     anspruchsNachlauf, BERICHT_SCHLUESSEL, BERICHT_MANUELL, UPDATE_SCHLUESSEL,
     leseRhythmus, leseUpdateStunden, faelligerUpdatePlatz, basisTaugtFuerUpdate,
     kompaktVorbericht, berichtAlsMailText, berichtsKette, aufbewahrungMs,
@@ -90,6 +90,26 @@ const tbKnapp = tagesbeginn(kurzNachMitternacht, 'Asia/Tokyo')
 pruefe('kurz nach Mitternacht liegt die Grenze ~10 min zurück',
     kurzNachMitternacht - tbKnapp === 10 * 60000,
     String(kurzNachMitternacht - tbKnapp))
+
+// RUK-04: «steht heute schon ein Vollbericht» — Kalendertag statt Zeitstempel, auch an Umstellungstagen
+{
+    const tz = 'Europe/Brussels'
+    // Sommerzeitbeginn So 28.3.2027: Sonntag 12:00 Ortszeit; Vollbericht am Samstag 23:30 Ortszeit (22:30 UTC)
+    const sonntag = Date.parse('2027-03-28T10:00:00Z')
+    const samstagSpaet = Date.parse('2027-03-27T22:30:00Z')
+    pruefe('Gegenprobe: tagesbeginn liegt am Sommerzeit-Sonntag bei Samstag 23:00', samstagSpaet >= tagesbeginn(sonntag, tz))
+    pruefe('Sommerzeit: Samstagsbericht 23:30 zählt am Sonntag nicht als heute', istAmSelbenTag(samstagSpaet, sonntag, tz) === false)
+    pruefe('Sommerzeit: Bericht vom Sonntag 00:30 zählt', istAmSelbenTag(Date.parse('2027-03-27T23:30:00Z'), sonntag, tz) === true)
+    // Sommerzeitende So 25.10.2026: Sonntag 11:00 Ortszeit; Bericht von Hand um 00:30 Ortszeit (Sa 22:30 UTC)
+    const herbst = Date.parse('2026-10-25T10:00:00Z')
+    const frueh = Date.parse('2026-10-24T22:30:00Z')
+    pruefe('Gegenprobe: tagesbeginn liegt am Winterzeit-Sonntag bei 01:00', frueh < tagesbeginn(herbst, tz))
+    pruefe('Winterzeit: Bericht von 00:30 zählt als heute', istAmSelbenTag(frueh, herbst, tz) === true)
+    pruefe('Winterzeit: Bericht vom Samstag 23:30 zählt nicht', istAmSelbenTag(Date.parse('2026-10-24T21:30:00Z'), herbst, tz) === false)
+    pruefe('gewöhnlicher Tag: 00:05 und 23:55 sind derselbe Tag', istAmSelbenTag(Date.parse('2026-11-14T23:05:00Z'), Date.parse('2026-11-15T22:55:00Z'), tz) === true)
+    pruefe('Zeitzone zählt: 23:30 UTC ist in Tokio schon morgen', istAmSelbenTag(Date.UTC(2026, 7, 17, 12), Date.UTC(2026, 7, 17, 23, 30), 'Asia/Tokyo') === false)
+    pruefe('unbrauchbarer Zeitstempel oder Zone wirft nicht', istAmSelbenTag(null, 'x', tz) === false && typeof istAmSelbenTag(herbst, herbst, 'Quatsch/Zone') === 'boolean')
+}
 
 // ── 5) Leermeldung der Videoanalyse ──────────────────────────────────────
 // Seit die Zusammenfassung als Stichpunktliste angefordert wird, antwortet das

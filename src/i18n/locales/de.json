@@ -7369,6 +7369,7 @@
       "seit": "seit",
       "nurBtcEth": "Orderbuch-Heatmap: nur für BTC und ETH aufgezeichnet",
       "keineAufnahme": "Orderbuch-Heatmap: noch keine Aufnahme — läuft nur bei eingeschalteter Aufzeichnung (Einstellungen › Live-Analyse) und mit Binance als Datenquelle",
+      "aufnahmeSteht": "Orderbuch-Heatmap: seit {seit} keine neue Aufnahme — die Karte zeigt den letzten Stand",
       "jung": "Orderbuch {quellen}: erst seit {seit} gesammelt — weit vom Kurs fehlen noch Orders, die sich seither nicht geändert haben",
       "stand": "Orderbuch {quellen}: gesammelt seit {seit}, ±20 %",
       "fehler": "Orderbuch-Heatmap: Abruf fehlgeschlagen",

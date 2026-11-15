@@ -744,6 +744,8 @@ export async function runAgentLoop(userMessage, conversationHistory, config, sen
     // aufgebraucht war — das ist etwas anderes als „Rechenbudget erschöpft".
     let budgetZuKlein = false
     let wiederholt = false
+    // Der gerade laufende Abruf ist die Wiederholung mit erhöhter Antwortlänge (RUK-03)
+    let imWiederholungsabruf = false
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         // Hat der Browser die Verbindung gekappt (Seitenwechsel, Reload), hört
@@ -762,8 +764,17 @@ export async function runAgentLoop(userMessage, conversationHistory, config, sen
             response = await rufeModell(providerMessages, config)
         } catch (e) {
             if (istAbgebrochen() || config.signal?.aborted) break
+            // RUK-03: die erhöhte Antwortlänge kann über der Ausgabegrenze des Modells liegen
+            // (Anbieter antwortet 400). Das ist kein «Agent Error», sondern derselbe Ausgang
+            // wie eine zweite leere Antwort.
+            if (imWiederholungsabruf) {
+                logWarn('ai-agent', `Wiederholung mit ${config.maxTokens} Tokens fehlgeschlagen: ${e.message}`)
+                budgetZuKlein = true
+                break
+            }
             throw e
         }
+        imWiederholungsabruf = false
         totalTokens += response.usage.totalTokens
         promptTokens += response.usage.promptTokens || 0
         completionTokens += response.usage.completionTokens || 0
@@ -781,8 +792,12 @@ export async function runAgentLoop(userMessage, conversationHistory, config, sen
                 // Einmal von selbst mit mehr Antwortlänge wiederholen, statt den
                 // Nutzer in die Einstellungen zu schicken (sein Wunsch vom
                 // 15.11.2026). Die höhere Grenze gilt für den Rest des Laufs.
-                if (!wiederholt && !istAbgebrochen()) {
+                // RUK-07: nicht in der letzten Runde — dort gäbe es den Wiederholungsabruf
+                // nicht mehr, und der Lauf fiele in den Abschlussabruf «Rechenbudget
+                // aufgebraucht» (bezahlt, und die Meldung «Token-Budget erreicht» stimmte nicht).
+                if (!wiederholt && !istAbgebrochen() && i < MAX_ITERATIONS - 1) {
                     wiederholt = true
+                    imWiederholungsabruf = true
                     config = { ...config, maxTokens: Math.max(config.maxTokens || 0, AGENT_WIEDERHOLUNG_TOKENS) }
                     continue
                 }
@@ -859,7 +874,9 @@ export async function runAgentLoop(userMessage, conversationHistory, config, sen
     // Aufruf aus dem, was bereits vorliegt, eine echte Antwort. Die Bitte
     // wandert NICHT in die gespeicherte Historie, nur die Antwort.
     if (budgetZuKlein && !istAbgebrochen()) {
-        finalAnswer = `Das Modell hat auch mit erhöhter Antwortlänge (${config.maxTokens} Tokens) keinen Text geliefert. `
+        finalAnswer = (wiederholt
+            ? `Das Modell hat auch mit erhöhter Antwortlänge (${config.maxTokens} Tokens) keinen Text geliefert. `
+            : 'Das Modell hat keinen Text geliefert. ')
             + 'Stell die Frage bitte noch einmal oder etwas enger.'
         history.push({ role: 'assistant', content: finalAnswer })
         sendSSE({ type: 'answer', content: finalAnswer, kiGeneriert: true })

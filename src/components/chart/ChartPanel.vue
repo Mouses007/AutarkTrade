@@ -49,6 +49,7 @@ import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { InstanzEbene } from '../../utils/chart/overlays/InstanzEbene.js'
 import { MarktEbene, waendeAusBuch } from '../../utils/chart/overlays/MarktEbene.js'
 import { BuchKarteEbene, dauerKurz } from '../../utils/chart/overlays/BuchKarteEbene.js'
+import { haengeSpaltenAn } from '../../../shared/fernBuch.js'
 import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
 import { AktienEbene } from '../../utils/chart/overlays/AktienEbene.js'
 import { ladeAktienKontext, aktieVon, termineGrundSchluessel } from '../../utils/chart/aktienKontext.js'
@@ -552,7 +553,7 @@ async function umsatzJeMinute(symbol, markt) {
  * Preisbereich wird beim ersten Laden festgelegt (Kerzen ±15 %) — damit bleibt
  * die Zeilenstufe gleich und die Spalten passen aneinander.
  */
-let buchCache = null   // { schluessel, lo, hi, spalten, stufe }
+let buchCache = null   // { schluessel, lo, hi, spalten, stufe, zuletzt }
 const buchQuellen = () => [overlayAn('buchPerp') && 'futures', overlayAn('buchSpot') && 'spot'].filter(Boolean)
 async function ladeBuchkarte() {
     if (!buchEbene) return
@@ -575,14 +576,23 @@ async function ladeBuchkarte() {
         const { data } = await axios.get('/api/chart/buchkarte', { params: { symbol, quellen: quellen.join(','), iv, von, lo: c.lo, hi: c.hi } })
         if (buchCache !== c) return
         if (!data?.verfuegbar) {
+            // RUK-02: kam seit der letzten Spalte kein Frame mehr (Aufzeichnung pausiert,
+            // Stream weg), bleibt die geladene Karte stehen — nur der Hinweis wechselt.
+            if (data?.grund !== 'symbol' && c.spalten.length) {
+                hinweis('buchkarte', t('chart.buch.aufnahmeSteht', { seit: dauerKurz(Date.now() - (c.zuletzt || Date.now())) }))
+                return
+            }
             buchEbene.setzeDaten(null)
             hinweis('buchkarte', t(data?.grund === 'symbol' ? 'chart.buch.nurBtcEth' : 'chart.buch.keineAufnahme'))
             return
         }
-        if (c.stufe !== data.stufe) c.spalten = []
+        // Stufenwechsel: die alten Spalten passen nicht mehr, dann gilt die Antwort ganz
+        const frisch = c.stufe !== data.stufe
+        if (frisch) c.spalten = []
         c.stufe = data.stufe
-        const ab = data.spalten[0]?.t ?? Infinity
-        c.spalten = [...c.spalten.filter((sp) => sp.t < ab), ...data.spalten].slice(-1500)
+        c.zuletzt = Date.now()
+        // RUK-01: nur ab `von` übernehmen — der Server-Vorlauf darf die fertige Vorgängerspalte nicht ersetzen
+        c.spalten = haengeSpaltenAn(c.spalten, data.spalten, frisch ? null : von)
         buchEbene.setzeDaten({ spalten: c.spalten, stufe: c.stufe, profil: data.profil, basis: symbol.replace(/USDT$|USDC$/, '') })
         const alter = data.seit ? Date.now() - data.seit : 0
         hinweis('buchkarte', t(alter < 6 * 3_600_000 ? 'chart.buch.jung' : 'chart.buch.stand', {

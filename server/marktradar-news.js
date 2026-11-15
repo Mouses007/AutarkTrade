@@ -2014,8 +2014,9 @@ const WIEDERHOLUNG_MS = 60 * 60 * 1000
  *
  * Gerechnet wird über den Abstand zu Mitternacht, weil sich `Date` sonst nicht
  * ohne Bibliothek in eine fremde Zeitzone versetzen lässt. An Tagen mit
- * Zeitumstellung liegt die Grenze deshalb um eine Stunde daneben — für die
- * Frage „lief heute schon einer" ist das folgenlos.
+ * Zeitumstellung liegt die Grenze deshalb um eine Stunde daneben — für den
+ * Tages-Anspruch ist das folgenlos. Wo es auf den Kalendertag ankommt («steht
+ * heute schon ein Vollbericht»), gilt `istAmSelbenTag` (RUK-04).
  */
 export function tagesbeginn(jetzt = Date.now(), zeitzone = '') {
     const lokal = zeitzone
@@ -2024,6 +2025,26 @@ export function tagesbeginn(jetzt = Date.now(), zeitzone = '') {
     const seitMitternacht = lokal.getHours() * 3600000 + lokal.getMinutes() * 60000
         + lokal.getSeconds() * 1000
     return jetzt - seitMitternacht
+}
+
+/**
+ * Liegen zwei Zeitpunkte am selben Kalendertag der Journal-Zeitzone?
+ *
+ * RUK-04: verglichen wird das lokale Datum, nicht ein Zeitstempel aus
+ * «Sekunden seit Mitternacht». Am Tag der Sommerzeit-Umstellung lag jene
+ * Grenze bei 23:00 des Vortags (ein Samstagsbericht von 23:30 galt am Sonntag
+ * als «heute»), im Herbst bei 01:00 (ein Bericht von 00:30 zählte nicht).
+ */
+export function istAmSelbenTag(a, b, zeitzone = '') {
+    const tag = (ms) => {
+        const d = new Date(Number(ms))
+        if (!Number.isFinite(d.getTime())) return null
+        try {
+            return d.toLocaleDateString('en-CA', zeitzone ? { timeZone: zeitzone } : undefined)
+        } catch { return d.toLocaleDateString('en-CA') }
+    }
+    const ta = tag(a)
+    return ta !== null && ta === tag(b)
 }
 
 /**
@@ -3765,10 +3786,12 @@ export function startNewsTakt() {
             // in genau diesem Fall.
             let erlaubt = sollUpdateLaufen({ jetztLokal: lokal, rhythmus: s?.radarNewsRhythmus, tage: s?.radarNewsTage })
             if (!erlaubt && leseRhythmus(s?.radarNewsRhythmus) === 'tage') {
-                const heuteAb = tagesbeginn(jetzt.getTime(), zeitzoneAus(s?.timeZone))
-                const voll = await getKnex()('news_digests').where('erstelltAm', '>=', heuteAb)
-                    .where((q) => q.where('art', 'bericht').orWhereNull('art')).first('id')
-                erlaubt = sollUpdateLaufen({ jetztLokal: lokal, rhythmus: s?.radarNewsRhythmus, tage: s?.radarNewsTage, berichtHeute: !!voll })
+                // RUK-04: der jüngste Vollbericht der letzten 25 h (längster Kalendertag), dann
+                // das lokale Datum vergleichen — nicht `tagesbeginn` (Sommerzeit-Umstellung).
+                const voll = await getKnex()('news_digests').where('erstelltAm', '>=', jetzt.getTime() - 25 * 3600000)
+                    .where((q) => q.where('art', 'bericht').orWhereNull('art')).orderBy('erstelltAm', 'desc').first('erstelltAm')
+                const berichtHeute = !!voll && istAmSelbenTag(voll.erstelltAm, jetzt.getTime(), zeitzoneAus(s?.timeZone))
+                erlaubt = sollUpdateLaufen({ jetztLokal: lokal, rhythmus: s?.radarNewsRhythmus, tage: s?.radarNewsTage, berichtHeute })
             }
             if (!erlaubt) return
             await erzeugeLagebericht({ aktualisierung: true, platz }).catch(() => { })

@@ -1285,17 +1285,42 @@ async function toolGetOpenrouterModels(knex, params) {
         ).slice(0, 10)
     }
 
+    // RUK-06: der Katalog ist Fremdtext (OpenRouter), das Werkzeug trägt aber kein
+    // `fremdtext: true` — es soll die schreibenden Werkzeuge nicht sperren. Darum geht
+    // kein freier Text hinaus: Bezeichnungen auf ein enges Alphabet und 60 Zeichen,
+    // sonst nur Zahlen und Ja/Nein, und «all» ist gedeckelt.
+    const gesamt = modelle.length
+    modelle = modelle.slice(0, OPENROUTER_MAX_MODELLE)
     return {
         filter: filterBy,
         count: modelle.length,
-        modelle: modelle.map((m) => ({
-            id: m.id,
-            name: m.name || m.id,
-            provider: m.provider,
-            contextLength: m.contextLength || 0,
-            pricing: m.pricing || { prompt: 0, completion: 0 },
-            topProvider: m.topProvider || '',
-        })),
+        ...(gesamt > modelle.length ? { gesamt, hinweis: `Nur die ersten ${modelle.length} von ${gesamt} Modellen. Enger filtern (cost, speed, quality).` } : {}),
+        modelle: modelle.map((m) => {
+            const id = katalogText(m?.id)
+            return {
+                id,
+                name: katalogText(m?.name) || id,
+                provider: katalogText(m?.provider),
+                contextLength: katalogZahl(m?.contextLength),
+                pricing: { prompt: katalogZahl(m?.pricing?.prompt), completion: katalogZahl(m?.pricing?.completion) },
+                topProvider: katalogAnbieter(m?.topProvider),
+            }
+        }),
+    }
+}
+
+const OPENROUTER_MAX_MODELLE = 100
+/** Bezeichnung aus dem OpenRouter-Katalog: enges Alphabet, eine Zeile, höchstens 60 Zeichen (RUK-06). */
+const katalogText = (v) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '')
+    .replace(/[^A-Za-z0-9 .:\-_/()+]/g, '').replace(/ {2,}/g, ' ').trim().slice(0, 60)
+const katalogZahl = (v) => (Number.isFinite(Number(v)) && v !== null && v !== '' && typeof v !== 'object' && typeof v !== 'boolean' ? Number(v) : 0)
+/** `top_provider` ist bei OpenRouter ein Objekt (Kontext, Ausgabegrenze, moderiert) — nur diese Felder, nie fremde Schlüssel. */
+function katalogAnbieter(v) {
+    if (!v || typeof v !== 'object') return katalogText(v)
+    return {
+        contextLength: katalogZahl(v.context_length ?? v.contextLength),
+        maxCompletionTokens: katalogZahl(v.max_completion_tokens ?? v.maxCompletionTokens),
+        isModerated: (v.is_moderated ?? v.isModerated) === true,
     }
 }
 

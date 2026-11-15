@@ -95,6 +95,15 @@ for (const typ of Object.keys(INDIKATOREN)) {
         neueInstanz('vwap').params.anker === 'session' && neueInstanz('vwap', null, { aktie: false }).params.anker === 'session' && vorgaben('vwap').anker === 'session')
     check('neuer VWAP im Chart eines Aktien-Futures: Anker US-Eröffnung vorbelegt', neueInstanz('vwap', null, { aktie: true }).params.anker === 'usOpen')
     check('der eigene Standard geht vor', neueInstanz('vwap', { params: { anker: 'week' } }, { aktie: true }).params.anker === 'week')
+    {   // RUK-05: gespeicherter Standard mit unberührtem Anker `session` (standardVon legt alle Parameter ab)
+        const gespeichert = standardVon({ typ: 'vwap', params: { band: 2 }, farben: { wert: '#123456' } })
+        const n = neueInstanz('vwap', gespeichert, { aktie: true })
+        check('eigener Standard speichert den Werks-Anker mit', gespeichert.params.anker === 'session')
+        check('eigener Standard mit Werks-Anker: Aktien-Future ankert trotzdem an der US-Eröffnung', n.params.anker === 'usOpen', n.params.anker)
+        check('… und behält die übrigen eigenen Werte', n.params.band === 2 && n.farben.wert === '#123456')
+        check('… ausserhalb des Aktien-Futures bleibt es beim Tagesanker', neueInstanz('vwap', gespeichert).params.anker === 'session' && neueInstanz('vwap', gespeichert, { aktie: false }).params.anker === 'session')
+        check('bewusst gespeicherter Monatsanker bleibt', neueInstanz('vwap', standardVon({ typ: 'vwap', params: { anker: 'month' } }), { aktie: true }).params.anker === 'month')
+    }
     check('andere Indikatoren kennen keine Aktien-Vorgabe', JSON.stringify(neueInstanz('ema', null, { aktie: true }).params) === JSON.stringify(neueInstanz('ema').params))
     const tag = rechneIndikator('vwap', std, { anker: 'session', band: 0 }).wert
     check('Anker Tag (UTC) rechnet weiter den UTC-Tag', tag.every((x, j) => x === vwap(std, { anchor: 'session' })[j]) && tag[30] !== us[30])

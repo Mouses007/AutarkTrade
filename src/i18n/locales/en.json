@@ -7369,6 +7369,7 @@
       "seit": "since",
       "nurBtcEth": "Order book heatmap: recorded for BTC and ETH only",
       "keineAufnahme": "Order book heatmap: no recording yet — runs only with recording switched on (Settings › Live analysis) and Binance as data source",
+      "aufnahmeSteht": "Order book heatmap: no new recording for {seit} — the map shows the last state",
       "jung": "Order book {quellen}: collected for only {seit} — far from the price, orders that have not changed since are still missing",
       "stand": "Order book {quellen}: collected for {seit}, ±20 %",
       "fehler": "Order book heatmap: request failed",
