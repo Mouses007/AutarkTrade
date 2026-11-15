@@ -15,13 +15,15 @@ import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { kiMarkdown } from '../../utils/kiMarkdown.js'
 import { useKiGespraech } from '../../composables/useKiGespraech.js'
+import { useSpracheingabe, erkennungsSprache } from '../../composables/useSpracheingabe.js'
+import Symbol from '../basis/Symbol.vue'
 import { Knopf, Kreisel } from '../basis'
 
 const props = defineProps({
     panel: { type: Object, required: true },
     sichtbarBis: { type: Function, default: null },
 })
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const liste = ref(null)
 
@@ -49,8 +51,28 @@ watch([() => nachrichten.value.length, laeuft], async () => {
     if (liste.value) liste.value.scrollTop = liste.value.scrollHeight
 })
 
+// Spracheingabe wie in der KI-Coach-Leiste: das Gesprochene wird an das Feld angehängt.
+let vorAufnahme = ''
+const sprache = useSpracheingabe({
+    sprache: () => erkennungsSprache(locale.value),
+    beiText: (text) => { eingabe.value = [vorAufnahme, text].filter(Boolean).join(' ') },
+})
+const mikroTitel = () => (sprache.grund.value === 'keinHttps' ? t('kiCoach.mikroKeinHttps')
+    : sprache.grund.value === 'keinBrowser' ? t('kiCoach.mikroKeinBrowser')
+        : sprache.hoert.value ? t('kiCoach.mikroStopp') : t('kiCoach.mikroStart'))
+function schalteMikro() {
+    if (sprache.grund.value) return
+    if (!sprache.hoert.value) vorAufnahme = eingabe.value.trim()
+    sprache.schalte()
+}
+function sendeEingabe() {
+    sprache.stopp()
+    sende()
+}
+watch(laeuft, () => sprache.stopp())
+
 function taste(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sende() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendeEingabe() }
 }
 
 onBeforeUnmount(() => abbrechen())
@@ -84,8 +106,12 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
         <div class="eingabe">
             <textarea v-model="eingabe" class="at-feld klein" rows="2" :placeholder="t('chart.ki.chatPlatzhalter')"
                 :disabled="laeuft" @keydown="taste"></textarea>
+            <button type="button" class="mikro" :class="{ hoert: sprache.hoert.value, aus: !!sprache.grund.value }"
+                :aria-pressed="sprache.hoert.value" :title="mikroTitel()" :aria-label="mikroTitel()" :disabled="laeuft" @click="schalteMikro">
+                <Symbol name="mikrofon" />
+            </button>
             <Knopf art="haupt" klein nur-symbol symbol="nachricht" :disabled="laeuft || !eingabe.trim()" :titel="t('chart.ki.chatSenden')"
-                @click="sende()" />
+                @click="sendeEingabe" />
         </div>
     </div>
 </template>
@@ -189,6 +215,31 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
 .eingabe textarea {
     resize: none;
     font-size: 12px;
+}
+
+.mikro {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    min-width: 28px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.mikro.aus,
+.mikro:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.mikro.hoert {
+    color: var(--text);
+    background: var(--bad-flaeche);
+    border-color: var(--bad);
 }
 
 /* Text-Knopf: Handlung ohne Fläche, für Zeilen in der dichten Seitenleiste. */

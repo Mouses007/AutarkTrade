@@ -7,10 +7,11 @@
  * benutzen denselben Baustein, damit Werkzeugschritte, KI-Kennzeichnung und
  * Eingabe überall gleich aussehen.
  */
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { kiMarkdown } from '@/utils/kiMarkdown.js'
 import { Symbol, Knopf, Kreisel, Hinweis } from '@/components/basis'
+import { useSpracheingabe, erkennungsSprache } from '@/composables/useSpracheingabe.js'
 
 const props = defineProps({
     gespraech: { type: Object, required: true },
@@ -20,7 +21,7 @@ const props = defineProps({
     // Fragen, die im leeren Gespräch als Knöpfe angeboten werden
     vorschlaege: { type: Array, default: () => [] },
 })
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const { nachrichten, schritte, eingabe, laeuft, fehler, sitzungId, sende } = props.gespraech
 const offeneWerkzeuge = ref(new Set())
@@ -46,8 +47,47 @@ watch([() => nachrichten.value.length, () => schritte.value.length, sitzungId, l
 })
 watch(sitzungId, () => { offeneWerkzeuge.value = new Set() })
 
+// ── Spracheingabe ──────────────────────────────────────────────────────────
+// Was schon im Feld stand, bleibt stehen; das Gesprochene wird angehängt.
+let vorAufnahme = ''
+const sprache = useSpracheingabe({
+    sprache: () => erkennungsSprache(locale.value),
+    beiText: (text) => { eingabe.value = [vorAufnahme, text].filter(Boolean).join(' ') },
+})
+const mikroTitel = computed(() => {
+    if (sprache.grund.value === 'keinHttps') return t('kiCoach.mikroKeinHttps')
+    if (sprache.grund.value === 'keinBrowser') return t('kiCoach.mikroKeinBrowser')
+    return sprache.hoert.value ? t('kiCoach.mikroStopp') : t('kiCoach.mikroStart')
+})
+const mikroFehler = computed(() => {
+    if (!sprache.fehler.value) return ''
+    return sprache.fehler.value === 'verweigert' ? t('kiCoach.mikroVerweigert') : t('kiCoach.mikroFehler', { grund: sprache.fehler.value })
+})
+// Einmal sagen, wohin der Ton geht — danach nicht mehr.
+const mikroHinweis = ref(false)
+function schalteMikro() {
+    if (sprache.grund.value) return
+    if (!sprache.hoert.value) {
+        vorAufnahme = eingabe.value.trim()
+        let gesehen = '1'
+        try { gesehen = localStorage.getItem('at.kiCoach.mikroHinweis') } catch { /* privater Modus */ }
+        if (gesehen !== '1') {
+            mikroHinweis.value = true
+            try { localStorage.setItem('at.kiCoach.mikroHinweis', '1') } catch { /* egal */ }
+        }
+    }
+    sprache.schalte()
+}
+function sendeEingabe() {
+    sprache.stopp()
+    mikroHinweis.value = false
+    sende()
+}
+// Ein neues Gespräch oder ein laufender Abruf beendet die Aufnahme.
+watch([sitzungId, laeuft], () => sprache.stopp())
+
 function taste(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sende() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendeEingabe() }
 }
 </script>
 
@@ -100,14 +140,20 @@ function taste(e) {
         </div>
 
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
+        <Hinweis v-if="mikroFehler" art="warn">{{ mikroFehler }}</Hinweis>
+        <small v-if="mikroHinweis" class="mikroHinweis">{{ t('kiCoach.mikroHinweis') }}</small>
 
         <div class="eingabeZeile">
             <textarea v-model="eingabe" class="at-feld klein" rows="2" :placeholder="platzhalter || t('kiCoach.platzhalter')"
                 :disabled="laeuft || !bereit" @keydown="taste"></textarea>
             <div class="knoepfe">
-                <slot name="knoepfe" />
+                <button type="button" class="mikro" :class="{ hoert: sprache.hoert.value, aus: !!sprache.grund.value }"
+                    :aria-pressed="sprache.hoert.value" :aria-disabled="!!sprache.grund.value || undefined"
+                    :title="mikroTitel" :aria-label="mikroTitel" :disabled="laeuft || !bereit" @click="schalteMikro">
+                    <Symbol name="mikrofon" />
+                </button>
                 <Knopf art="haupt" klein nur-symbol symbol="nachricht" :titel="t('kiCoach.senden')"
-                    :disabled="laeuft || !bereit || !eingabe.trim()" @click="sende()" />
+                    :disabled="laeuft || !bereit || !eingabe.trim()" @click="sendeEingabe" />
             </div>
         </div>
     </div>
@@ -251,5 +297,52 @@ function taste(e) {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+}
+
+/* Mikrofon: gleiche Grösse wie der Senden-Knopf darunter. */
+.mikro {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2rem;
+    min-width: 2.2rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.mikro:hover:not(:disabled):not(.aus) {
+    color: var(--text);
+    border-color: var(--accent-rand);
+}
+
+/* Nicht verfügbar (http, Firefox): sichtbar, aber ausgegraut — der Titel sagt warum. */
+.mikro.aus,
+.mikro:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.mikro.hoert {
+    color: var(--text);
+    background: var(--bad-flaeche);
+    border-color: var(--bad);
+    animation: mikroPuls 1.2s ease-in-out infinite;
+}
+
+@keyframes mikroPuls {
+    50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mikro.hoert { animation: none; }
+}
+
+.mikroHinweis {
+    color: var(--muted);
+    font-size: 0.72rem;
 }
 </style>
