@@ -109,6 +109,52 @@ async function dcaUmstellungen(k) {
     return umstellungenAus(await k('portfolio_bewegungen').where('art', 'tausch').where('roh', 'like', '%merger_crypto%')
         .select('zeit', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'roh'))
 }
+/**
+ * Staking-Produkte mit Bestand und Kurs aus der Übersicht — dieselbe Rechnung
+ * für die Seite und für das Coach-Werkzeug `query_portfolio`.
+ */
+export async function stakingAnsicht() {
+    const u = await berechneUebersicht()
+    const bew = await getKnex()('portfolio_bewegungen').whereIn('art', ['staking', 'umbuchung'])
+        .select('quelle', 'zeit', 'art', 'asset', 'menge', 'chfWert', 'einordnung', 'roh')
+    const bestand = new Map()
+    for (const q of u.quellen) for (const p of q.posten) if (!p.spam) bestand.set(`${q.quelle}|${p.schluessel}`, { menge: p.menge, chf: p.chf })
+    const kurs = new Map(u.posten.filter((p) => !p.ohneKurs && !p.spam && p.menge > 0).map((p) => [p.schluessel, p.chf / p.menge]))
+    const erg = stakingUebersicht(bew, {
+        bestandVon: (quelle, asset) => bestand.get(`${quelle}|${asset}`) || null,
+        kursChfVon: (asset) => kurs.get(asset) ?? null,
+    })
+    const ortName = ortNameVon(u)
+    for (const p of erg.produkte) p.ortName = ortName(p.quelle)
+    return erg
+}
+
+/** DCA-Portfolio: Kurs und heutiger Bestand aus der Übersicht. Seite und Coach-Werkzeug teilen sie. */
+export async function dcaAnsicht({ nurLaufende = false } = {}) {
+    const k = getKnex()
+    const [u, kaeufe, umstellungen] = await Promise.all([berechneUebersicht(), dcaKaeufe(k), dcaUmstellungen(k)])
+    const ortName = ortNameVon(u)
+    const posten = new Map(u.posten.filter((p) => !p.kontrakt && !p.spam).map((p) => [p.schluessel, p]))
+    const kurs = new Map()
+    for (const a of new Set(kaeufe.map((z) => heutigerCoin(z.asset, umstellungen).asset))) {
+        const p = posten.get(a)
+        if (p && !p.ohneKurs && p.usdKurs != null) { kurs.set(a, p.usdKurs * u.fx.chf); continue }
+        // Nicht mehr gehalten: Tageskerze von heute (ein Abruf je Coin, danach im Kurs-Cache).
+        const t = await tagesKursUsd(a, new Date().toISOString().slice(0, 10)).catch(() => null)
+        if (t?.usd != null) kurs.set(a, t.usd * u.fx.chf)
+    }
+    return dcaUebersicht(kaeufe, {
+        umstellungen, quelleName: ortName, nurLaufende,
+        kursChfVon: (a) => kurs.get(a) ?? null,
+        bestandVon: (a) => {
+            const p = posten.get(a)
+            if (!p) return null
+            const orte = p.orte.filter((o) => Math.abs(o.menge) > p.menge * 1e-6).sort((a, b) => b.menge - a.menge)
+            return { menge: p.menge, chf: p.ohneKurs ? null : p.chf, orte: orte.map((o) => ({ name: ortName(o.quelle), menge: o.menge, chf: o.chf })) }
+        },
+    })
+}
+
 let dcaVerlaufSpeicher = null   // { schluessel, zeit, monatsKurse, ohneKerzen }
 
 export function setupPortfolioRoutes(app) {
@@ -180,50 +226,14 @@ export function setupPortfolioRoutes(app) {
     // Mit Verlauf: dann teilt sie die Rechnung, die die Seite im selben Moment anstösst.
     app.get('/api/portfolio/staking', async (req, res) => {
         try {
-            const u = await berechneUebersicht()
-            const bew = await getKnex()('portfolio_bewegungen').whereIn('art', ['staking', 'umbuchung'])
-                .select('quelle', 'zeit', 'art', 'asset', 'menge', 'chfWert', 'einordnung', 'roh')
-            const bestand = new Map()
-            for (const q of u.quellen) for (const p of q.posten) if (!p.spam) bestand.set(`${q.quelle}|${p.schluessel}`, { menge: p.menge, chf: p.chf })
-            const kurs = new Map(u.posten.filter((p) => !p.ohneKurs && !p.spam && p.menge > 0).map((p) => [p.schluessel, p.chf / p.menge]))
-            const erg = stakingUebersicht(bew, {
-                bestandVon: (quelle, asset) => bestand.get(`${quelle}|${asset}`) || null,
-                kursChfVon: (asset) => kurs.get(asset) ?? null,
-            })
-            const ortName = ortNameVon(u)
-            for (const p of erg.produkte) p.ortName = ortName(p.quelle)
-            res.json({ ok: true, ...erg })
+            res.json({ ok: true, ...(await stakingAnsicht()) })
         } catch (e) { fehler(res, e) }
     })
 
     // DCA-Portfolio: Kurs und heutiger Bestand aus der Übersicht (dieselbe Rechnung, die die Seite schon anstösst).
     app.get('/api/portfolio/dca', async (req, res) => {
         try {
-            const k = getKnex()
-            const [u, kaeufe, umstellungen] = await Promise.all([berechneUebersicht(), dcaKaeufe(k), dcaUmstellungen(k)])
-            const ortName = ortNameVon(u)
-            const posten = new Map(u.posten.filter((p) => !p.kontrakt && !p.spam).map((p) => [p.schluessel, p]))
-            const kurs = new Map()
-            for (const a of new Set(kaeufe.map((z) => heutigerCoin(z.asset, umstellungen).asset))) {
-                const p = posten.get(a)
-                if (p && !p.ohneKurs && p.usdKurs != null) { kurs.set(a, p.usdKurs * u.fx.chf); continue }
-                // Nicht mehr gehalten: Tageskerze von heute (ein Abruf je Coin, danach im Kurs-Cache).
-                const t = await tagesKursUsd(a, new Date().toISOString().slice(0, 10)).catch(() => null)
-                if (t?.usd != null) kurs.set(a, t.usd * u.fx.chf)
-            }
-            res.json({
-                ok: true,
-                ...dcaUebersicht(kaeufe, {
-                    umstellungen, quelleName: ortName, nurLaufende: req.query.nurLaufende === '1',
-                    kursChfVon: (a) => kurs.get(a) ?? null,
-                    bestandVon: (a) => {
-                        const p = posten.get(a)
-                        if (!p) return null
-                        const orte = p.orte.filter((o) => Math.abs(o.menge) > p.menge * 1e-6).sort((a, b) => b.menge - a.menge)
-                        return { menge: p.menge, chf: p.ohneKurs ? null : p.chf, orte: orte.map((o) => ({ name: ortName(o.quelle), menge: o.menge, chf: o.chf })) }
-                    },
-                }),
-            })
+            res.json({ ok: true, ...(await dcaAnsicht({ nurLaufende: req.query.nurLaufende === '1' })) })
         } catch (e) { fehler(res, e) }
     })
 

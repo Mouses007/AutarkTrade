@@ -18,16 +18,30 @@
  * war nur der Kommentar — und ein Kommentar, der mehr Sicherheit behauptet als
  * da ist, ist gefaehrlicher als gar keiner.
  *
- * ZWEITE REGEL, die nirgends stand und die ganze Sicherheitseigenschaft traegt:
- * **kein Agent-Tool darf je Fremdtext zurueckgeben.** Keines der Werkzeuge
- * liefert News, Feeds oder Webinhalte; deshalb hat eine Prompt-Injektion aus
- * einem Beitrag keinen Codepfad, sondern nur einen Entscheidungspfad ueber den
- * gelesenen Bericht. Wer ein `query_news`-Tool ergaenzt, hebt das auf —
- * besonders bei Ollama, wo Tool-Aufrufe per Regex aus dem Antworttext geparst
- * werden (`ai-agent.js`). Siehe `server/fremdtext.js`.
+ * ZWEITE REGEL — sie trägt die Sicherheitseigenschaft. Bis 15.11.2026 hiess
+ * sie „kein Agent-Tool darf je Fremdtext zurückgeben". Mit dem Umbau des
+ * Coachs zur Seitenleiste (Wunsch des Eigentümers: er soll zu JEDER Seite
+ * antworten können, auch zum Hype-Radar) gilt sie eng begrenzt gelockert:
+ *
+ *   1. Fremdtext geben NUR Werkzeuge zurück, die `fremdtext: true` tragen
+ *      (`server/ki-werkzeuge/`: Hype-Radar, Portfolio, Lagebericht, Newcomer).
+ *   2. Er ist dort auf eine Zeile gekürzt und als Zitat markiert
+ *      (`zitatZeile`), und der Systemprompt trägt `ZITAT_REGEL`. Nie hinaus
+ *      gehen Webseitentexte, Befund-Freitexte, Beleg-Adressen, einzelne
+ *      Nachrichtenbeiträge oder Feeds. Ein `query_news` über Beiträge gibt es
+ *      weiterhin nicht.
+ *   3. Nach dem ersten Fremdtext-Ergebnis eines Laufs lehnt `executeTool` die
+ *      schreibenden Werkzeuge (`SCHREIBENDE_WERKZEUGE`) für den Rest des Laufs
+ *      ab. Eine Injektion hat damit weiterhin keinen Codepfad, der etwas
+ *      verändert — nur einen Entscheidungspfad über die gelesene Antwort.
+ *
+ * Die Markierung ist keine Mauer (siehe `server/fremdtext.js`); die Mauer ist
+ * Punkt 3. Wer ein schreibendes Werkzeug ergänzt, trägt es in
+ * `SCHREIBENDE_WERKZEUGE` ein — `__selftest-ki-werkzeuge.mjs` prüft die Sperre.
  */
 
 import { logWarn } from './logger.js'
+import { BEREICHS_WERKZEUGE, BEREICHS_WERKZEUGE_IMPL } from './ki-werkzeuge/index.js'
 import { zeitzoneAus } from '../shared/zeitzone.js'
 import { kontostand } from '../shared/kontostand.js'
 import { STRATEGY_TOOLS, STRATEGY_TOOL_IMPL } from './strategy-tools.js'
@@ -219,7 +233,8 @@ export const AGENT_TOOLS = [
                     enum: ['alle', 'imSpiel', 'trendend', 'bestaetigt', 'laeuftMitBtc', 'eigenstaendig'],
                     description: 'alle = keine Einschränkung. imSpiel = RVOL über der Schwelle. trendend = ADX über der Schwelle. bestaetigt = beide Zeiteinheiten stimmen überein. laeuftMitBtc = starker Bitcoin-Gleichlauf. eigenstaendig = kaum Bitcoin-Bezug.'
                 },
-                boerse: { type: 'string', enum: ['bitunix', 'bitget', 'pionex'], description: 'Nur Coins zeigen, die auf dieser Börse handelbar sind.' }
+                boerse: { type: 'string', enum: ['bitunix', 'bitget', 'pionex'], description: 'Nur Coins zeigen, die auf dieser Börse handelbar sind.' },
+                markt: { type: 'string', enum: ['krypto', 'aktien'], description: 'krypto (default) = Coin-Radar. aktien = ranking of the Aktien-Radar page (stock mode).' }
             }
         }
     },
@@ -291,50 +306,66 @@ export const AGENT_TOOLS = [
     // Werkzeuge der Strategie-Agenten — auch der KI-Coach darf die Auswertung
     // der automatisch gehandelten Strategien lesen und Verbesserungen vorschlagen.
     ...STRATEGY_TOOLS,
+    ...BEREICHS_WERKZEUGE,
 ]
 
 // ==================== TOOL EXECUTION ====================
+
+/**
+ * Werkzeuge, die etwas schreiben. Nach dem ersten Fremdtext-Ergebnis eines
+ * Laufs sind sie gesperrt — siehe Dateikopf, „Zweite Regel".
+ */
+export const SCHREIBENDE_WERKZEUGE = new Set(['run_backtest', 'propose_param_change'])
+const FREMDTEXT_WERKZEUGE = new Set(AGENT_TOOLS.filter((t) => t.fremdtext).map((t) => t.name))
+
+const WERKZEUGE = {
+    query_trades: toolQueryTrades,
+    query_notes: toolQueryNotes,
+    query_tags: toolQueryTags,
+    query_excursions: toolQueryExcursions,
+    query_playbooks: toolQueryPlaybooks,
+    query_satisfactions: toolQuerySatisfactions,
+    query_incoming_positions: toolQueryIncomingPositions,
+    compute_statistics: toolComputeStatistics,
+    analyze_sl_tp_patterns: toolAnalyzeSlTpPatterns,
+    query_settings: toolQuerySettings,
+    query_screenshots: toolQueryScreenshots,
+    analyze_screenshot: toolAnalyzeScreenshot,
+    query_app_help: toolQueryAppHelp,
+    query_marktradar: toolQueryMarktradar,
+    query_coin_radar: toolQueryCoinRadar,
+    query_chart: toolQueryChart,
+    analyze_model_performance: toolAnalyzeModelPerformance,
+    get_openrouter_models: toolGetOpenrouterModels,
+    recommend_model_allocation: toolRecommendModelAllocation,
+    // Werkzeuge der Strategie-Agenten: Auswertung lesen, Hypothesen im
+    // Backtest messen, Parameteränderungen zur Freigabe vorschlagen.
+    ...STRATEGY_TOOL_IMPL,
+    // Bereiche der App ausserhalb des Journals (server/ki-werkzeuge/)
+    ...BEREICHS_WERKZEUGE_IMPL,
+}
 
 /**
  * Execute a tool by name with given parameters.
  * @param {string} toolName
  * @param {object} params
  * @param {import('knex').Knex} knex
+ * @param {{fremdtextGesehen: boolean}} [lauf] Zustand EINES Agentenlaufs; ohne ihn gibt es keine Sperre
  * @returns {Promise<object>} Tool result
  */
-export async function executeTool(toolName, params, knex) {
-    const tools = {
-        query_trades: toolQueryTrades,
-        query_notes: toolQueryNotes,
-        query_tags: toolQueryTags,
-        query_excursions: toolQueryExcursions,
-        query_playbooks: toolQueryPlaybooks,
-        query_satisfactions: toolQuerySatisfactions,
-        query_incoming_positions: toolQueryIncomingPositions,
-        compute_statistics: toolComputeStatistics,
-        analyze_sl_tp_patterns: toolAnalyzeSlTpPatterns,
-        query_settings: toolQuerySettings,
-        query_screenshots: toolQueryScreenshots,
-        analyze_screenshot: toolAnalyzeScreenshot,
-        query_app_help: toolQueryAppHelp,
-        query_marktradar: toolQueryMarktradar,
-        query_coin_radar: toolQueryCoinRadar,
-        query_chart: toolQueryChart,
-        analyze_model_performance: toolAnalyzeModelPerformance,
-        get_openrouter_models: toolGetOpenrouterModels,
-        recommend_model_allocation: toolRecommendModelAllocation,
-        // Werkzeuge der Strategie-Agenten: Auswertung lesen, Hypothesen im
-        // Backtest messen, Parameteränderungen zur Freigabe vorschlagen.
-        ...STRATEGY_TOOL_IMPL,
-    }
-
-    const fn = tools[toolName]
+export async function executeTool(toolName, params, knex, lauf = null) {
+    const fn = WERKZEUGE[toolName]
     if (!fn) {
         return { error: `Unknown tool: ${toolName}` }
     }
+    if (lauf?.fremdtextGesehen && SCHREIBENDE_WERKZEUGE.has(toolName)) {
+        return { error: 'In diesem Lauf wurde bereits Fremdtext gelesen (Token-Namen oder der Lagebericht). Danach sind Backtest und Parametervorschlag gesperrt. Der Nutzer kann die Frage in einem neuen Lauf stellen.' }
+    }
 
     try {
-        return await fn(knex, params || {})
+        const ergebnis = await fn(knex, params || {})
+        if (lauf && FREMDTEXT_WERKZEUGE.has(toolName)) lauf.fremdtextGesehen = true
+        return ergebnis
     } catch (err) {
         logWarn('ai-agent-tools', `Tool ${toolName} failed: ${err.message}`)
         return { error: `Tool execution failed: ${err.message}` }
@@ -441,8 +472,10 @@ const fmtZahl = v => (v === null || v === undefined ? '?' : Number(v).toFixed(2)
 // mit knappen Textzeilen statt Rohdaten, damit der Agent nicht ~100 Zeilen mit
 // allen Spalten in den Kontext bekommt.
 async function toolQueryCoinRadar(knex, params) {
-    const letzterLauf = await knex('coinradar_laeufe').where({ status: 'fertig', anlageklasse: 'krypto' }).orderBy('id', 'desc').first()
-    if (!letzterLauf) return { error: 'Noch kein fertiger Coin-Radar-Lauf vorhanden.' }
+    // `markt: 'aktien'` liest die Rangliste des Aktien-Radars — derselbe Unterbau, andere Anlageklasse.
+    const anlageklasse = params.markt === 'aktien' ? 'aktien' : 'krypto'
+    const letzterLauf = await knex('coinradar_laeufe').where({ status: 'fertig', anlageklasse }).orderBy('id', 'desc').first()
+    if (!letzterLauf) return { error: anlageklasse === 'aktien' ? 'Noch kein fertiger Aktien-Radar-Lauf vorhanden (Aktien-Modus aus?).' : 'Noch kein fertiger Coin-Radar-Lauf vorhanden.' }
 
     const rohZeilen = await knex('coinradar_zeilen')
         .where('laufId', letzterLauf.id)

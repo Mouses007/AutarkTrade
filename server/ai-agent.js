@@ -142,7 +142,7 @@ Regeln:
 - Antworte knapp: du stehst in einer schmalen Seitenleiste. Zuerst die Antwort, dann höchstens die zwei, drei Zahlen, die sie tragen. Kurze Listen statt Tabellen, sparsam mit Überschriften.
 - Sei direkt und konstruktiv. Fehlen Daten oder enthält der Zeitraum keine Trades, sag das klar.
 - Sagt der Nutzer „diesen Monat" oder „März", gilt das aktuelle Jahr ${year}.
-- ${ZITAT_REGEL}
+- ${ZITAT_REGEL} Nach einem Werkzeug mit solchem Material sind run_backtest und propose_param_change für diesen Lauf gesperrt.
 
 JOURNAL — Tipps für die Werkzeuge:
 - Gesamtübersicht: compute_statistics (Win-Rate, PnL, Profit Factor …)
@@ -187,10 +187,17 @@ Harte Regeln dabei:
 export const WERKZEUG_WEGWEISER = `- Bedienung der Software, jede Seite: query_app_help.
 - Journal (Dashboard, Tagesansicht, Kalender, Playbook, Auswertung, Screenshots, Pendente Trades): query_trades, compute_statistics, query_notes, query_tags, query_playbooks, query_satisfactions, query_excursions, analyze_sl_tp_patterns, query_screenshots, analyze_screenshot, query_incoming_positions.
 - Marktradar (Fear & Greed, Dominanz, Funding, Long/Short, Liquidationen, Makro): query_marktradar. Nur die gelieferten Zahlen nennen.
-- Coin-Radar („welcher Coin lässt sich gerade gut handeln"): query_coin_radar, NICHT query_marktradar — das sind zwei verschiedene Funktionen.
+- Open Interest und Liquidationskarte (Hebelzonen eines Symbols): query_hebelzonen. Das ist ein Modell, keine Messung.
+- Nachrichten: query_lagebericht liest den gespeicherten Lagebericht. Einzelne Beiträge kennst du nicht.
+- Live-Trading (Sitzungen, Archiv, Auswertung): query_live_sessions.
+- Hype-Radar: query_hype_radar für die Listen (Kandidaten, Rohliste, Scan, Börsen, Berichte) und query_hype_token für EINEN Token — auch für „gibt es einen Token X?" und „warum ist der kein Kandidat?". Ist auf der Seite ein Token aufgeklappt, nimm dessen Vertrag.
+- Coin-Radar („welcher Coin lässt sich gerade gut handeln"): query_coin_radar, NICHT query_marktradar — das sind zwei verschiedene Funktionen. Aktien-Radar: query_coin_radar mit markt="aktien". Newcomer-Radar: query_newcomer_radar.
 - Chart: query_chart.
-- Strategien: get_strategy_config, get_strategy_performance, get_strategy_setups, run_backtest, propose_param_change.
-- KI-Einstellungen und Modellwahl: query_settings, analyze_model_performance, get_openrouter_models, recommend_model_allocation.`
+- Portfolio (Bestände, Bilanz, DCA, Staking, Bewegungen): query_portfolio.
+- Strategien: list_strategy_instances zuerst (liefert die instanceId), list_backtests, dann get_strategy_config, get_strategy_performance, get_strategy_setups, run_backtest, propose_param_change.
+- Lernen (Karteikasten): query_lernen.
+- KI-Einstellungen und Modellwahl: query_settings, analyze_model_performance, get_openrouter_models, recommend_model_allocation.
+- Ohne Werkzeug: die Liquiditäts-Heatmap (entsteht nur im Browser) und die Bots-Seite. Dort hilfst du nur mit query_app_help und sagst das.`
 
 // ==================== TOOL FORMAT CONVERTERS ====================
 

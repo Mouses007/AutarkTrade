@@ -117,7 +117,7 @@ function standDerStrategie(strategyId, fassungen) {
 }
 
 /** DB-Zeile → API-Form (JSON geparst, objectId wie überall im Projekt). */
-function instanzNachAussen(row) {
+export function instanzNachAussen(row) {
     return {
         ...row,
         objectId: String(row.id),
@@ -146,7 +146,7 @@ function instanzNachAussen(row) {
  * Bis 01.11.2026 lieferte die Liste nur offene Positionen, Zahl und Netto —
  * einen Vergleich zwischen Instanzen gab es nirgends.
  */
-async function kennzahlenJeInstanz(knex, ids = null) {
+export async function kennzahlenJeInstanz(knex, ids = null) {
     const nur = (q) => (ids ? q.whereIn('instanceId', ids) : q)
     const [offen, summen, vorschlaege] = await Promise.all([
         nur(knex('strategy_positions').whereIn('status', ['open', 'closing']))

@@ -334,10 +334,10 @@ const SEITEN_UEBERSCHREIBUNG = {
 // Coin-/Hype-Radar: query_marktradar liefert Marktradar-Kacheln für EIN
 // Symbol, keine Radar-Rangliste. Ohne diesen Hinweis hat der Agent das schon
 // einmal verwechselt und Marktmechanik-Zahlen als Coin-Radar-Antwort
-// ausgegeben. Für den Coin-Radar gibt es seit 28.08.2026 query_coin_radar;
-// für den Hype-Radar weiterhin kein Live-Abfrage-Tool.
+// ausgegeben. Für den Coin-Radar gibt es seit 28.08.2026 query_coin_radar,
+// für den Hype-Radar seit 15.11.2026 query_hype_radar und query_hype_token.
 const RADAR_HINWEIS_COIN = 'query_marktradar liefert NICHT die Coin-Radar-Rangliste (das sind Marktradar-Kacheln für ein einzelnes Symbol). Für die aktuelle Coin-Radar-Rangliste nutze query_coin_radar.'
-const RADAR_HINWEIS_HYPE = 'query_marktradar liefert NICHT die Hype-Radar-Funde (das sind Marktradar-Kacheln für ein einzelnes Symbol). Für aktuelle Hype-Radar-Ergebnisse gibt es aktuell kein Live-Abfrage-Tool — sag das offen, statt Marktradar-Zahlen als Antwort auszugeben.'
+const RADAR_HINWEIS_HYPE = 'Für den Hype-Radar gibt es query_hype_radar (Kandidaten, Rohliste, Scan, Börsen, Berichte) und query_hype_token (ein Token nach Kürzel, Name oder Vertrag). query_marktradar liefert NICHT die Hype-Radar-Funde (das sind Marktradar-Kacheln für ein einzelnes Symbol).'
 const SEITEN_HINWEIS = {
     coinRadar: RADAR_HINWEIS_COIN,
     coinVerlauf: RADAR_HINWEIS_COIN,

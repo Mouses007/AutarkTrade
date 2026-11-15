@@ -20,14 +20,18 @@
  * nicht zwingen; es lässt sich nur klar informieren, was es vor sich hat. Die
  * eigentliche Sicherheitseigenschaft liegt woanders und bleibt bestehen:
  *
- *   **KEIN Agent-Tool darf je Fremdtext zurückgeben.**
+ *   **Nach Fremdtext schreibt der Agent nichts mehr.**
  *
- * Fremdtext-Prompts laufen über `callLLMJson` ohne jede Tool-Definition; der
- * Tool-Use-Agent bekommt nie Fremdtext, keines seiner Tools liefert News,
- * Feeds oder Webinhalte. Solange das gilt, hat eine Injektion keinen
- * Codepfad — nur einen Entscheidungspfad über den gelesenen Bericht. Wer ein
- * `query_news`-Tool ergänzt, hebt diese Eigenschaft auf; besonders bei Ollama,
- * wo Tool-Aufrufe per Regex aus dem Antworttext geparst werden.
+ * Fremdtext-Prompts laufen über `callLLMJson` ohne jede Tool-Definition. Der
+ * Tool-Use-Agent (KI-Coach) bekam bis 15.11.2026 nie Fremdtext; seither geben
+ * ihn wenige, mit `fremdtext: true` markierte Werkzeuge gekürzt und als Zitat
+ * zurück (`zitatZeile`: Token-Namen des Hype-Radars, der gespeicherte
+ * Lagebericht) — und nach dem ersten solchen Ergebnis sperrt `executeTool`
+ * die schreibenden Werkzeuge für den Rest des Laufs. Eine Injektion hat damit
+ * weiterhin keinen Codepfad, der etwas verändert, nur einen Entscheidungspfad
+ * über die gelesene Antwort. Feeds, einzelne Beiträge und Webinhalte liefert
+ * kein Werkzeug; wer ein `query_news` über Beiträge ergänzt, öffnet genau das.
+ * Die ganze Regel steht im Kopf von `server/ai-agent-tools.js`.
  */
 
 const START = '<<<'
