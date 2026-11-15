@@ -41,7 +41,7 @@ import { spamPruefer } from './spam.js'
 import { STABIL, FIAT } from './normal.js'
 import { uebergaben } from './uebergabe.js'
 import { futuresSteuerjahr } from './futures-steuer.js'
-import { bitpandaAktienArten, aktienKlasseVon, ohneAktienSeiten, aktienHinweis, ladeBewegungsKlassen } from './aktien-art.js'
+import { bitpandaAktienArten, bitpandaMehrdeutige, aktienKlasseVon, ohneAktienSeiten, aktienHinweis, aktienMehrdeutigHinweis, ladeBewegungsKlassen } from './aktien-art.js'
 
 const SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
     'transferMit', 'einordnung', 'chfWert', 'sicherheit', 'kontrakt', 'kette']
@@ -216,9 +216,10 @@ export async function berechneSteuerjahr(jahr) {
     const istSpam = await spamPruefer()
     const roh = (await k('portfolio_bewegungen').select(SPALTEN)).map((b) => ({ ...b, zeit: Number(b.zeit) }))
     // Aktien/ETFs bei Bitpanda heraus (nach Quelle UND Kürzel), die Geldseite bleibt.
-    // Die Art steht an der Bewegung (BUG-P-005), sonst gilt der Stand der Quelle.
+    // Die Art steht an der Bewegung (BUG-P-005), sonst gilt der Stand der Quelle — ausser das Konto
+    // kennt zum Kürzel auch einen Coin: dann bleibt die alte Bewegung als Coin im Bericht (RAS-02).
     const aktienArten = await bitpandaAktienArten(k)
-    const aktienKlasse = aktienKlasseVon(aktienArten)
+    const aktienKlasse = aktienKlasseVon(aktienArten, await bitpandaMehrdeutige(k, aktienArten))
     await ladeBewegungsKlassen(k, roh, aktienArten)
     const ohne = ohneAktienSeiten((await ladeGegenKontrakte(k, roh)).filter((b) => !istSpam(b.asset, b.kontrakt)), aktienKlasse)
     const bew = ohne.bewegungen
@@ -400,6 +401,9 @@ export async function berechneSteuerjahr(jahr) {
     }
     const aktienH = aktienHinweis(aktienListe)
     if (aktienH) hinweise.push(aktienH)
+    // Aktie und Coin gleichen Kürzels, alte Bewegungen ohne Art: sie stehen als Coin im Bericht (RAS-02).
+    const mehrdeutigH = aktienMehrdeutigHinweis([...ohne.offen].filter(([, e]) => e.ersteZeit <= bis).map(([a]) => a))
+    if (mehrdeutigH) hinweise.push(mehrdeutigH)
     if (estv.fehler) hinweise.push({ art: 'estv', text: `ESTV-Kursliste ${jahr} konnte nicht gelesen werden (${estv.fehler}) — es gelten Börsenkurse; Kurse der ESTV von Hand eintragen.` })
     else if (estv.nichtErschienen) hinweise.push({ art: 'estv', text: `Die ESTV-Kursliste ${jahr} ist noch nicht erschienen (jeweils am 1. Januar) — bis dahin gelten Börsenkurse.` })
 
@@ -495,6 +499,7 @@ export async function berechneSteuerjahr(jahr) {
         kostenbasisSumme: vermoegen.reduce((s, p) => s + (p.kostenbasis || 0), 0),
         futures,
         aktienNichtEnthalten: aktienH ? aktienH.kuerzel : [],
+        aktienMehrdeutig: mehrdeutigH ? mehrdeutigH.kuerzel : [],
         vermoegenGesamt: vermoegenSumme + (futures?.guthabenChf || 0),
         hinweise,
     }
@@ -544,6 +549,7 @@ export function steuerCsv(s) {
     zeilen.push('', 'VERÄNDERUNGEN (Käufe, Verkäufe, Tausch, Ein- und Auszahlungen);Ort;Art;Abgang Coin;Abgang Menge;Zugang Coin;Zugang Menge;Wert CHF')
     for (const v of s.veraenderungen || []) zeilen.push([d(v.zeit), v.quelle, v.art, v.ab?.asset, v.ab?.menge, v.zu?.asset, v.zu?.menge, v.chfWert].map(z).join(';'))
     if (s.aktienNichtEnthalten?.length) zeilen.push('', z(`Nicht enthalten: ${s.aktienNichtEnthalten.length} Aktien/ETF bei Bitpanda (${s.aktienNichtEnthalten.join(', ')}) — sie gehören ins Wertschriftenverzeichnis, nicht in die Beilage Kryptowährungen.`))
+    if (s.aktienMehrdeutig?.length) zeilen.push('', z(`Nicht eindeutig zugeordnet: ${s.aktienMehrdeutig.join(', ')} ist bei Bitpanda zugleich Aktie und Coin — ältere Bewegungen zählen in diesem Bericht als Coin.`))
     zeilen.push('', 'Methode: Stichtag 31.12. 23:59:59 Europe/Zurich; Kurse: ESTV-Kursliste, sonst Tagesschlusskurs der Börse (Spalte Kursquelle); USD/CHF und EUR/CHF der EZB.')
     return '\ufeff' + zeilen.join('\n') + '\n'
 }

@@ -24,7 +24,7 @@ import { boersenWahl, laufStand, BOERSEN } from './abruf.js'
 import { WALLET_TYPEN, EVM_NETZE, KETTEN } from '../../shared/portfolio-adresse.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
 import { tokenIdentitaet, ladeGegenKontrakte } from './token-id.js'
-import { aktienZeilenKurs, stammKurseUsd, bitpandaAktienNamen, bitpandaAktienArten, aktienKlasseVon, ladeBewegungsKlassen, identMitAktien, AKTIEN_ANHANG } from './aktien-art.js'
+import { aktienZeilenKurs, stammKurseUsd, bitpandaAktienNamen, bitpandaAktienArten, bitpandaMehrdeutige, aktienKlasseVon, ladeBewegungsKlassen, identMitAktien, AKTIEN_ANHANG } from './aktien-art.js'
 
 const BOERSEN_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', bitpanda: 'Bitpanda' }
 
@@ -46,16 +46,23 @@ const FIFO_SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAss
  * (FUN-P-004): bis dahin teilten sich die Aktie LDO (Leonardo) und der Coin
  * LDO (Lido) die FIFO-Lose, Ø-Kaufkurs und unrealisierter Gewinn stimmten
  * für keines von beiden. Ohne Aktien am Konto ändert sich nichts.
- * @returns {Promise<{ einstand: Map, ident }>}
+ *
+ * `aktienMehrdeutig` (RAS-02): Kürzel, die das Konto als Aktie UND als Coin
+ * kennt und zu denen Bewegungen ohne eigene Art vorliegen — sie liegen im Topf
+ * des Coins, weil sich nicht sagen lässt, wem sie gehören.
+ * @returns {Promise<{ einstand: Map, ident, aktienMehrdeutig: string[] }>}
  */
 export async function einstandHeute(istSpam = () => null) {
     const k = getKnex()
     const bew = (await ladeGegenKontrakte(k, await k('portfolio_bewegungen').select(FIFO_SPALTEN))).filter((b) => !istSpam(b.asset, b.kontrakt))
     const ident = tokenIdentitaet(bew)
     const arten = await bitpandaAktienArten(k)
-    if (!arten.size) return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident }).lose), ident }
+    if (!arten.size) return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident }).lose), ident, aktienMehrdeutig: [] }
     await ladeBewegungsKlassen(k, bew, arten)
-    return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident: identMitAktien(ident, aktienKlasseVon(arten)) }).lose), ident }
+    const klasse = aktienKlasseVon(arten, await bitpandaMehrdeutige(k, arten))
+    const offen = new Set()
+    for (const b of bew) for (const seite of [b.asset, b.gegenAsset]) if (seite && klasse.offen(b.quelle, seite, b)) offen.add(String(seite).toUpperCase())
+    return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident: identMitAktien(ident, klasse) }).lose), ident, aktienMehrdeutig: [...offen].sort() }
 }
 
 /** Quellen, deren „genutzt bis“ vor `zeit` liegt. */
@@ -212,7 +219,7 @@ async function rechneUebersicht({ ohneVerlauf }) {
     }
     const gesamtChf = gesamtUsd * fx.chf
     // Kaufkurs: FIFO über alle Bewegungen, Ø der noch gehaltenen Lose (CHF).
-    const { einstand, ident } = await einstandHeute(istSpam)
+    const { einstand, ident, aktienMehrdeutig } = await einstandHeute(istSpam)
     const einstandVon = (p) => einstand.get(einstandSchluessel(p, ident))
     const postenListe = [...jeAsset.values()]
         .map((p) => ({ ...p, ...einstandFuer(einstandVon(p), p), anteil: gesamtChf > 0 ? p.chf / gesamtChf : 0, staub: !p.ohneKurs && p.chf < staubChf }))
@@ -305,6 +312,7 @@ async function rechneUebersicht({ ohneVerlauf }) {
         gesamt: { chf: gesamtChf, usd: gesamtUsd, ohneKurs },
         fx: { chf: fx.chf, quelle: fx.quelle, datum: fx.datum },
         marktFehler: marktFehler || null,
+        aktienMehrdeutig,
         staubChf,
         posten: postenListe,
         quellen,

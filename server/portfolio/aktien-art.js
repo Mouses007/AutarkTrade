@@ -350,6 +350,95 @@ export async function ladeBewegungsKlassen(knex, bewegungen, arten) {
 }
 
 /**
+ * Bewegungsarten, die es bei Bitpanda nur für Coins gibt: Staking-Ertrag, Stake/Unstake,
+ * Airdrop, Ein- und Auszahlung auf eine Wallet. Aktien dort sind nicht übertragbar.
+ * `belohnung` fehlt mit Absicht — Bitpanda verschenkt auch Aktien-Stücke.
+ */
+const NUR_COIN_ARTEN = new Set(['staking', 'umbuchung', 'airdrop', 'einzahlung', 'auszahlung'])
+
+/**
+ * Aktien-Kürzel, zu denen das Konto AUCH einen Coin gleichen Kürzels kennt. Rein.
+ *
+ * RAS-02: Eine Bewegung von vor dem 15.11.2026 trägt keine Art (`roh.klassen`),
+ * für sie zählte allein das Kürzel der Quelle — der Kauf des Coins LDO (Lido)
+ * galt als Aktie, weil das Konto die Aktie LDO (Leonardo) kennt, und fiel aus
+ * dem Krypto-Steuerbericht. Für ein mehrdeutiges Kürzel gilt der Rückfall
+ * darum nicht (`aktienKlasseVon`).
+ *
+ * Mehrdeutig heisst: das KONTO belegt einen Coin dieses Kürzels — nicht, dass
+ * Bitpanda irgendwo einen führt (53 Kürzel doppelt; wer nur die Aktie hat,
+ * soll sie nicht als Coin versteuern). Ein Beleg genügt:
+ *   - `stand`:    der Abruf kennt zum Kürzel eine zweite Asset-Kennung, die keine Aktie ist
+ *                 (`stand.symbole`/`stand.klassen`; Kennungen bleiben über alle Läufe gemerkt,
+ *                 also auch die eines längst verkauften Coins),
+ *   - `bestand`:  das Kürzel liegt als Aktien-Zeile UND als Zeile ohne Art im Bestand,
+ *   - `bewegung`: eine Bewegung hält «keine Aktie» fest (`roh.klassen` = '') oder ist von
+ *                 einer Art, die es für Aktien nicht gibt (`NUR_COIN_ARTEN`) und trägt selbst keine Art.
+ *
+ * @param {{arten: Map<string, string>, stand?: object|null,
+ *          bestand?: Array<{asset: string, klasse?: string|null}>,
+ *          bewegungen?: Array<{art?: string, asset?: string, gegenAsset?: string, roh?: any, klassen?: object}>}} o
+ *        `bestand` und `bewegungen` nur von Bitpanda
+ * @returns {Map<string, 'stand'|'bestand'|'bewegung'>}  KÜRZEL → erster Beleg
+ */
+export function mehrdeutigeKuerzel({ arten, stand = null, bestand = [], bewegungen = [] } = {}) {
+    const aus = new Map()
+    if (!arten?.size) return aus
+    const gross = (s) => String(s || '').toUpperCase()
+    const merke = (a, grund) => { if (arten.has(a) && !aus.has(a)) aus.set(a, grund) }
+
+    const jeKuerzel = new Map()      // KÜRZEL → [Art je Kennung]
+    for (const [id, s] of Object.entries(stand?.symbole && typeof stand.symbole === 'object' ? stand.symbole : {})) {
+        const a = gross(s)
+        if (!arten.has(a)) continue
+        if (!jeKuerzel.has(a)) jeKuerzel.set(a, [])
+        jeKuerzel.get(a).push(stand?.klassen?.[id])
+    }
+    for (const [a, k] of jeKuerzel) if (k.length > 1 && k.some((x) => !KLASSEN.includes(x))) merke(a, 'stand')
+
+    const zeilen = new Map()         // KÜRZEL → {mit, ohne}
+    for (const z of bestand || []) {
+        const a = gross(z.asset)
+        if (!arten.has(a)) continue
+        const e = zeilen.get(a) || { mit: false, ohne: false }
+        if (z.klasse) e.mit = true
+        else e.ohne = true
+        zeilen.set(a, e)
+    }
+    for (const [a, e] of zeilen) if (e.mit && e.ohne) merke(a, 'bestand')
+
+    for (const b of bewegungen || []) {
+        const eigen = bewegungsKlassen(b)
+        for (const seite of [b.asset, b.gegenAsset]) {
+            const a = gross(seite)
+            if (!a || !arten.has(a) || aus.has(a)) continue
+            if (eigen && a in eigen) { if (!KLASSEN.includes(eigen[a])) merke(a, 'bewegung') }
+            else if (seite === b.asset && !b.gegenAsset && NUR_COIN_ARTEN.has(b.art)) merke(a, 'bewegung')
+        }
+    }
+    return aus
+}
+
+/**
+ * `mehrdeutigeKuerzel` aus der Datenbank. Liest nur, und nur zu Kürzeln, die das Konto als Aktie kennt —
+ * ohne Aktien am Konto (`arten` leer) gar nichts. Was nicht lesbar ist, belegt nichts.
+ * @param {Map<string, string>} arten  aus `bitpandaAktienArten`
+ * @returns {Promise<Map<string, string>>}
+ */
+export async function bitpandaMehrdeutige(knex, arten) {
+    if (!arten?.size) return new Map()
+    const kuerzel = [...arten.keys()]
+    let stand = null, bestand = [], bewegungen = []
+    try { stand = JSON.parse((await knex('portfolio_quellen').where('quelle', 'bitpanda').first())?.stand || '{}') } catch { /* kein Stand */ }
+    try { bestand = await knex('portfolio_bestaende').where('quelle', 'bitpanda').whereIn('asset', kuerzel).select('asset', 'klasse') } catch { /* kein Bestand */ }
+    try {
+        bewegungen = await knex('portfolio_bewegungen').where('quelle', 'bitpanda')
+            .where((w) => w.whereIn('asset', kuerzel).orWhereIn('gegenAsset', kuerzel)).select('art', 'asset', 'gegenAsset', 'roh')
+    } catch { /* keine Bewegungen */ }
+    return mehrdeutigeKuerzel({ arten, stand, bestand, bewegungen })
+}
+
+/**
  * Art einer Seite nach QUELLE und Kürzel — nie nach dem Kürzel allein: `SUI`
  * ist bei Bitpanda die Aktie Sun Communities, bei einer anderen Quelle der Coin.
  *
@@ -357,18 +446,31 @@ export async function ladeBewegungsKlassen(knex, bewegungen, arten) {
  * (`bewegungsKlassen`, BUG-P-005): Bitpanda führt `LDO` als Aktie Leonardo UND
  * als Coin Lido — der Staking-Ertrag des Coins ist keine Aktie, nur weil das
  * Konto je eine gleichen Kürzels hatte. Sagt die Bewegung nichts (alte Zeile),
- * gilt der Stand der Quelle.
+ * gilt der Stand der Quelle — ausser das Kürzel ist am Konto mehrdeutig
+ * (`mehrdeutigeKuerzel`, RAS-02): dann zählt die Bewegung wie vor der
+ * Aktien-Trennung als Coin. Sie bleibt so im Krypto-Steuerbericht und im Topf
+ * des Coins, statt still daraus zu verschwinden; `klasse.offen(…)` sagt, dass
+ * genau das geschah, damit Bericht und Übersicht es nennen können.
+ * Ohne Bewegung (Bestandszeile) gilt immer der Stand der Quelle.
+ *
  * @param {Map<string, string>} arten  aus `bitpandaAktienArten`
- * @returns {(quelle: string, asset: string, bewegung?: object) => 'aktie'|'etf'|null}
+ * @param {Map<string, string>|Set<string>|null} [mehrdeutig]  aus `bitpandaMehrdeutige`; ohne → kein Kürzel mehrdeutig
+ * @returns {((quelle: string, asset: string, bewegung?: object) => 'aktie'|'etf'|null) & {offen: (quelle: string, asset: string, bewegung?: object) => boolean}}
  */
-export function aktienKlasseVon(arten) {
-    return (quelle, asset, bewegung = null) => {
-        if (quelle !== 'bitpanda' || !asset) return null
+export function aktienKlasseVon(arten, mehrdeutig = null) {
+    // 'eigen' = die Bewegung sagt es selbst, 'stand' = Rückfall auf das Kürzel, 'offen' = Rückfall gesperrt (mehrdeutig)
+    const lies = (quelle, asset, bewegung) => {
+        if (quelle !== 'bitpanda' || !asset) return [null, null]
         const a = String(asset).toUpperCase()
         const eigen = bewegung ? bewegungsKlassen(bewegung) : null
-        if (eigen && a in eigen) return KLASSEN.includes(eigen[a]) ? eigen[a] : null
-        return arten?.get(a) || null
+        if (eigen && a in eigen) return [KLASSEN.includes(eigen[a]) ? eigen[a] : null, 'eigen']
+        const k = arten?.get(a) || null
+        if (k && bewegung && mehrdeutig?.has(a)) return [null, 'offen']
+        return [k, 'stand']
     }
+    const klasse = (quelle, asset, bewegung = null) => lies(quelle, asset, bewegung)[0]
+    klasse.offen = (quelle, asset, bewegung = null) => lies(quelle, asset, bewegung)[1] === 'offen'
+    return klasse
 }
 
 /**
@@ -397,18 +499,21 @@ export function identMitAktien(ident, klasse) {
  *
  * @param {Array} bewegungen
  * @param {(quelle: string, asset: string) => string|null} klasse  siehe `aktienKlasseVon`
- * @returns {{ bewegungen: Array, betroffen: Set, kuerzel: Map<string, {klasse: string, ersteZeit: number}> }}
+ * @returns {{ bewegungen: Array, betroffen: Set, kuerzel: Map<string, {klasse: string, ersteZeit: number}>,
+ *             offen: Map<string, {klasse: 'offen', ersteZeit: number}> }}
  *   `betroffen` = ids der gekürzten Bewegungen (sie sind keine «Veränderung» des Krypto-Berichts mehr).
+ *   `offen` = mehrdeutige Kürzel (RAS-02), deren Bewegungen ohne eigene Art als Coin im Bericht BLEIBEN.
  */
 export function ohneAktienSeiten(bewegungen, klasse) {
-    const aus = [], betroffen = new Set(), kuerzel = new Map()
-    const merke = (asset, k, zeit) => {
+    const aus = [], betroffen = new Set(), kuerzel = new Map(), offen = new Map()
+    const merke = (asset, k, zeit, ziel = kuerzel) => {
         const a = String(asset).toUpperCase()
-        const e = kuerzel.get(a)
-        if (!e) kuerzel.set(a, { klasse: k, ersteZeit: Number(zeit) })
+        const e = ziel.get(a)
+        if (!e) ziel.set(a, { klasse: k, ersteZeit: Number(zeit) })
         else if (Number(zeit) < e.ersteZeit) e.ersteZeit = Number(zeit)
     }
     for (const b of bewegungen || []) {
+        if (klasse.offen) for (const seite of [b.asset, b.gegenAsset]) if (seite && klasse.offen(b.quelle, seite, b)) merke(seite, 'offen', b.zeit, offen)
         const kA = b.asset ? klasse(b.quelle, b.asset, b) : null
         const kG = b.gegenAsset ? klasse(b.quelle, b.gegenAsset, b) : null
         if (!kA && !kG) { aus.push(b); continue }
@@ -423,7 +528,7 @@ export function ohneAktienSeiten(bewegungen, klasse) {
         if (!rest || !(Math.abs(Number(rest.menge)) > 0)) continue
         aus.push({ ...b, ...rest, ...gebuehr, gegenAsset: null, gegenMenge: null, art: Number(rest.menge) < 0 ? 'auszahlung' : 'einzahlung' })
     }
-    return { bewegungen: aus, betroffen, kuerzel }
+    return { bewegungen: aus, betroffen, kuerzel, offen }
 }
 
 /**
@@ -437,5 +542,20 @@ export function aktienHinweis(liste) {
     return {
         art: 'aktien', n: kuerzel.length, kuerzel,
         text: `${kuerzel.length} Aktien/ETF bei Bitpanda nicht enthalten – sie gehören ins Wertschriftenverzeichnis, nicht in die Beilage Kryptowährungen: ${kuerzel.join(', ')}.`,
+    }
+}
+
+/**
+ * Hinweis auf Kürzel, die das Konto als Aktie UND als Coin kennt und deren ältere
+ * Bewegungen keine Art tragen (RAS-02) — sie stehen als Coin im Bericht. Rein.
+ * @param {Iterable<string>} kuerzel
+ * @returns {{art: 'aktienMehrdeutig', n: number, kuerzel: string[], text: string}|null}
+ */
+export function aktienMehrdeutigHinweis(kuerzel) {
+    const liste = [...new Set([...(kuerzel || [])].map((a) => String(a).toUpperCase()))].sort()
+    if (!liste.length) return null
+    return {
+        art: 'aktienMehrdeutig', n: liste.length, kuerzel: liste,
+        text: `${liste.length} Kürzel sind bei Bitpanda zugleich Aktie und Coin; ältere Bewegungen sind nicht eindeutig zugeordnet und zählen hier als Coin: ${liste.join(', ')}. Enthalten sie Käufe oder Verkäufe der Aktie, gehören diese nicht in die Beilage Kryptowährungen.`,
     }
 }

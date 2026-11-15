@@ -201,6 +201,7 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                 <ul class="ps-pruefen">
                     <li v-for="(h, i) in daten.hinweise" :key="i">
                         <template v-if="h.art === 'aktien'">{{ t('portfolio.stAktienNichtEnthalten', { n: h.n }) }}<span class="ps-liste">{{ h.kuerzel.join(' · ') }}</span></template>
+                        <template v-else-if="h.art === 'aktienMehrdeutig'">{{ t('portfolio.stAktienMehrdeutig', { n: h.n }) }}<span class="ps-liste">{{ h.kuerzel.join(' · ') }}</span></template>
                         <template v-else>{{ h.text }}</template>
                         <span v-if="h.quellen" class="ps-liste">{{ h.quellen.join(' · ') }}</span>
                         <span v-if="h.liste" class="ps-liste">{{ h.liste.map((x) => `${x.quelle}: ${x.asset} ${menge(x.menge)}`).join(' · ') }}</span>

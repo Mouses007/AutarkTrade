@@ -53,7 +53,7 @@ import { totalverlustUebersicht } from './totalverlust-seite.js'
 import { stakingUebersicht } from './staking.js'
 import { wachtAus, setzeWacht, wachtbar } from './wacht.js'
 import { istDcaKauf, dcaArt, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon, dcaKursWege, dcaAktienBestand } from './dca.js'
-import { bitpandaAktienArten, aktienKlasseVon } from './aktien-art.js'
+import { bitpandaAktienArten, bitpandaMehrdeutige, aktienKlasseVon } from './aktien-art.js'
 import { kerzen as marktKerzen } from '../marktdaten/index.js'
 import { steuerBerichtHtml, berichtCss, BERICHT_JS } from './steuer-bericht.js'
 import fs from 'fs'
@@ -107,7 +107,8 @@ async function dcaKaeufe(k) {
 
 /** Art eines DCA-Kaufs (`aktie` | `etf` | null) — nach Quelle und Kürzel, siehe `aktien-art.js`. */
 async function dcaKlasseVon(k) {
-    const klasse = aktienKlasseVon(await bitpandaAktienArten(k))
+    const arten = await bitpandaAktienArten(k)
+    const klasse = aktienKlasseVon(arten, await bitpandaMehrdeutige(k, arten))
     return (z) => klasse(z.quelle, z.asset, z)      // die Bewegung weiss es genauer als das Kürzel (BUG-P-005)
 }
 

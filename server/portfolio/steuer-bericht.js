@@ -189,6 +189,7 @@ ${dv ? `<li>Devisenkurse: EZB-Referenzkurs, letzter Handelstag bis ${tagIso(dv.d
 <li>Verwendete Kursquellen: ${[...jeQuelle].map(([q, n]) => `${esc(q)} (${n})`).join(', ')}.</li>
 <li>Werbe-Tokens (Spam-Airdrops ohne Wert) sind nicht aufgeführt.</li>
 ${s.aktienNichtEnthalten?.length ? `<li>Nicht enthalten: ${s.aktienNichtEnthalten.length} Aktien/ETF bei Bitpanda (${s.aktienNichtEnthalten.map(esc).join(', ')}) — sie gehören ins Wertschriftenverzeichnis, nicht in diese Beilage.</li>` : ''}
+${s.aktienMehrdeutig?.length ? `<li>Nicht eindeutig zugeordnet: ${s.aktienMehrdeutig.map(esc).join(', ')} ist bei Bitpanda zugleich Aktie und Coin — ältere Bewegungen dieser Kürzel zählen in diesem Bericht als Coin. Käufe oder Verkäufe der Aktie darunter gehören ins Wertschriftenverzeichnis.</li>` : ''}
 </ul></section>`)
     h.push(`<footer class="ende">Krypto-Steuerbericht ${s.jahr}${kt ? ` · Kanton ${esc(kt.name)}` : ''} · erstellt ${datum(o.erstellt || Date.now())} mit AutarkTrade ${esc(o.version || '')}</footer>`)
     h.push('</body></html>')

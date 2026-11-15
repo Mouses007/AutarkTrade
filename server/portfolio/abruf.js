@@ -21,7 +21,7 @@ import { istKanon, gegenKontraktVon } from './token-id.js'
 import { berechneUebersicht } from './uebersicht.js'
 import { wachtAus, meldenswert, meldungFuer, bestandsAenderungen } from './wacht.js'
 import { spamPruefer } from './spam.js'
-import { bitpandaAktienArten, aktienKlasseVon } from './aktien-art.js'
+import { bitpandaAktienArten, bitpandaMehrdeutige, aktienKlasseVon } from './aktien-art.js'
 import { stelleZu } from '../hype-radar/zustellung.js'
 import { leseEinstellungen } from '../hype-radar/einstellungen.js'
 import { melde } from '../benachrichtigungen.js'
@@ -210,7 +210,9 @@ async function bewerteBewegungen(max = 400) {
     // im Spot gibt es nicht, und ein gleichnamiger Coin wäre der falsche Kurs.
     // Die Art steht an der Bewegung (`roh.klassen`), sonst gilt der Stand der Quelle —
     // ein Staking-Ertrag des Coins LDO ist keine Aktie, nur weil es Leonardo gab (BUG-P-005).
-    const klasse = aktienKlasseVon(await bitpandaAktienArten(k))
+    // Kennt das Konto zum Kürzel Aktie UND Coin, zählt eine Zeile ohne Art als Coin (RAS-02).
+    const arten = await bitpandaAktienArten(k)
+    const klasse = aktienKlasseVon(arten, await bitpandaMehrdeutige(k, arten))
     const istAktie = (b, asset) => !!klasse(b.quelle, asset, b)
     for (const b of offen) {
         const datum = new Date(Number(b.zeit)).toISOString().slice(0, 10)

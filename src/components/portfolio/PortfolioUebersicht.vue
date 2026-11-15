@@ -205,6 +205,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
             {{ q.meldung }} <span class="at-gedaempft">· {{ t('portfolio.zeigtLetzten') }}</span>
         </Hinweis>
         <Hinweis v-if="u.marktFehler" art="warn" class="at-mo-3">{{ t('portfolio.marktFehler') }}</Hinweis>
+        <Hinweis v-if="u.aktienMehrdeutig?.length" art="warn" class="at-mo-3">{{ t('portfolio.aktienMehrdeutig', { kuerzel: u.aktienMehrdeutig.join(', ') }) }}</Hinweis>
 
         <Leerzustand v-if="!u.quellen.length" class="at-mo-4" symbol="muenzen" :titel="t('portfolio.leerTitel')" :text="t('portfolio.leerText')">
             <div class="at-flex at-luecke-2 at-zentriert at-umbruch">

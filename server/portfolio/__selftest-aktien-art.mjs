@@ -8,11 +8,14 @@
  * geprüft wird hier die Regel, nicht die Feldnamen jener Antwort.
  */
 import { readFileSync } from 'node:fs'
+import axios from 'axios'
 import {
     klasseAusAsset, klasseAusStamm, aktienZeilenKurs, KLASSEN, bitpandaAktienArten, bitpandaAktienKuerzel, aktienKlasseVon, ohneAktienSeiten, aktienHinweis,
     gruppeGenannt, kennungenAusListe, klasseAusListe, bestimmeKlasse, gemerkteKlassen, trageKlassenNach,
     bewegungsKlassen, ladeBewegungsKlassen, identMitAktien, AKTIEN_ANHANG, namenAusListe, bitpandaAktienNamen, ersatzkursErlaubt, stammKurseUsd,
+    mehrdeutigeKuerzel, bitpandaMehrdeutige, aktienMehrdeutigHinweis,
 } from './aktien-art.js'
+import { klassenNachtrag, OHNE_KURS_AKTIE } from './klassen-nachtrag.js'
 import { tokenIdentitaet } from './token-id.js'
 import { einstandJeAsset } from './steuer-rechnung.js'
 import { postenSchluessel, einstandSchluessel, einstandFuer } from './uebersicht.js'
@@ -29,6 +32,11 @@ import axios from 'axios'
 
 // Ohne Netz: Preise und Listen kommen als Attrappen herein. Ginge doch ein Abruf hinaus, fällt der Test.
 const keinNetz = async (ziel) => { throw new Error(`Abruf im Selbsttest: ${ziel?.url || ziel}`) }
+globalThis.fetch = keinNetz
+axios.defaults.adapter = keinNetz
+
+// Kein Abruf nach aussen: `abruf.js` zieht `kurse.js` mit, und das fragt Bitget über axios.
+const keinNetz = async () => { throw new Error('kein Netz im Selbsttest') }
 globalThis.fetch = keinNetz
 axios.defaults.adapter = keinNetz
 
@@ -336,6 +344,147 @@ console.log('\nFUN-P-004: Aktie und gleichnamiger Coin sind zwei Positionen mit 
     const mit = fifo(krypto, { ident: identMitAktien(idK, aktienKlasseVon(new Map())) }), ohne = fifo(krypto, { ident: idK })
     check('ohne Aktien: Lose und Abgänge unverändert', JSON.stringify([...mit.lose]) === JSON.stringify([...ohne.lose]) && JSON.stringify(mit.abgaenge) === JSON.stringify(ohne.abgaenge))
     check('… auch mit Aktien am Konto bleiben die Coins anderer Kürzel gleich', JSON.stringify(lose.get('BTC')) === JSON.stringify(fifo(bew, { ident }).lose.get('BTC')))
+}
+
+console.log('\nRAS-02: alte Bewegungen ohne Art bei einem Kürzel, das Aktie UND Coin ist')
+{
+    const T = (s) => Date.parse(s)
+    const arten = new Map([['LDO', 'aktie'], ['AAPL', 'aktie']])
+    // Der Fall des Prüfers: Coin LDO (Lido) vor dem 15.11. gekauft und gestakt — Zeilen ohne `klassen` —,
+    // dazu eine neu abgerufene. Das Konto kennt auch die Aktie LDO (Leonardo). AAPL ist nur Aktie.
+    const alt = { id: 1, quelle: 'bitpanda', zeit: T('2025-02-01T10:00:00Z'), art: 'kauf', asset: 'LDO', menge: 100, gegenAsset: 'EUR', gegenMenge: -200, chfWert: 190, roh: '{"operation_type":"buy"}' }
+    const altStaking = { id: 2, quelle: 'bitpanda', zeit: T('2025-06-01T10:00:00Z'), art: 'staking', asset: 'LDO', menge: 1, chfWert: 2, roh: '{"operation_type":"reward"}' }
+    const neu = { id: 3, quelle: 'bitpanda', zeit: T('2025-11-20T10:00:00Z'), art: 'staking', asset: 'LDO', menge: 1, chfWert: 2, roh: '{"operation_type":"reward","klassen":{"LDO":""}}' }
+    const apfel = { id: 4, quelle: 'bitpanda', zeit: T('2025-03-01T10:00:00Z'), art: 'kauf', asset: 'AAPL', menge: 2, gegenAsset: 'EUR', gegenMenge: -400, chfWert: 380, roh: '{"operation_type":"buy"}' }
+    const apfelStueck = { id: 5, quelle: 'bitpanda', zeit: T('2025-04-01T10:00:00Z'), art: 'belohnung', asset: 'AAPL', menge: 0.01, chfWert: 2, roh: '{"operation_type":"onetime_reward"}' }
+    const alle = [alt, altStaking, neu, apfel, apfelStueck]
+
+    // Vorher (der Befund): ohne Mehrdeutigkeit gilt die alte Coin-Zeile als Aktie.
+    const vorher = aktienKlasseVon(arten)
+    check('vorher: alte Coin-Bewegungen galten als Aktie (der Befund)', vorher('bitpanda', 'LDO', alt) === 'aktie' && vorher('bitpanda', 'LDO', altStaking) === 'aktie')
+
+    // Belege für «mehrdeutig», jeder für sich.
+    const m = (o) => [...mehrdeutigeKuerzel({ arten, ...o })].map(([a, g]) => `${a}:${g}`).join()
+    check('Beleg Stand: zweite Kennung des Kürzels ist keine Aktie', m({ stand: { symbole: { a1: 'LDO', c1: 'LDO', a2: 'AAPL', f: 'EUR' }, klassen: { a1: 'aktie', c1: '', a2: 'aktie' } } }) === 'LDO:stand')
+    check('… auch die Kennung eines längst verkauften Coins (Art nie gefragt)', m({ stand: { symbole: { a1: 'LDO', c1: 'LDO' }, klassen: { a1: 'aktie' } } }) === 'LDO:stand')
+    check('zwei Kennungen, beide Aktie/ETF: nicht mehrdeutig', m({ stand: { symbole: { a1: 'LDO', a9: 'LDO' }, klassen: { a1: 'aktie', a9: 'etf' } } }) === '')
+    check('Beleg Bestand: Aktien-Zeile UND Zeile ohne Art', m({ bestand: [{ asset: 'LDO', klasse: 'aktie' }, { asset: 'LDO', klasse: null }, { asset: 'AAPL', klasse: 'aktie' }] }) === 'LDO:bestand')
+    check('eine Zeile ohne Art allein belegt nichts (Bestand von vor der Spalte)', m({ bestand: [{ asset: 'AAPL', klasse: null }] }) === '')
+    check('Beleg Bewegung: neue Zeile hält «keine Aktie» fest', m({ bewegungen: [alt, neu, apfel] }) === 'LDO:bewegung')
+    check('Beleg Bewegung: Staking-Ertrag gibt es für Aktien nicht', m({ bewegungen: [alt, altStaking, apfel, apfelStueck] }) === 'LDO:bewegung')
+    check('Kauf, Verkauf und geschenkte Stücke belegen keinen Coin', m({ bewegungen: [alt, apfel, apfelStueck] }) === '')
+    check('eine Bewegung mit Art «aktie» belegt keinen Coin, was immer ihre Art ist', m({ bewegungen: [{ art: 'einzahlung', asset: 'AAPL', klassen: { AAPL: 'aktie' } }] }) === '')
+    check('ohne Aktien am Konto ist nichts mehrdeutig', mehrdeutigeKuerzel({ arten: new Map(), bewegungen: alle }).size === 0)
+
+    const mehrdeutig = mehrdeutigeKuerzel({ arten, bewegungen: alle })
+    const klasse = aktienKlasseVon(arten, mehrdeutig)
+    check('alte Coin-Bewegungen LDO zählen als Coin', klasse('bitpanda', 'LDO', alt) === null && klasse('bitpanda', 'LDO', altStaking) === null && klasse('bitpanda', 'LDO', neu) === null)
+    check('… und sind als «offen» erkennbar, die neue Zeile nicht', klasse.offen('bitpanda', 'LDO', alt) && klasse.offen('bitpanda', 'LDO', altStaking) && !klasse.offen('bitpanda', 'LDO', neu) && !klasse.offen('bitpanda', 'EUR', alt))
+    check('eine Zeile mit Art «aktie» bleibt Aktie, auch beim mehrdeutigen Kürzel', klasse('bitpanda', 'LDO', { roh: { klassen: { LDO: 'aktie' } } }) === 'aktie')
+    check('ohne Bewegung (Bestandszeile) gilt weiter der Stand der Quelle', klasse('bitpanda', 'LDO') === 'aktie' && !klasse.offen('bitpanda', 'LDO'))
+    check('Gegenprobe: reines Aktien-Kürzel bleibt Aktie, auch ohne Art an der Zeile', klasse('bitpanda', 'AAPL', apfel) === 'aktie' && klasse('bitpanda', 'AAPL', apfelStueck) === 'aktie' && !klasse.offen('bitpanda', 'AAPL', apfel))
+    check('andere Quelle unberührt', klasse('bitget', 'LDO', alt) === null && !klasse.offen('bitget', 'LDO', alt))
+
+    // Steuerbericht.
+    const von = T('2024-12-31T23:00:00Z'), bis = T('2025-12-31T22:59:59Z')
+    const o = ohneAktienSeiten(alle, klasse)
+    check('Steuerbericht behält Kauf und beide Staking-Erträge des Coins unverändert', JSON.stringify(o.bewegungen.filter((b) => b.asset === 'LDO')) === JSON.stringify([alt, altStaking, neu]), JSON.stringify(o.bewegungen.map((b) => `${b.id}:${b.art} ${b.asset}`)))
+    check('kein «Auszahlung EUR» statt des Coin-Kaufs', !o.bewegungen.some((b) => b.id === 1 && b.art === 'auszahlung') && !o.betroffen.has(1) && !o.betroffen.has(2))
+    const e = einkommen(o.bewegungen, von, bis)
+    check('beide Staking-Erträge zählen als Einkommen (4 CHF)', e.zeilen.length === 2 && nah(e.summe, 4), JSON.stringify(e.zeilen.map((z) => z.id)))
+    const best = bestandAm(o.bewegungen, bis)
+    check('Coin steht im Vermögen des Jahres (102 LDO), die Aktie AAPL nicht', nah(best.get('bitpanda\u0000LDO'), 102) && !best.has('bitpanda\u0000AAPL'), JSON.stringify([...best]))
+    check('Gegenprobe: Aktienkauf AAPL wird zum EUR-Abgang, geschenkte Stücke fallen weg', o.bewegungen.some((b) => b.id === 4 && b.asset === 'EUR' && b.art === 'auszahlung') && !o.bewegungen.some((b) => b.id === 5) && o.kuerzel.has('AAPL') && !o.kuerzel.has('LDO'))
+    check('offen = LDO ab der ersten alten Zeile, AAPL nicht', [...o.offen.keys()].join() === 'LDO' && o.offen.get('LDO').ersteZeit === alt.zeit)
+    const h = aktienMehrdeutigHinweis(o.offen.keys())
+    check('Hinweis nennt das Kürzel', h?.art === 'aktienMehrdeutig' && h.n === 1 && h.kuerzel.join() === 'LDO' && /zugleich Aktie und Coin/.test(h.text) && /nicht eindeutig zugeordnet/.test(h.text), JSON.stringify(h))
+    check('ohne offene Kürzel kein Hinweis', aktienMehrdeutigHinweis([]) === null && aktienMehrdeutigHinweis(ohneAktienSeiten([apfel, apfelStueck], klasse).offen.keys()) === null)
+    check('Hinweis Aktien nennt weiter nur AAPL', aktienHinweis(new Map([...o.kuerzel].map(([a, x]) => [a, x.klasse])))?.kuerzel.join() === 'AAPL')
+    const csv = steuerCsv({ jahr: 2025, vermoegen: [], vermoegenSumme: 0, einkommen: { zeilen: [], summe: 0 }, aktienNichtEnthalten: [], aktienMehrdeutig: h.kuerzel })
+    check('CSV nennt das mehrdeutige Kürzel', /Nicht eindeutig zugeordnet: LDO ist bei Bitpanda zugleich Aktie und Coin/.test(csv))
+
+    // FIFO.
+    const ident = tokenIdentitaet(alle)
+    const mit = identMitAktien(ident, klasse)
+    check('FIFO-Topf: alte und neue Coin-Zeilen in LDO, AAPL in AAPL|aktie', [alt, altStaking, neu].every((b) => mit.seiten(b)[0].id === 'LDO') && mit.seiten(apfel)[0].id === 'AAPL|aktie', alle.map((b) => `${b.id}→${mit.seiten(b)[0].id}`).join())
+    const ein = einstandJeAsset(fifo(alle, { ident: mit }).lose)
+    check('Einstand des Coins: 102 Stück, 194 CHF; kein Topf LDO|aktie', nah(ein.get('LDO')?.menge, 102) && nah(ein.get('LDO').kosten, 194) && !ein.has('LDO|aktie') && nah(ein.get('AAPL|aktie')?.menge, 2.01), JSON.stringify([...ein.keys()]))
+    const falsch = einstandJeAsset(fifo(alle, { ident: identMitAktien(ident, vorher) }).lose)
+    check('vorher: der Coin-Kauf lag im Topf LDO|aktie (der Befund)', nah(falsch.get('LDO|aktie')?.menge, 101) && nah(falsch.get('LDO')?.menge, 1))
+
+    // Bewertung: welchen Weg nimmt die Zeile ohne Geldseite?
+    check('Bewertung: alter Staking-Ertrag LDO über den Tageskurs, geschenkte AAPL-Stücke nie über das Kürzel', !klasse('bitpanda', bewertbareSeiten(altStaking).kurs[0], altStaking) && !!klasse('bitpanda', bewertbareSeiten(apfelStueck).kurs[0], apfelStueck))
+
+    // Reines Krypto-Konto: nichts ändert sich.
+    const krypto = [alt, altStaking, neu]
+    const leer = aktienKlasseVon(new Map(), mehrdeutigeKuerzel({ arten: new Map(), bewegungen: krypto }))
+    const ok = ohneAktienSeiten(krypto, leer)
+    check('reines Krypto-Konto: Bewegungen, Lose und Hinweise unverändert', ok.bewegungen.every((b, i) => b === krypto[i]) && ok.offen.size === 0 && ok.kuerzel.size === 0
+        && JSON.stringify([...fifo(krypto, { ident: identMitAktien(tokenIdentitaet(krypto), leer) }).lose]) === JSON.stringify([...fifo(krypto, { ident: tokenIdentitaet(krypto) }).lose]))
+
+    // Aus der Datenbank gelesen.
+    const knex = knexLib({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
+    await knex.schema.createTable('portfolio_quellen', (t) => { t.string('quelle'); t.text('stand') })
+    await knex.schema.createTable('portfolio_bestaende', (t) => { t.string('quelle'); t.string('asset'); t.string('klasse') })
+    await knex.schema.createTable('portfolio_bewegungen', (t) => { t.increments('id'); t.string('quelle'); t.string('art'); t.string('asset'); t.string('gegenAsset'); t.text('roh') })
+    await knex('portfolio_quellen').insert({ quelle: 'bitpanda', stand: JSON.stringify({ aktien: { LDO: 'aktie', AAPL: 'aktie' } }) })
+    const artenDb = await bitpandaAktienArten(knex)
+    check('DB ohne Belege: nichts mehrdeutig', (await bitpandaMehrdeutige(knex, artenDb)).size === 0)
+    await knex('portfolio_bewegungen').insert([
+        { quelle: 'bitget', art: 'staking', asset: 'AAPL', roh: null },                       // andere Quelle zählt nicht
+        { quelle: 'bitpanda', art: 'kauf', asset: 'AAPL', gegenAsset: 'EUR', roh: apfel.roh },
+        { quelle: 'bitpanda', art: 'staking', asset: 'LDO', roh: altStaking.roh },
+    ])
+    check('DB: Staking-Ertrag bei Bitpanda macht LDO mehrdeutig, AAPL nicht', [...(await bitpandaMehrdeutige(knex, artenDb)).keys()].join() === 'LDO')
+    await knex('portfolio_bewegungen').del()
+    await knex('portfolio_bestaende').insert([{ quelle: 'bitpanda', asset: 'LDO', klasse: 'aktie' }, { quelle: 'bitpanda', asset: 'LDO', klasse: null }, { quelle: 'bitget', asset: 'AAPL', klasse: null }, { quelle: 'bitpanda', asset: 'AAPL', klasse: 'aktie' }])
+    check('DB: Bestand mit Aktie und Coin LDO', [...(await bitpandaMehrdeutige(knex, artenDb))].join() === 'LDO,bestand')
+    check('DB: ohne Aktien am Konto wird nichts gelesen', (await bitpandaMehrdeutige(knex, new Map())).size === 0)
+    await knex.destroy()
+}
+
+console.log('\nRAS-02, Teil 2: Nachtrag der Art an Bestandsdaten — nur gerechnet, nichts angewendet')
+{
+    const sym = new Map([['ldo-aktie', 'LDO'], ['ldo-coin', 'LDO'], ['btc', 'BTC'], ['neu', 'NEU'], ['eur', 'EUR']])
+    const art = new Map([['ldo-aktie', 'aktie'], ['ldo-coin', ''], ['btc', '']])
+    const tx = (asset, flow, value) => ({ asset_id: asset === 'eur' ? undefined : asset, currency_id: asset === 'eur' ? 'eur' : undefined, flow, asset_amount: { value: String(value) }, credited_at: '2025-03-01T10:00:00Z' })
+    const ops = [
+        { operation_id: 'k1', operation_type: 'buy', transactions: [tx('eur', 'OUTGOING', '200'), tx('ldo-coin', 'INCOMING', '100')] },
+        { operation_id: 'r1', operation_type: 'reward', transactions: [tx('ldo-coin', 'INCOMING', '1')] },
+        { operation_id: 'a1', operation_type: 'buy', transactions: [tx('eur', 'OUTGOING', '500'), tx('ldo-aktie', 'INCOMING', '10')] },
+        { operation_id: 'g1', operation_type: 'onetime_reward', transactions: [tx('ldo-aktie', 'INCOMING', '0.1')] },
+        { operation_id: 'n1', operation_type: 'reward', transactions: [tx('neu', 'INCOMING', '2')] },
+        { operation_id: 's1', operation_type: 'reward', transactions: [tx('btc', 'INCOMING', '0.001')] },
+        { operation_id: 'x1', operation_type: 'reward', transactions: [tx('btc', 'INCOMING', '0.002')] },
+    ]
+    // So lagen die Zeilen vor dem 15.11. in der DB: ohne `klassen`.
+    const alt = ausBitpandaOperationen(ops, sym)
+    const frisch = ausBitpandaOperationen(ops, sym, (id) => (art.has(id) ? art.get(id) : undefined))
+    const zeile = (id, mehr = {}) => { const b = alt.find((x) => x.externeId === id); return { id: alt.indexOf(b) + 1, externeId: id, asset: b.asset, menge: b.menge, gegenAsset: b.gegenAsset ?? null, gegenMenge: b.gegenMenge ?? null, roh: JSON.stringify(b.roh), chfWert: 1, chfQuelle: 'Betrag in EUR · EZB', ...mehr } }
+    const gespeichert = [
+        zeile('k1'), zeile('r1', { chfWert: null, chfQuelle: OHNE_KURS_AKTIE }), zeile('a1'), zeile('g1', { chfWert: 0.2, chfQuelle: 'Bitget · EZB' }), zeile('n1'),
+        zeile('s1', { roh: JSON.stringify({ operation_type: 'reward', klassen: { BTC: '' } }) }),
+        zeile('x1', { menge: 0.5 }),
+        { id: 90, externeId: 'weg', asset: 'BTC', menge: 1, roh: '{}' },
+        { id: 91, externeId: 'k1x', asset: 'BTC', menge: 1, roh: '{kaputt' },
+    ]
+    const vorher = JSON.stringify(gespeichert)
+    const n = klassenNachtrag(gespeichert, [...frisch, { externeId: 'k1x', asset: 'BTC', menge: 1, roh: { klassen: { BTC: '' } } }])
+    const erg = (id) => n.ergaenzungen.find((x) => x.externeId === id)
+    check('ergänzt werden genau die Zeilen mit belegter Art', n.ergaenzungen.map((x) => x.externeId).sort().join() === 'a1,g1,k1,r1', JSON.stringify(n))
+    check('Coin-Kauf: «keine Aktie», Bewertung über den Betrag bleibt', JSON.stringify(erg('k1').klassen) === '{"LDO":""}' && erg('k1').chfZuruecksetzen === null)
+    check('Staking-Ertrag «Aktie ohne Handelsbetrag»: Art Coin, Bewertung zurücksetzen', erg('r1').klassen.LDO === '' && erg('r1').chfZuruecksetzen === 'coin')
+    check('Aktienkauf: Art Aktie, nichts zurücksetzen', erg('a1').klassen.LDO === 'aktie' && erg('a1').chfZuruecksetzen === null)
+    check('geschenkte Aktien-Stücke mit Coin-Kurs bewertet: zurücksetzen', erg('g1').klassen.LDO === 'aktie' && erg('g1').chfZuruecksetzen === 'aktie')
+    check('neues Rohfeld = altes + klassen, lesbar für bewegungsKlassen', JSON.parse(erg('r1').roh).operation_type === 'reward' && bewegungsKlassen({ roh: erg('r1').roh })?.LDO === '')
+    check('unbekannte Art, schon belegte Zeile, fehlendes Gegenstück: gezählt, nicht ergänzt', n.ohneArt === 1 && n.schonBelegt === 1 && n.ohneGegenstueck === 1, JSON.stringify(n))
+    check('abweichende Menge und unlesbares Rohfeld: gemeldet, nicht ergänzt', n.abweichend.map((x) => x.externeId).sort().join() === 'k1x,x1', JSON.stringify(n.abweichend))
+    check('Eingabe unverändert (rein)', JSON.stringify(gespeichert) === vorher)
+    // Mit den Ergänzungen ist das Kürzel entschieden — ganz ohne Mehrdeutigkeits-Regel.
+    const klasse = aktienKlasseVon(new Map([['LDO', 'aktie']]))
+    const nach = gespeichert.map((z) => ({ quelle: 'bitpanda', ...z, roh: erg(z.externeId)?.roh ?? z.roh }))
+    check('nach dem Nachtrag: Coin-Zeilen Coin, Aktien-Zeilen Aktie', ['k1', 'r1'].every((id) => klasse('bitpanda', 'LDO', nach.find((z) => z.externeId === id)) === null) && ['a1', 'g1'].every((id) => klasse('bitpanda', 'LDO', nach.find((z) => z.externeId === id)) === 'aktie'))
+    check('leere Eingaben', klassenNachtrag([], []).ergaenzungen.length === 0 && klassenNachtrag(null, null).ergaenzungen.length === 0)
 }
 
 console.log('\nFACH-P-006: Aktien-Future als Ersatzkurs nur, wenn Stamm und Name passen')

@@ -73,6 +73,7 @@ await fuelle({ mitAktie: false })
 const ohne = await berechneUebersicht({ ohneVerlauf: true })
 const fx = ohne.fx.chf
 const coinOhne = ohne.posten.find((p) => p.schluessel === 'LDO')
+check('reines Krypto-Konto: kein Hinweis auf mehrdeutige Kürzel', Array.isArray(ohne.aktienMehrdeutig) && ohne.aktienMehrdeutig.length === 0)
 check('eine Zeile LDO: 105 Stück an zwei Orten, Einstand 215 CHF', ohne.posten.length === 2 && nah(coinOhne.menge, 105) && coinOhne.orte.length === 2 && nah(coinOhne.einstandChf, 215) && !coinOhne.klasse, JSON.stringify(ohne.posten.map(kern)))
 check('bewertet über Bitpandas Kurs des Coins (2 USD), für beide Orte', nah(coinOhne.usd, 210) && nah(coinOhne.unrealisiertChf, 210 * fx - 215), JSON.stringify([kern(coinOhne), ohne.fx, netz]))
 
@@ -113,7 +114,66 @@ console.log('\nBewertung der Bewegungen: die Art steht an der Zeile (BUG-P-005)'
     // Ohne Netz gibt es keinen Tageskurs — geprüft wird, WELCHEN Weg die Zeile nimmt.
     check('Staking-Ertrag des Coins LDO geht den Weg über den Tageskurs, nicht «Aktie ohne Handelsbetrag»', q.get('r2') === 'kein Kurs', q.get('r2'))
     check('Stücke der Aktie LDO ohne Geldseite: nie über das Kürzel', q.get('d2') === 'kein Kurs (Aktie ohne Handelsbetrag)', q.get('d2'))
-    check('alte Zeile ohne Art: wie bisher nach dem Stand der Quelle', q.get('a2') === 'kein Kurs (Aktie ohne Handelsbetrag)', q.get('a2'))
+    check('alte Zeile ohne Art, Kürzel ist Aktie UND Coin: Weg des Coins (RAS-02)', q.get('a2') === 'kein Kurs', q.get('a2'))
+}
+
+console.log('\nRAS-02: alte Bewegungen ohne Art — Konto mit Aktie LDO und Coin LDO, dazu die reine Aktie AAPL')
+{
+    const { berechneSteuerjahr } = await import('./steuer.js')
+    const { bewerteAlles } = await import('./abruf.js')
+    await knex('settings').where('id', 1).update({ portfolioTotalverlust: null })
+    for (const t of ['portfolio_bestaende', 'portfolio_bewegungen', 'portfolio_quellen']) await knex(t).del()
+    // Wie beim Prüfer: Coin-Kauf und Staking-Ertrag von vor dem 15.11. (Rohfeld ohne `klassen`), ein neuer Ertrag mit Art.
+    const alt = (b) => bewegung({ quelle: 'bitpanda', ...b })
+    await knex('portfolio_bewegungen').insert([
+        alt({ externeId: 'e0', zeit: T('2025-01-05T10:00:00Z'), art: 'einzahlung', asset: 'EUR', menge: 2000, chfWert: 1900, roh: { operation_type: 'deposit' } }),
+        alt({ externeId: 'c1', zeit: T('2025-02-01T10:00:00Z'), art: 'kauf', asset: 'LDO', menge: 100, gegenAsset: 'EUR', gegenMenge: -200, chfWert: 190, roh: { operation_type: 'buy' } }),
+        alt({ externeId: 'c2', zeit: T('2025-06-01T10:00:00Z'), art: 'staking', asset: 'LDO', menge: 1, chfWert: 2, roh: { operation_type: 'reward' } }),
+        alt({ externeId: 'c3', zeit: T('2025-11-20T10:00:00Z'), art: 'staking', asset: 'LDO', menge: 1, chfWert: 2, roh: { operation_type: 'reward', klassen: { LDO: '' } } }),
+        alt({ externeId: 'p1', zeit: T('2025-03-01T10:00:00Z'), art: 'kauf', asset: 'AAPL', menge: 2, gegenAsset: 'EUR', gegenMenge: -400, chfWert: 380, roh: { operation_type: 'buy' } }),
+        { ...alt({ externeId: 'c4', zeit: T('2025-07-01T10:00:00Z'), art: 'staking', asset: 'LDO', menge: 1, roh: { operation_type: 'reward' } }), chfQuelle: null },
+        { ...alt({ externeId: 'p2', zeit: T('2025-07-02T10:00:00Z'), art: 'belohnung', asset: 'AAPL', menge: 0.01, roh: { operation_type: 'onetime_reward' } }), chfQuelle: null },
+    ])
+    await knex('portfolio_bestaende').insert([
+        { quelle: 'bitpanda', ort: 'konto', asset: 'LDO', menge: 103, kursUsd: 2, klasse: null, zeit: jetzt },
+        { quelle: 'bitpanda', ort: 'konto', asset: 'AAPL', menge: 2.01, kursUsd: 200, klasse: 'aktie', zeit: jetzt },
+        { quelle: 'bitpanda', ort: 'konto', asset: 'EUR', menge: 1400, kursUsd: null, klasse: null, zeit: jetzt },
+    ])
+    // Die Aktie LDO (Leonardo) ist verkauft; der Stand kennt ihre Kennung noch neben der des Coins.
+    await knex('portfolio_quellen').insert([{ quelle: 'bitpanda', status: 'ok', stand: JSON.stringify({
+        vollstaendig: true, aktien: { LDO: 'aktie', AAPL: 'aktie' },
+        symbole: { 'id-leonardo': 'LDO', 'id-lido': 'LDO', 'id-apple': 'AAPL' }, klassen: { 'id-leonardo': 'aktie', 'id-lido': '', 'id-apple': 'aktie' }, klassenBelegt: true,
+    }) }])
+
+    const u = await berechneUebersicht({ ohneVerlauf: true })
+    const ldo = u.posten.find((p) => p.schluessel === 'LDO'), apfel = u.posten.find((p) => p.schluessel === 'AAPL|aktie')
+    check('Übersicht: Coin LDO hat seinen Einstand (103 Stück, Ø 194 CHF / 102 bewertete Stück)', nah(ldo?.menge, 103) && nah(ldo.kaufkurs, 194 / 102) && !ldo.klasse, JSON.stringify(u.posten.map(kern)))
+    check('Übersicht: Aktie AAPL im eigenen Topf (Ø 190 CHF je Stück)', nah(apfel?.menge, 2.01) && nah(apfel.kaufkurs, 190) && apfel.klasse === 'aktie', JSON.stringify(kern(apfel || {})))
+    check('Übersicht nennt LDO als nicht eindeutig zugeordnet, AAPL nicht', JSON.stringify(u.aktienMehrdeutig) === '["LDO"]', JSON.stringify(u.aktienMehrdeutig))
+
+    await bewerteAlles()
+    const q = new Map((await knex('portfolio_bewegungen').whereIn('externeId', ['c4', 'p2']).select('externeId', 'chfQuelle')).map((x) => [x.externeId, x.chfQuelle]))
+    check('Bewertung: alter Staking-Ertrag LDO geht den Weg des Coins', q.get('c4') === 'kein Kurs', q.get('c4'))
+    check('Bewertung: geschenkte AAPL-Stücke bleiben «Aktie ohne Handelsbetrag»', q.get('p2') === 'kein Kurs (Aktie ohne Handelsbetrag)', q.get('p2'))
+
+    const st = await berechneSteuerjahr(2025)
+    const v = st.vermoegen.find((p) => p.asset === 'LDO')
+    check('Steuerbericht 2025: Coin LDO steht im Vermögen (103 Stück)', nah(v?.menge, 103), JSON.stringify(st.vermoegen.map((p) => [p.asset, p.menge])))
+    check('… die Aktie AAPL nicht', !st.vermoegen.some((p) => p.asset === 'AAPL'))
+    check('Staking-Erträge des Coins sind Einkommen (3 Zeilen, 4 CHF bewertet)', st.einkommen.zeilen.filter((z) => z.asset === 'LDO').length === 3 && nah(st.einkommen.summe, 4), JSON.stringify(st.einkommen.zeilen))
+    const kauf = st.veraenderungen.find((x) => x.zu?.asset === 'LDO' && x.ab?.asset === 'EUR')
+    check('der Coin-Kauf steht als Kauf in den Veränderungen, nicht als «Auszahlung EUR»', !!kauf && nah(kauf.zu.menge, 100), JSON.stringify(st.veraenderungen))
+    check('Hinweis «zugleich Aktie und Coin» mit LDO', st.hinweise.some((h) => h.art === 'aktienMehrdeutig' && h.kuerzel.join() === 'LDO') && st.aktienMehrdeutig.join() === 'LDO', JSON.stringify(st.hinweise.map((h) => h.art)))
+    check('Hinweis «Aktien nicht enthalten» nennt nur AAPL', st.aktienNichtEnthalten.join() === 'AAPL', JSON.stringify(st.aktienNichtEnthalten))
+
+    // Gegenprobe: dasselbe Konto ohne den Coin-Beleg — LDO ist dann nur die Aktie.
+    await knex('portfolio_bewegungen').whereIn('externeId', ['c2', 'c3', 'c4']).del()
+    await knex('portfolio_bestaende').where('asset', 'LDO').update({ klasse: 'aktie', menge: 100 })
+    await knex('portfolio_quellen').where('quelle', 'bitpanda').update({ stand: JSON.stringify({ vollstaendig: true, aktien: { LDO: 'aktie', AAPL: 'aktie' }, symbole: { 'id-leonardo': 'LDO', 'id-apple': 'AAPL' }, klassen: { 'id-leonardo': 'aktie', 'id-apple': 'aktie' }, klassenBelegt: true }) })
+    const st2 = await berechneSteuerjahr(2025)
+    check('Gegenprobe reines Aktien-Kürzel: LDO nicht im Krypto-Vermögen, kein Mehrdeutig-Hinweis', !st2.vermoegen.some((p) => p.asset === 'LDO') && !st2.hinweise.some((h) => h.art === 'aktienMehrdeutig') && st2.aktienNichtEnthalten.join() === 'AAPL,LDO', JSON.stringify([st2.vermoegen.map((p) => p.asset), st2.aktienNichtEnthalten]))
+    const u2 = await berechneUebersicht({ ohneVerlauf: true })
+    check('… und in der Übersicht eine Aktien-Position mit Einstand 190 CHF, kein Hinweis', nah(u2.posten.find((p) => p.schluessel === 'LDO|aktie')?.einstandChf, 190) && u2.aktienMehrdeutig.length === 0, JSON.stringify(u2.posten.map(kern)))
 }
 
 check('jeder Versuch nach aussen lief in die Sperre (Wechselkurs, Bitget-Spot)', netz > 0, String(netz))

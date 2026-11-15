@@ -33,6 +33,8 @@ const s = {
 }
 const html = steuerBerichtHtml(s, { erstellt: Date.parse('2026-10-26'), version: '4.2.0', totalverluste: [{ asset: 'MBTN', menge: 10, kaufkurs: 3, einstandChf: 30, abJahr: 2025 }, { asset: 'ALT', menge: 1, abJahr: 2026 }, { asset: 'CHSB', menge: 0, abJahr: 2025 }] })
 
+pruefe('ohne mehrdeutige Kürzel keine Zeile dazu', !html.includes('Nicht eindeutig zugeordnet'))
+pruefe('mehrdeutiges Kürzel steht im Bericht (RAS-02), escaped', (() => { const h = steuerBerichtHtml({ ...s, aktienMehrdeutig: ['LDO', '<b>'] }, { erstellt: 1, version: 'x' }); return h.includes('Nicht eindeutig zugeordnet: LDO, &lt;b&gt; ist bei Bitpanda zugleich Aktie und Coin') })())
 pruefe('Token-Name wird escaped', !html.includes('<script>alert') && html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'))
 pruefe('kein Inline-Skript (CSP)', !/<script>(?!<)/.test(html.replace('<script src="bericht.js" defer></script>', '')))
 pruefe('Druckknopf nur über bericht.js', html.includes('id="drucken"') && html.includes('src="bericht.js"'))
