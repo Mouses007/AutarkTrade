@@ -8924,7 +8924,10 @@
     "aktien": "Aktien"
   },
   "marktlage": {
-    "stand": "Stand {zeit}",
+    "stand": "Abgerufen {zeit}",
+    "schlussVom": "Schlusskurse vom {datum}",
+    "sitzungLaeuftTitel": "Die US-Börse handelt gerade",
+    "sitzungLaeuft": "Urteil und alle Zahlen dieser Seite stammen vom letzten Börsenschluss ({datum}), nicht vom laufenden Handel. Der Markt kann seither deutlich gelaufen sein – die Seite sieht das erst nach dem heutigen Schluss.",
     "aktualisieren": "Aktualisieren",
     "grund_gebremst": "Die Kursquelle bremst gerade. Bitte in einigen Minuten erneut versuchen.",
     "grund_abrufFehlgeschlagen": "Die Kursquelle hat nicht geantwortet.",

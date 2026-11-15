@@ -4,7 +4,8 @@
  *   node server/aktien/__selftest-marktlage.mjs
  */
 import assert from 'node:assert/strict'
-import { indexLage, schwankung, sektorStaerke, standUndAenderung, breite, urteile } from './marktlage-kern.js'
+import { indexLage, schwankung, sektorStaerke, standUndAenderung, breite, urteile, schlussTag, kursStand, sitzungsStand } from './marktlage-kern.js'
+import { ausChart } from '../newcomer-radar/kursquelle-kern.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -74,5 +75,41 @@ ok(urteile({ spy: auf, qqq: ab, vola: vRuhig }).urteil === 'gemischt', 'QQQ unte
 ok(urteile({ spy: erholung, qqq: auf, vola: vRuhig }).urteil === 'gemischt', 'SPY darüber, Linie fällt noch: gemischt')
 ok(urteile({ spy: kurz, qqq: auf }).urteil === 'unbekannt' && urteile({}).urteil === 'unbekannt', 'Leitindex unbekannt: kein Urteil')
 ok(urteile({ spy: auf, qqq: auf }).urteil === 'rueckenwind', 'ohne VIX-Daten zählt nur der Trend')
+
+// ── Von wann sind die Zahlen? (Audit FACH-H-006) ──
+{
+    const Z = (iso) => Date.parse(iso)
+    // Tageskerzen der Kursquelle tragen den Sitzungsbeginn (09:30 New York = 14:30 UTC im Winter).
+    const fr = Z('2026-11-13T14:30:00Z'), mo = Z('2026-11-16T14:30:00Z')
+    const bisFr = [{ t: Z('2026-11-12T14:30:00Z'), c: 1 }, { t: fr, c: 2 }]
+    ok(schlussTag(bisFr) === '2026-11-13' && schlussTag([]) === null && schlussTag([{ t: NaN, c: 1 }]) === null, 'Handelstag der letzten Kerze, ohne Kerzen nichts')
+    // Dollar-Index: Kerze um Mitternacht New York — bleibt derselbe Tag, nicht der Vortag
+    ok(schlussTag([{ t: Z('2026-11-13T05:00:00Z'), c: 1 }]) === '2026-11-13', 'Kerze um 00:00 New York gehört zu diesem Tag')
+
+    // Montag 10:30 New York: die Sitzung läuft, die Kursquelle hat die laufende Kerze verworfen
+    const montagMittag = Z('2026-11-16T15:30:00Z')
+    const antwort = {
+        chart: { result: [{
+            meta: { symbol: 'SPY', currentTradingPeriod: { regular: { start: mo / 1000, end: Z('2026-11-16T21:00:00Z') / 1000 } } },
+            timestamp: [fr / 1000, mo / 1000],
+            indicators: { quote: [{ close: [600, 570], open: [598, 600], high: [601, 600], low: [597, 569], volume: [1, 1] }] },
+        }] },
+    }
+    const laufend = ausChart(antwort, montagMittag).kerzen
+    ok(laufend.length === 1 && laufend[0].c === 600, 'während der Sitzung fehlt die laufende Tageskerze — der Kurs ist der vom Freitag')
+    const s1 = kursStand({ index: [laufend, laufend], zins: [laufend] }, montagMittag)
+    ok(s1.schluss.index === '2026-11-13' && s1.schluss.zins === '2026-11-13', 'Montag in der Sitzung: Schlusskurse vom Freitag, nicht «jetzt»')
+    ok(s1.sitzung === 'regulaer' && s1.sitzungLaeuft === true, 'laufende reguläre Sitzung wird gekennzeichnet')
+    // Nach dem Schluss kommt die Tageskerze mit — der Stand rückt auf Montag, nichts läuft mehr
+    const montagAbend = Z('2026-11-16T21:30:00Z')
+    const fertig = ausChart(antwort, montagAbend).kerzen
+    const s2 = kursStand({ index: [fertig] }, montagAbend)
+    ok(fertig.length === 2 && s2.schluss.index === '2026-11-16' && s2.sitzungLaeuft === false && s2.sitzung === 'nach', 'nach dem Schluss: Kurse vom selben Tag, keine Kennzeichnung')
+    // Vorbörslich und am Wochenende läuft nichts — der letzte Schluss IST der Stand
+    ok(sitzungsStand(Z('2026-11-16T13:00:00Z')).sitzungLaeuft === false && sitzungsStand(Z('2026-11-15T15:30:00Z')).sitzung === 'wochenende', 'vorbörslich und Wochenende: nicht gekennzeichnet')
+    // Ein Block ist so alt wie sein ältester Wert; leere Reihen zählen nicht, ein leerer Block ist unbekannt
+    const s3 = kursStand({ sektoren: [fertig, laufend, []], dollar: [[]], leer: [] }, montagAbend)
+    ok(s3.schluss.sektoren === '2026-11-13' && s3.schluss.dollar === null && s3.schluss.leer === null, 'Block mit gemischtem Stand nennt den ältesten; ohne Kerzen null')
+}
 
 console.log(`✓ Marktlage Aktien: ${n} Prüfungen`)

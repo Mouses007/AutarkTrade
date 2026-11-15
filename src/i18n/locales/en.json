@@ -8924,7 +8924,10 @@
     "aktien": "Stocks"
   },
   "marktlage": {
-    "stand": "As of {zeit}",
+    "stand": "Fetched {zeit}",
+    "schlussVom": "Closing prices of {datum}",
+    "sitzungLaeuftTitel": "The US market is trading right now",
+    "sitzungLaeuft": "The verdict and every figure on this page come from the last market close ({datum}), not from live trading. The market may have moved considerably since – this page only sees it after today's close.",
     "aktualisieren": "Refresh",
     "grund_gebremst": "The price source is throttling right now. Please try again in a few minutes.",
     "grund_abrufFehlgeschlagen": "The price source did not answer.",

@@ -6,12 +6,17 @@
  * ETFs. Eine halbe Stunde im Speicher, gleichzeitige Aufrufe teilen sich den
  * Abruf. Fällt ein einzelner Wert aus, fehlt nur er; fehlt der Leitindex,
  * gibt es kein Urteil. Gerechnet wird in `marktlage-kern.js`.
+ *
+ * Die Kursquelle liefert nur ABGESCHLOSSENE Tageskerzen. `stand` ist deshalb
+ * der Zeitpunkt des Abrufs, nicht der der Kurse: von welchem Handelstag die
+ * Schlusskurse je Block stammen, steht in `schluss`; `sitzungLaeuft` sagt, ob
+ * die reguläre US-Sitzung gerade läuft (dann ist der Markt seither gelaufen).
  */
 import { getKnex } from '../database.js'
 import { holeChart, Gebremst } from '../newcomer-radar/kursquelle.js'
 import { istAus } from '../quellen/aus.js'
 import { logWarn } from '../logger.js'
-import { indexLage, schwankung, sektorStaerke, standUndAenderung, breite, urteile, runde } from './marktlage-kern.js'
+import { indexLage, schwankung, sektorStaerke, standUndAenderung, breite, urteile, runde, kursStand, sitzungsStand } from './marktlage-kern.js'
 
 export const INDIZES = ['SPY', 'QQQ', 'IWM']
 /** Die elf Sektor-ETFs des S&P 500 (Select Sector SPDR). */
@@ -68,6 +73,14 @@ async function baue(jetzt) {
         breite: breiteFeld,
         ...urteile({ spy: index.SPY, qqq: index.QQQ, iwm: index.IWM, vola, breiteFeld }),
         fehlend,
+        // Handelstag des letzten Schlusskurses je Block — die Zahlen sind nie «jetzt».
+        ...kursStand({
+            index: INDIZES.map((s) => kerzen[s] || []),
+            schwankung: [kerzen[SYMBOL.vix] || [], kerzen[SYMBOL.vix3m] || []],
+            sektoren: [...SEKTOREN.map((s) => kerzen[s] || []), kerzen.SPY || []],
+            zins: [kerzen[SYMBOL.zins] || []],
+            dollar: [kerzen[SYMBOL.dollar] || []],
+        }, jetzt),
         stand: jetzt,
     }
 }
@@ -75,9 +88,11 @@ async function baue(jetzt) {
 /** Die Marktlage, höchstens alle 30 Minuten neu geholt (`neu` umgeht den Speicher). */
 export async function holeMarktlage({ neu = false } = {}) {
     const jetzt = Date.now()
-    if (!neu && cache && jetzt - cache.zeit < GILT_MS) return cache.wert
+    // Die Sitzung gilt für den Augenblick der Antwort, nicht für den des Abrufs.
+    const mitSitzung = (wert) => ({ ...wert, ...sitzungsStand(Date.now()) })
+    if (!neu && cache && jetzt - cache.zeit < GILT_MS) return mitSitzung(cache.wert)
     if (!laeuft) {
         laeuft = baue(jetzt).then((wert) => { cache = { zeit: Date.now(), wert }; return wert }).finally(() => { laeuft = null })
     }
-    return laeuft
+    return laeuft.then(mitSitzung)
 }

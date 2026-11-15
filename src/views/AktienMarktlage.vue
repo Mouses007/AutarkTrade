@@ -9,7 +9,7 @@
  * aus Tageskursen; das Urteil oben ist regelbasiert und nennt seine Gründe
  * (`server/aktien/marktlage-kern.js`). Keine Vorhersage, keine Empfehlung.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Knopf from '../components/basis/Knopf.vue'
@@ -18,6 +18,7 @@ import Karte from '../components/basis/Karte.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
 import QuelleAus from '../components/quellen/QuelleAus.vue'
+import { sitzungVon } from '../../shared/aktien-sitzung.js'
 
 const { t, locale } = useI18n()
 
@@ -25,6 +26,16 @@ const lage = ref(null)
 const aus = ref(null)
 const laedt = ref(true)
 const fehler = ref('')
+/**
+ * Läuft die reguläre US-Sitzung? Die Seite zeigt nur Schlusskurse (die Kursquelle
+ * liefert keine laufende Tageskerze) — während der Sitzung ist der Markt seither
+ * gelaufen. Beim Laden sagt es der Server, danach die eigene Uhr: die Seite
+ * bleibt über die Eröffnung hinweg offen.
+ */
+const sitzungLaeuft = ref(false)
+const pruefeSitzung = () => { sitzungLaeuft.value = sitzungVon(Date.now()) === 'regulaer' }
+const sitzungsUhr = setInterval(pruefeSitzung, 60_000)
+onBeforeUnmount(() => clearInterval(sitzungsUhr))
 
 async function lade(neu = false) {
     laedt.value = true
@@ -33,7 +44,7 @@ async function lade(neu = false) {
     try {
         const { data } = await axios.get('/api/aktien/marktlage', { params: neu ? { neu: 1 } : {}, timeout: 60000 })
         if (data?.aus) { aus.value = data; lage.value = null }
-        else if (data?.ok) lage.value = data
+        else if (data?.ok) { lage.value = data; sitzungLaeuft.value = data.sitzungLaeuft ?? sitzungVon(Date.now()) === 'regulaer' }
         else fehler.value = t('marktlage.grund_' + (data?.grund || 'abrufFehlgeschlagen'))
     } catch (e) {
         fehler.value = e.response?.data?.error || e.message
@@ -47,6 +58,21 @@ const zahl = (v, n = 2) => (v == null ? '—' : Number(v).toLocaleString(locale.
 const prozent = (v, n = 1) => (v == null ? '—' : `${v > 0 ? '+' : ''}${zahl(v, n)} %`)
 const zeit = (ms) => (ms ? new Date(ms).toLocaleString(locale.value, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—')
 const datum = (ms) => (ms ? new Date(ms).toLocaleDateString(locale.value, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
+/** Handelstag `YYYY-MM-DD` als Datum der Sprache — ohne Umweg über eine Zeitzone. */
+const tag = (iso) => {
+    const [j, m, d] = String(iso || '').split('-').map(Number)
+    return j && m && d ? new Date(j, m - 1, d).toLocaleDateString(locale.value, { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+}
+/** «Schlusskurse vom …» für einen Block; unbekannt → leer. */
+const schlussText = (block) => (lage.value?.schluss?.[block] ? t('marktlage.schlussVom', { datum: tag(lage.value.schluss[block]) }) : '')
+/** Schwankung, Zinsen und Dollar teilen sich eine Karte — ein Datum, wenn alle gleich alt sind, sonst je Wert. */
+const umfeldSchluss = computed(() => {
+    const s = lage.value?.schluss || {}
+    const teile = [['vix', s.schwankung], ['zins', s.zins], ['dollar', s.dollar]].filter(([, d]) => d)
+    if (!teile.length) return ''
+    if (new Set(teile.map(([, d]) => d)).size === 1) return t('marktlage.schlussVom', { datum: tag(teile[0][1]) })
+    return teile.map(([id, d]) => `${t('marktlage.' + id)}: ${t('marktlage.schlussVom', { datum: tag(d) })}`).join(' · ')
+})
 const richtung = (v) => (v == null || v === 0 ? '' : v > 0 ? 'auf' : 'ab')
 
 const indizes = computed(() => Object.entries(lage.value?.index || {}).filter(([, v]) => v).map(([id, v]) => ({ id, ...v })))
@@ -61,7 +87,7 @@ const sektoren = computed(() => {
 <template>
     <div class="marktlage-seite">
         <div class="leiste">
-            <p class="klein">{{ lage ? t('marktlage.stand', { zeit: zeit(lage.stand) }) : '' }}</p>
+            <p class="klein">{{ lage ? t('marktlage.stand', { zeit: zeit(lage.stand) }) : '' }}<template v-if="lage?.schluss?.index"> · {{ schlussText('index') }}</template></p>
             <Knopf klein symbol="aktualisieren" :laedt="laedt" @click="lade(true)">{{ t('marktlage.aktualisieren') }}</Knopf>
         </div>
 
@@ -70,6 +96,10 @@ const sektoren = computed(() => {
         <Kreisel v-if="laedt && !lage" />
 
         <template v-if="lage">
+            <!-- Während der Sitzung: die Zahlen sind der letzte Schluss, nicht der laufende Markt -->
+            <Hinweis v-if="sitzungLaeuft" art="warn" :titel="t('marktlage.sitzungLaeuftTitel')">
+                {{ t('marktlage.sitzungLaeuft', { datum: lage.schluss?.index ? tag(lage.schluss.index) : '—' }) }}
+            </Hinweis>
             <!-- Urteil und seine Gründe -->
             <section class="urteil" :class="lage.urteil">
                 <div class="kopf">
@@ -84,7 +114,7 @@ const sektoren = computed(() => {
 
             <div class="reihe">
                 <!-- Index -->
-                <Karte :titel="t('marktlage.index')" :unter="t('marktlage.indexUnter')">
+                <Karte :titel="t('marktlage.index')" :unter="[schlussText('index'), t('marktlage.indexUnter')].filter(Boolean).join(' · ')">
                     <table v-if="indizes.length" class="tabelle">
                         <thead>
                             <tr>
@@ -113,7 +143,7 @@ const sektoren = computed(() => {
                 </Karte>
 
                 <!-- Schwankung, Zinsen, Dollar, Breite -->
-                <Karte :titel="t('marktlage.umfeld')">
+                <Karte :titel="t('marktlage.umfeld')" :unter="umfeldSchluss">
                     <dl class="werte">
                         <div v-if="lage.schwankung">
                             <dt>{{ t('marktlage.vix') }}</dt>
@@ -148,7 +178,7 @@ const sektoren = computed(() => {
             </div>
 
             <!-- Sektoren -->
-            <Karte :titel="t('marktlage.sektoren')" :unter="t('marktlage.sektorenUnter')">
+            <Karte :titel="t('marktlage.sektoren')" :unter="[schlussText('sektoren'), t('marktlage.sektorenUnter')].filter(Boolean).join(' · ')">
                 <ul v-if="sektoren.length" class="sektoren">
                     <li v-for="s in sektoren" :key="s.id">
                         <span class="name"><b>{{ s.id }}</b> {{ t('marktlage.sektor.' + s.id) }}</span>

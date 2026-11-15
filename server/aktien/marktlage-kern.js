@@ -17,7 +17,14 @@
  *
  * Das Urteil am Ende ist regelbasiert: dieselben Zahlen ergeben immer dasselbe
  * Urteil, und die Gründe stehen dabei. Rein — kein Netz, keine Datenbank.
+ *
+ * Alle Zahlen sind SCHLUSSKURSE: die Kursquelle liefert nur abgeschlossene
+ * Tageskerzen (`ausChart` verwirft den laufenden Tag). `kursStand` sagt
+ * deshalb je Block, von welchem Handelstag der letzte Schluss stammt, und ob
+ * die reguläre US-Sitzung gerade läuft — dann ist der Markt seit diesen
+ * Zahlen weitergelaufen (Audit FACH-H-006).
  */
+import { nyTeile, sitzungVon } from '../../shared/aktien-sitzung.js'
 
 const TAGE_MONAT = 21
 const TAGE_JAHR = 252
@@ -157,6 +164,40 @@ export function urteile({ spy, qqq, iwm, vola, breiteFeld } = {}) {
     if (!spy.ueber200 || stress) urteil = 'gegenwind'
     else if (spy.linie200 === 'steigt' && qqq?.ueber200 === true && vola?.zone !== 'angespannt') urteil = 'rueckenwind'
     return { urteil, gruende: g }
+}
+
+/** Handelstag der letzten Tageskerze als `YYYY-MM-DD` (New Yorker Datum); ohne Kerzen `null`. */
+export function schlussTag(kerzen = []) {
+    const t = kerzen.length ? Number(kerzen[kerzen.length - 1].t) : NaN
+    return Number.isFinite(t) && t > 0 ? nyTeile(t).datum : null
+}
+
+/**
+ * Von wann sind die Zahlen? Je Block der Handelstag des letzten Schlusskurses,
+ * dazu die Sitzung, in der `jetzt` liegt.
+ *
+ * Stehen in einem Block mehrere Reihen (drei Indizes, elf Sektoren), zählt die
+ * ÄLTESTE — der Block ist so alt wie sein ältester Wert. Reihen ohne Kerzen
+ * zählen nicht (sie stehen schon unter `fehlend`).
+ *
+ * @param {Record<string, object[][]>} bloecke  Blockname → Kerzenreihen
+ * @param {number} jetzt
+ * @returns {{schluss: Record<string, string|null>, sitzung: string, sitzungLaeuft: boolean}}
+ *          `sitzungLaeuft`: die reguläre US-Sitzung läuft — die Zahlen sind der Schluss davor
+ */
+export function kursStand(bloecke = {}, jetzt = Date.now()) {
+    const schluss = {}
+    for (const [name, reihen] of Object.entries(bloecke)) {
+        const tage = (reihen || []).map(schlussTag).filter(Boolean).sort()
+        schluss[name] = tage[0] ?? null
+    }
+    return { schluss, ...sitzungsStand(jetzt) }
+}
+
+/** Sitzung zu einem Zeitpunkt — getrennt, weil die Lage 30 Minuten im Speicher liegt und die Sitzung inzwischen wechselt. */
+export function sitzungsStand(jetzt = Date.now()) {
+    const sitzung = sitzungVon(jetzt)
+    return { sitzung, sitzungLaeuft: sitzung === 'regulaer' }
 }
 
 /** Auf eine Nachkommastelle weniger Rauschen: Zahlen für die Antwort runden (null bleibt null). */
