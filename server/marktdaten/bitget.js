@@ -251,7 +251,7 @@ export async function fundingVerlauf(symbol, von, bis) {
 }
 
 /** Kontraktregeln in der Form von `getSymbolMeta` (tickSize aus `pricePlace`, nicht geraten). */
-export async function symbole({ markt: m } = {}) {
+export async function symbole({ markt: m, alle = false } = {}) {
     const map = new Map()
     if (markt(m) === 'spot') {
         for (const s of (await hole('/api/v2/spot/public/symbols', {}, { timeout: 15000 })) || []) {
@@ -268,8 +268,11 @@ export async function symbole({ markt: m } = {}) {
     }
     for (const s of (await hole('/api/v2/mix/market/contracts', { productType: PRODUKT }, { timeout: 15000 })) || []) {
         if (s.symbolStatus !== 'normal') continue
-        if (s.isRwa === 'YES') continue   // Aktien/Rohstoffe, siehe rwaSymbole
+        // Aktien/Rohstoffe bleiben für die Krypto-Aufrufer draussen (siehe rwaSymbole);
+        // `alle` holt sie dazu — für die Kontraktdaten eines Aktien-Futures.
+        if (s.isRwa === 'YES' && !alle) continue
         map.set(s.symbol, {
+            ...(s.isRwa === 'YES' ? { rwa: true } : {}),
             symbol: s.symbol, basis: s.baseCoin, quote: s.quoteCoin,
             tickSize: Number(s.priceEndStep || 1) * 10 ** -Number(s.pricePlace || 0),
             stepSize: Number(s.sizeMultiplier) || 10 ** -Number(s.volumePlace || 0),

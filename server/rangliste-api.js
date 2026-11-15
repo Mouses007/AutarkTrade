@@ -27,6 +27,7 @@ import { isValidTimeframe } from './market-data.js'
 import { schaetzeKerzen, MAX_BACKTEST_CANDLES } from './strategy-backtest.js'
 import { beansprucheFuehrung, verlaengereFuehrung, gibFuehrungFrei, INSTANZ_ID } from './db-claim.js'
 import { loeseUniversumAuf, quellenUebersicht, normalisiereSymbole, UNIVERSUM_ARTEN } from './coin-universum.js'
+import { normMarkt } from './migrationen/aktien.js'
 import { leiteZeiteinheitAb } from './rangliste-zeiteinheit.js'
 import { bearbeiteCoin, schaetzeAufwand } from './rangliste-lauf.js'
 import { vergibRaenge, beurteileRangliste, ranglisteSatz } from './rangliste-rang.js'
@@ -239,7 +240,8 @@ export function setupRanglisteRoutes(app) {
 
     app.get('/api/rangliste/universen', async (req, res) => {
         try {
-            res.json(await knex()('coin_universen').orderBy('id', 'desc'))
+            // Jeder Markt hat seine eigenen Universen (`?markt=aktien`, sonst Krypto).
+            res.json(await knex()('coin_universen').where('anlageklasse', normMarkt(req.query.markt)).orderBy('id', 'desc'))
         } catch (e) {
             logError('rangliste', 'Universen laden fehlgeschlagen', e)
             res.status(500).json({ error: 'Universen konnten nicht geladen werden' })
@@ -249,7 +251,7 @@ export function setupRanglisteRoutes(app) {
     /** Die drei Zahlen über der Auswahl — auch der schnellste Weg zu sehen, ob beide Börsen antworten. */
     app.get('/api/rangliste/universen/quellen', async (req, res) => {
         try {
-            res.json(await quellenUebersicht())
+            res.json(await quellenUebersicht(normMarkt(req.query.markt)))
         } catch (e) {
             logError('rangliste', 'Quellen nicht abrufbar', e)
             res.status(502).json({ error: `Börsenlisten nicht abrufbar: ${e.message}` })
@@ -273,6 +275,7 @@ export function setupRanglisteRoutes(app) {
                 modell: String(b.modell || '').slice(0, 120),
                 kostenUsd: Number(b.kostenUsd) || 0,
                 nurHandelbar: b.nurHandelbar === false || b.nurHandelbar === 0 ? 0 : 1,
+                anlageklasse: normMarkt(b.markt),
                 createdAt: jetzt(), updatedAt: jetzt(),
             }).returning('id')
             res.json({ ok: true, id: typeof id === 'object' ? id.id : id })
@@ -312,7 +315,7 @@ export function setupRanglisteRoutes(app) {
     /** Auflösen ohne zu starten — zeigt vorher, wie viele Coins wirklich laufen. */
     app.post('/api/rangliste/universen/aufloesen', async (req, res) => {
         try {
-            const aufgeloest = await loeseUniversumAuf(req.body || {})
+            const aufgeloest = await loeseUniversumAuf({ ...(req.body || {}), anlageklasse: normMarkt(req.body?.markt) })
             res.json({
                 anzahl: aufgeloest.symbole.length,
                 symbole: aufgeloest.symbole.slice(0, 400),
@@ -407,14 +410,14 @@ export function setupRanglisteRoutes(app) {
 
             const universum = b.universumId
                 ? await knex()('coin_universen').where('id', b.universumId).first()
-                : { art: b.art || 'manuell', n: b.n, symbole: b.symbole, nurHandelbar: b.nurHandelbar, name: b.name }
+                : { art: b.art || 'manuell', n: b.n, symbole: b.symbole, nurHandelbar: b.nurHandelbar, name: b.name, anlageklasse: normMarkt(b.markt) }
             if (!universum) return res.status(400).json({ error: 'Universum nicht gefunden' })
 
             const aufgeloest = await loeseUniversumAuf({
                 ...universum, symbole: parse(universum.symbole, universum.symbole),
             })
             if (!aufgeloest.symbole.length) {
-                return res.status(400).json({ error: 'Kein einziger Coin dieses Universums ist testbar' })
+                return res.status(400).json({ error: 'Kein einziges Symbol dieses Universums ist testbar' })
             }
             const symbole = aufgeloest.symbole.slice(0, MAX_COINS)
 
@@ -441,6 +444,7 @@ export function setupRanglisteRoutes(app) {
                 // (FUN-L5-001; bis 31.10.2026 galt hier immer 1000).
                 startEquity: Number(b.startEquity) > 0 ? Number(b.startEquity) : (Number(risk.startEquityUsdt) || 1000),
                 status: 'wartet',
+                anlageklasse: normMarkt(universum.anlageklasse),
                 gesamt: symbole.length,
                 createdAt: jetzt(),
             }).returning('id')
@@ -465,10 +469,13 @@ export function setupRanglisteRoutes(app) {
 
     app.get('/api/rangliste/laeufe', async (req, res) => {
         try {
-            const rows = await knex()('rangliste_laeufe')
+            let abfrage = knex()('rangliste_laeufe')
                 .select('id', 'strategyId', 'universumName', 'timeframe', 'fromTs', 'toTs',
-                    'status', 'fortschritt', 'gesamt', 'gestartetAm', 'beendetAm', 'createdAt')
-                .orderBy('id', 'desc').limit(50)
+                    'status', 'fortschritt', 'gesamt', 'gestartetAm', 'beendetAm', 'createdAt', 'anlageklasse')
+            // `?markt=` zeigt nur die Läufe dieses Markts; ohne Angabe alle.
+            if (req.query.markt === 'aktien') abfrage = abfrage.where('anlageklasse', 'aktien')
+            else if (req.query.markt === 'krypto') abfrage = abfrage.where((q) => q.where('anlageklasse', 'krypto').orWhereNull('anlageklasse'))
+            const rows = await abfrage.orderBy('id', 'desc').limit(50)
             res.json(rows)
         } catch (e) {
             logError('rangliste', 'Läufe laden fehlgeschlagen', e)

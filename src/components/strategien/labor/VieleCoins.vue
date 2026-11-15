@@ -33,7 +33,12 @@ const props = defineProps({
     instanzen: { type: Array, default: () => [] },
 })
 const { t } = useI18n()
-ladeStrategieMarkt()
+/* Aktien-Markt: Universum «alle Aktien-Futures» oder eine eigene Liste; Läufe und Quellen nur dieses Markts. */
+ladeStrategieMarkt().then((m) => {
+    if (m.markt !== 'aktien') return
+    if (rl.value.art === 'top') rl.value.art = 'aktien'
+    if (matrix.value?.symbole === 'BTCUSDT, ETHUSDT') matrix.value.symbole = m.symbole.join(', ')
+})
 const route = useRoute()
 
 const modus = ref(route.query.modus === 'vergleich' ? 'vergleich' : 'rangliste')
@@ -110,6 +115,8 @@ async function pruefeUniversum() {
     fehler.value = ''
     try {
         const r = await axios.post('/api/rangliste/universen/aufloesen', {
+            markt: strategieMarkt.value,
+            markt: strategieMarkt.value,
             art: rl.value.art, n: rl.value.n, symbole: rl.value.symbole, nurHandelbar: rl.value.nurHandelbar,
         })
         probe.value = r.data
@@ -175,13 +182,15 @@ function stopPolling() {
 }
 
 onMounted(async () => {
+    // Erst den Markt kennen: Quellen und Läufe gelten je Markt.
+    await ladeStrategieMarkt()
     holeVorschlag()
-    axios.get('/api/rangliste/universen/quellen').then((r) => { quellen.value = r.data }).catch(() => { quellen.value = null })
+    axios.get('/api/rangliste/universen/quellen', { params: { markt: strategieMarkt.value } }).then((r) => { quellen.value = r.data }).catch(() => { quellen.value = null })
     // Aus „Läufe" geöffnet, sonst der laufende oder der letzte Lauf — auch
     // einer, den eine andere Sitzung gestartet hat.
     if (route.query.rangliste) return oeffne(Number(route.query.rangliste))
     try {
-        const laeufe = (await axios.get('/api/rangliste/laeufe')).data || []
+        const laeufe = (await axios.get('/api/rangliste/laeufe', { params: { markt: strategieMarkt.value } })).data || []
         const offen = laeufe.find((x) => ['wartet', 'laeuft', 'pausiert'].includes(x.status))
         if (offen) oeffne(offen.id)
         else if (laeufe.length) oeffne(laeufe[0].id)
@@ -245,7 +254,6 @@ const matrixZahl = (v, n = 3) => (v === null || v === undefined || !Number.isFin
 
 <template>
 <div class="vieleCoins">
-    <Hinweis v-if="strategieMarkt === 'aktien'" art="warn" class="abstandUnten">{{ t('strategien.labor.ranglisteNurKrypto') }}</Hinweis>
     <div class="modusWahl">
         <button type="button" :class="['ctl-pill', { aktiv: modus === 'rangliste' }]" @click="modus = 'rangliste'">
             <Symbol name="listeNummer" class="vor" />{{ t('strategien.labor.modusRangliste') }}
@@ -291,15 +299,21 @@ const matrixZahl = (v, n = 3) => (v === null || v === undefined || !Number.isFin
             <!-- ══ Universum ══ -->
             <div class="section-title abstand-klein">{{ t('rangliste.universum') }}</div>
             <p v-if="quellen" class="at-gedaempft klein-text abstand-klein">
-                {{ t('rangliste.quellen', quellen) }}
+                {{ t(strategieMarkt === 'aktien' ? 'rangliste.quellenAktien' : 'rangliste.quellen', quellen) }}
             </p>
             <div class="formular">
                 <div class="b-4">
                     <select v-model="rl.art" class="at-feld klein" :aria-label="t('rangliste.artLabel')" @change="probe = null">
-                        <option value="bitunix">{{ t('rangliste.artBitunix') }}</option>
-                        <option value="top">{{ t('rangliste.artTop') }}</option>
-                        <option value="manuell">{{ t('rangliste.artManuell') }}</option>
-                        <option value="ki">{{ t('rangliste.artKi') }}</option>
+                        <template v-if="strategieMarkt === 'aktien'">
+                            <option value="aktien">{{ t('rangliste.artAktien') }}</option>
+                            <option value="manuell">{{ t('rangliste.artManuell') }}</option>
+                        </template>
+                        <template v-else>
+                            <option value="bitunix">{{ t('rangliste.artBitunix') }}</option>
+                            <option value="top">{{ t('rangliste.artTop') }}</option>
+                            <option value="manuell">{{ t('rangliste.artManuell') }}</option>
+                            <option value="ki">{{ t('rangliste.artKi') }}</option>
+                        </template>
                     </select>
                 </div>
                 <div v-if="rl.art === 'top'" class="b-2 mobil-halb">

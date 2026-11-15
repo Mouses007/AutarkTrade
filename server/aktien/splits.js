@@ -55,6 +55,22 @@ function findeSprung(kerzen, split) {
 }
 
 /**
+ * Die Kerze, IN die der Split fällt (Tageskerze am Ex-Tag): sie eröffnet noch
+ * im alten Massstab und schliesst im neuen. Ihr Eröffnungskurs wird
+ * umgerechnet; das Hoch (bei einer Zusammenlegung das Tief) stammt ebenfalls
+ * aus dem alten Massstab und lässt sich nicht retten — es wird auf das
+ * begrenzt, was Eröffnung und Schluss hergeben. Kerzen, die sauber im neuen
+ * Massstab eröffnen, bleiben unverändert.
+ */
+function flickeSprungKerze(k, f) {
+    if (!(k.o > 0) || !(k.c > 0) || Math.abs(Math.log(k.o / k.c) - Math.log(f)) > Math.log(1 + TOLERANZ)) return k
+    const o = k.o / f
+    return f > 1
+        ? { ...k, o, h: Math.max(o, k.c), l: Math.min(k.l, o, k.c) }
+        : { ...k, o, l: Math.min(o, k.c), h: Math.max(k.h, o, k.c) }
+}
+
+/**
  * Kerzen vor jedem Split umrechnen.
  *
  * @param {{t,o,h,l,c,v,vb?}[]} kerzen  aufsteigend; wird NICHT verändert (die Marktdaten-Schicht merkt sich ihre Reihen)
@@ -75,12 +91,53 @@ export function bereinigeSplits(kerzen = [], splits = []) {
         bericht.push({ t: split.t, faktor: split.faktor, text: split.text || '', angewendet: i > 0, bei: i > 0 ? aus[i].t : null })
         if (i <= 0) continue
         const f = split.faktor
-        aus = aus.map((k, j) => (j >= i ? k : {
+        aus = aus.map((k, j) => (j === i ? flickeSprungKerze(k, f) : j > i ? k : {
             ...k, o: k.o / f, h: k.h / f, l: k.l / f, c: k.c / f, v: k.v * f,
             ...(k.vb != null ? { vb: k.vb * f } : {}),
         }))
     }
     return { kerzen: aus, splits: bericht.reverse() }
+}
+
+/**
+ * Wie `bereinigeSplits`, aber für Kerzen, die SEITENWEISE kommen (Chart: beim
+ * Zurückscrollen lädt jede Seite für sich).
+ *
+ * Eine Seite, die ganz vor dem Split liegt, enthält den Sprung nicht — für
+ * sich allein lässt sich nicht sagen, ob sie umzurechnen ist. Deshalb merkt
+ * sich der Aufrufer in `bekannt`, an welcher Kerze der Sprung gefunden wurde;
+ * jede spätere Seite davor wird dann ganz umgerechnet. Der Chart lädt von neu
+ * nach alt, die Seite mit dem Sprung kommt also vor den älteren.
+ *
+ * Grenze: liegt der Sprung genau zwischen zwei Seiten (letzte Kerze der einen,
+ * erste der anderen), wird er nicht gefunden und nichts umgerechnet.
+ *
+ * @param {object[]} kerzen   aufsteigend; wird nicht verändert
+ * @param {{t, faktor}[]} splits
+ * @param {Map<number, number>} bekannt  Split-Zeit → Zeit der ersten Kerze NACH dem Sprung; wird ergänzt
+ * @returns {{kerzen: object[], angewendet: number}}  `angewendet` = Zahl der Splits, die auf diese Seite wirkten
+ */
+export function bereinigeSeite(kerzen = [], splits = [], bekannt = new Map()) {
+    if (!kerzen.length || !splits.length) return { kerzen, angewendet: 0 }
+    let aus = kerzen
+    let angewendet = 0
+    for (const split of [...splits].sort((a, b) => b.t - a.t)) {
+        let ab = bekannt.get(split.t)
+        if (ab === undefined) {
+            const i = aus.length > 1 ? findeSprung(aus, split) : -1
+            if (i <= 0) continue
+            ab = aus[i].t
+            bekannt.set(split.t, ab)
+        }
+        if (!(aus[0].t <= ab)) continue
+        const f = split.faktor
+        aus = aus.map((k) => (k.t === ab ? flickeSprungKerze(k, f) : k.t > ab ? k : {
+            ...k, o: k.o / f, h: k.h / f, l: k.l / f, c: k.c / f, v: k.v * f,
+            ...(k.vb != null ? { vb: k.vb * f } : {}),
+        }))
+        angewendet++
+    }
+    return { kerzen: aus, angewendet }
 }
 
 /**

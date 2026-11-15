@@ -25,6 +25,8 @@ Oben in der Leiste wird zwischen den Modi umgeschaltet:
 - **Strategien (Beta)** — simulierte Strategie-Instanzen in drei Seiten: Bibliothek (Strategien ansehen und bauen), Labor (Test, Viele Coins, Läufe), Instanzen (laufen lassen und auswerten).
 - **Entdecken (Research)** — zwei Radare mit gegensätzlichen Fragen: Hype-Radar („was ist neu draussen") und Coin-Radar („was lässt sich heute handeln"). Siehe Thema "entdecken".
 
+Zusätzlich gibt es einen Aktien-Teil (im Aufbau, ab Werk aus) mit eigenem Markt-Umschalter Krypto ↔ Aktien in der Kopfleiste — siehe Thema "aktien".
+
 Jeder Modus ausser dem Journal lässt sich einzeln abschalten (Einstellungen → Allgemein → Bedienung & Menü → „Modi ein-/ausblenden"). Abgeschaltet heisst wirklich aus: der Tab verschwindet, das Seitenmenü zeigt nichts mehr, und auch ein direkt aufgerufener Link führt zurück ins Journal. Das Journal selbst hat keinen Schalter. Wer also nach einem Bereich fragt, den es hier nicht gibt, hat ihn möglicherweise abgeschaltet.
 
 Links im Seitenmenü: Börsen-Umschalter (Bitunix/Bitget/Pionex), Pille „Kontoübersicht", darunter die Seiten des aktiven Modus. Oben rechts in der Kopfleiste stehen der Seitentitel (im Journal mit dem gewählten Zeitraum), der Augen-Button (Zensur-Modus: verbirgt Kontostände und Beträge, z.B. für Screenshots), der Roboter-Button, der den KI-Coach als Seitenleiste über der aktuellen Seite auf- und zuklappt, im Dashboard „Export", dann das Zahnrad für die Einstellungen (modusübergreifend immer erreichbar) und „Abmelden" (nur wenn ein Passwort gesetzt ist). Am Telefon steht der Titel in einer eigenen Zeile und öffnet das Seitenmenü; ebenso ein Wisch vom linken Bildschirmrand nach rechts (nur vom Rand aus — waagrechtes Wischen im Inhalt bleibt Tabellen und Charts), nach links gewischt oder ein Tipp daneben schliesst es wieder. Im Chart-Vollbild gehört der linke Rand den Schubladen (Indikatoren, Zeichenwerkzeuge). Ganz unten im Seitenmenü: „Spenden" (QR-Codes für Bitcoin und PayPal), „Rechtliches" (Haftungsausschluss, Lizenz AGPL-3.0 — AutarkTrade ist freie Software —, Hinweise, fremde Software, Link zum Quellcode) und die Version. Selten fragt die App von sich aus: bei 50, 200, 500 und 1000 bewerteten Trades, einmal nach jedem Update, 30 Tage nach der ersten Nutzung und danach alle 90 Tage — höchstens einmal in 30 Tagen, nie im Live-Trading oder im Vollbild. „Ich habe schon gespendet" beendet die Nachfragen (einmal im Jahr ein Dank), „Ich will definitiv nicht" beendet sie ganz.`,
@@ -174,6 +176,24 @@ Wichtig: Der Coin-Radar sagt NICHTS über die Richtung. Er trägt in die Gegenwa
 
 **Gemeinsame Favoriten und Wachhund** — der Stern in beiden Listen führt in dieselbe Beobachtungsliste. Ein Wachhund prüft sie im eigenen Takt (Vorgabe alle 15 Minuten) und meldet über die Alarm-Liste sowie optional ntfy, Telegram oder einen Webhook (einzurichten unter Einstellungen → Benachrichtigungen → „Push aufs Handy"). Die Regeln unterscheiden sich nach Herkunft: bei Hype-Funden Preissprung, Tagesbewegung, Liquiditätsabfluss und eine erneut fehlschlagende Sicherheitsprüfung; bei Coin-Radar-Favoriten Preissprung, Tagesbewegung, Umsatzeinbruch, aufgehender Spread und extremes Funding — ein Bitunix-Perp hat keinen Liquiditätspool, der abfliessen könnte. Alle Schwellen stehen in den Einstellungen des Hype-Radars — Zahnrad oben links auf der Seite. Die Alarm-Liste lässt sich aufräumen: „alle gelesen" nimmt nur die Markierung weg, das Papierkorb-Zeichen rechts an einer Zeile löscht diesen Alarm und „alle löschen" die ganze Liste — beides braucht zwei Klicks, der erste schärft nur. Ein Klick auf einen Frühphasen-Alarm öffnet den Token in der Frühphase; führt sie ihn nicht mehr, steht oben eine Karte mit dem Stand damals, dem Markt jetzt und der Erfolgskontrolle, und der Knopf „Tiefensuche“ prüft Vertrag, Halter und Projekt frisch.`,
     },
+    aktien: {
+        titel: 'Aktien (im Aufbau): Markt-Umschalter, Newcomer-Radar, Aktien-Radar, Marktlage, Titel-Seite',
+        text: `Der Aktien-Teil ist ab Werk aus. Einschalten: Einstellungen → Allgemein → Bedienung & Menü → „Aktien (im Aufbau)". Danach steht oben rechts in der Kopfleiste ein Umschalter **Krypto ↔ Aktien**. Er lädt die Seite neu; jeder Markt hat eigene Research-Seiten, eigene Chart-Layouts und Watchlists und eigene Strategie-Instanzen. Gehandelt werden Aktien hier als USDT-Futures („Aktien-Futures") bei Binance, Bitget und Bitunix, dazu gibt es Spot-Token (Pionex) und Bitpanda. Die App sendet keine Orders.
+
+Wichtig zum Verständnis: Der Kurs einer Aktie entsteht an der US-Börse. Der Future handelt rund um die Uhr, ist ausserhalb der Börsenzeit aber dünn. Kennzahlen, Analysten, Zahlentermine und Tageskurse kommen von Yahoo Finance und brauchen den Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (Einstellungen → Datenquellen); ist er aus, sagen die Seiten das.
+
+Seiten im Markt Aktien (Research):
+- **Newcomer-Radar** — junge und neu gelistete Firmen unter den handelbaren Titeln, benotet nach Neuheit, Kursstärke und Volumen. Kategorien: junge Börsengänge (bis zwei Jahre), vor Börsengang, neu gelistet, etabliert. Beim Börsengang steht ein Vermerk zur üblichen Haltefrist (180 Tage, gerechnet — die wirkliche Frist steht im Börsenprospekt). Der Lauf holt Tageskurse für alle Titel und dauert einige Minuten.
+- **Aktien-Radar** — welche Aktien-Futures der Marktdatenquelle sich gerade anbieten. Die Note (0–100) setzt sich zusammen aus Stärke (Rendite über 3, 6 und 12 Monate gegen den S&P 500, als Rang im Feld), Nähe zum 52-Wochen-Hoch, Volumen gegen dieselbe Tageszeit, Bewegung (ATR) und Trend (ADX). Funding zählt nicht in die Note und steht nur als „Haltekosten". Am Wochenende und an US-Feiertagen gibt es keinen Volumenvergleich. Die Spalte „Zahlen" zeigt die Tage bis zu den nächsten Quartalszahlen. Ist weniger als 60 % der Note messbar (z. B. Titel ohne Tageskurse), wird sie bei 49 gedeckelt und mit Stern markiert. Ein Klick auf den Ticker öffnet den Chart, auf den Namen die Titel-Seite.
+- **Marktlage** — das Umfeld: S&P 500, Nasdaq 100 und Nebenwerte gegen ihre 200-Tage-Linie, VIX samt Vergleich zum Dreimonats-VIX, die elf Sektoren gegen den S&P 500, US-Zinsen, Dollar und die Breite im eigenen Feld (Anteil der eigenen Titel über ihrer 50-Tage-Linie, aus dem letzten Newcomer-Lauf). Oben steht ein regelbasiertes Urteil (Rückenwind, gemischt, Gegenwind) mit seinen Gründen. Eine Beschreibung, keine Vorhersage.
+- **Titel-Liste** („Aktien") — alle Titel mit ihren Handelsplätzen (Future, Spot-Token, Bitpanda); „Jetzt abgleichen" liest die öffentlichen Symbol-Listen. Ein Klick auf den Ticker öffnet die **Titel-Seite**: Kurs und Verlauf, Lage in der 52-Wochen-Spanne, Kennzahlen, Analysten-Konsens und Abstand der Kursziele, Quartalszahlen gegen Schätzung, Firma, Aktionäre und Leerverkäufe, Insider-Geschäfte, Kasse (mit Reichweite bei Mittelabfluss) und bei jungen Firmen die übliche Haltefrist. „Was den Kurs bewegt hat" ist eine Websuche über Perplexity — sie kostet eine Abfrage und läuft nur auf Knopfdruck.
+
+Chart im Aktien-Markt: Die Symbolsuche findet Aktien nach Ticker oder Firmenname. Splits werden in den Kerzen umgerechnet (die Börsen liefern sie unbereinigt). Liquidations-, Hebel- und Footprint-Ebenen bedeuten bei Aktien-Futures wenig, weil der Kurs an der Börse entsteht.
+
+Strategien im Aktien-Markt: Labor und Instanzen beginnen mit einem Aktien-Future und bieten die Aktien-Suche. Eine Instanz gehört zu einem Markt; Aktien und Coins lassen sich nicht mischen. Bei Aktien rechnet die Simulation anders: Jeder Trade trägt seine Börsensitzung (regulär 09:30–16:00 New Yorker Zeit, vor- und nachbörslich, Nacht, Wochenende, US-Feiertag), das Labor zeigt das Ergebnis je Sitzung und mit/ohne Trades rund um Quartalszahlen, das Tageslimit zählt am New Yorker Handelstag. Zwei Risiko-Schalter gelten nur für Aktien: „nur reguläre US-Sitzung" und „Zahlentermine meiden" (ein Tag vor bis ein Tag nach der Meldung). Die Rangliste („Viele Coins") hat im Aktien-Markt das Universum „Alle Aktien-Futures" oder eine eigene Liste; Top-Listen und KI-Themen gibt es nur für Coins.
+
+Was es für Aktien (noch) nicht gibt: einen eigenen Marktradar mit Kacheln (der Marktradar zeigt Krypto), Journal und Portfolio für Aktien, echte Haltefristen und Kapitalerhöhungen aus den US-Einreichungen, Marker für Zahlentermine im Chart.`,
+    },
     livetrading: {
         titel: 'Live-Trading: Sessions, Cockpit, Archiv, Auswertung',
         text: `Das Live-Trading-Fenster (Analyse → Live-Trading) ist der Arbeitsplatz für die Stunden, in denen tatsächlich gehandelt wird. Nur am Desktop verfügbar (am Telefon per Einstellung freischaltbar) und über die Einstellung „Live-Trading" komplett abschaltbar.
@@ -312,7 +332,7 @@ const SEITEN_ZU_MODUS = {
     marktradar: 'live', nachrichten: 'live', openinterest: 'live', liquidity: 'live',
     liquidations: 'live', livetrading: 'live', liveSessions: 'live', liveAuswertung: 'live',
     hypeRadar: 'research', hypeFrueh: 'research', hypeBoersen: 'research', hypeBerichte: 'research', coinRadar: 'research', coinVerlauf: 'research', coinAbverkauf: 'research',
-    newcomerRadar: 'research', aktienRadar: 'research', aktienStamm: 'research',
+    newcomerRadar: 'research', aktienRadar: 'research', aktienMarktlage: 'research', aktienStamm: 'research',
     strategieBibliothek: 'agent', strategieLabor: 'agent', strategieInstanzen: 'agent',
     lernen: 'lernen', lernenKarten: 'lernen', lernenStatistik: 'lernen',
     portfolio: 'portfolio', portfolioDca: 'portfolio', portfolioBewegungen: 'portfolio', portfolioStaking: 'portfolio', portfolioSteuer: 'portfolio', portfolioQuellen: 'portfolio', portfolioTotalverluste: 'portfolio',
@@ -321,6 +341,7 @@ const SEITEN_ZU_MODUS = {
 
 // Ausnahmen, wo eine Seite ein eigenes/genaueres Thema hat als ihr Modus.
 const SEITEN_UEBERSCHREIBUNG = {
+    newcomerRadar: 'aktien', aktienRadar: 'aktien', aktienMarktlage: 'aktien', aktienStamm: 'aktien',
     kiAgent: 'ki',
     incoming: 'import',
     tradeImport: 'import',

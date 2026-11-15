@@ -37,6 +37,8 @@ import { ordnePunkte } from './chart-alarm-regeln.js'
 import { getStrategy, validateParams } from './strategies/index.js'
 import { signalVerlauf, fensterFuer } from './chart-signale.js'
 import { normMarkt } from './migrationen/aktien.js'
+import { aktienKontext } from './aktien/kontext.js'
+import { bereinigeSeite } from './aktien/splits.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 const HTTP_TIMEOUT = 10000
@@ -412,6 +414,31 @@ function sendeGedrosselt(res) {
 const TIEFE_TTL_MS = 4000
 const tiefeCache = new Map()     // quelle|markt|symbol → { t, daten, laeuft }
 
+/*
+ * Aktien-Futures: die Börsen liefern unbereinigte Kerzen — nach einem Split
+ * steht ein Sprung im Chart, und jeder Indikator rechnet über ihn hinweg
+ * (`server/aktien/splits.js`). Die Kerzen vor dem Split werden deshalb
+ * umgerechnet, bevor sie den Browser erreichen. Der Chart lädt seitenweise;
+ * wo der Sprung liegt, wird je Quelle, Symbol und Zeiteinheit gemerkt.
+ */
+const splitWissen = new Map()   // quelle|symbol|interval → Map(Split-Zeit → erste Kerze danach)
+
+async function mitSplits(quelle, symbol, interval, kerzen) {
+    if (!Array.isArray(kerzen) || !kerzen.length || quelle === 'binance-spot') return { kerzen, splits: 0 }
+    let aktie = null
+    try { aktie = await aktienKontext(symbol) } catch { aktie = null }
+    if (!aktie?.splits?.length) return { kerzen, splits: 0 }
+    const schluessel = `${quelle}|${symbol}|${interval}`
+    if (!splitWissen.has(schluessel)) splitWissen.set(schluessel, new Map())
+    const alsObjekte = kerzen.map(([t, o, h, l, c, v, vb]) => ({ t, o, h, l, c, v, ...(vb !== undefined ? { vb } : {}) }))
+    const erg = bereinigeSeite(alsObjekte, aktie.splits, splitWissen.get(schluessel))
+    if (!erg.angewendet) return { kerzen, splits: 0 }
+    return {
+        kerzen: erg.kerzen.map((k) => (k.vb !== undefined ? [k.t, k.o, k.h, k.l, k.c, k.v, k.vb] : [k.t, k.o, k.h, k.l, k.c, k.v])),
+        splits: erg.angewendet,
+    }
+}
+
 export function setupChartRoutes(app) {
 
     /**
@@ -520,7 +547,8 @@ export function setupChartRoutes(app) {
                     ? await holeBitunix(symbol, interval, limit, params.endTime)
                     : await holeBitget(symbol, interval, limit, params.endTime)
                 res.setHeader('Cache-Control', 'no-store')
-                return res.json({ quelle, symbol, interval, ...erg })
+                const b = await mitSplits(quelle, symbol, interval, erg.kerzen)
+                return res.json({ quelle, symbol, interval, ...erg, kerzen: b.kerzen, ...(b.splits ? { splitBereinigt: b.splits } : {}) })
             } catch (e) {
                 const status = e.status || e.response?.status || 502
                 if (status >= 500 || !e.response) logWarn('chart', `Kerzen ${quelle} ${symbol} ${interval}: ${e.message}`)
@@ -538,7 +566,8 @@ export function setupChartRoutes(app) {
             // Gewicht und Strafe meldet `binanceHole` (nur Futures) an die Bremse.
             const roh = await marktdaten.binanceHole('kerzen', q.markt, q.pfad, params)
             res.setHeader('Cache-Control', 'no-store')
-            res.json({ quelle, symbol, interval, kerzen: kerzenAusBinance(roh) })
+            const b = await mitSplits(quelle, symbol, interval, kerzenAusBinance(roh))
+            res.json({ quelle, symbol, interval, kerzen: b.kerzen, ...(b.splits ? { splitBereinigt: b.splits } : {}) })
         } catch (e) {
             if (marktdaten.sendeWennAus(res, e)) return
             const status = e.response?.status || 502

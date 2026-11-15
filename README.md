@@ -249,6 +249,21 @@ newly failing safety check; for Coin-Radar favourites price jump, daily move,
 turnover collapse, widening spread and extreme funding — a Bitunix perpetual has no
 liquidity pool that could drain.
 
+### Stocks (beta, off by default)
+
+Stock perpetuals and tokenised stocks that the connected venues list (Binance, Bitget, Bitunix as USDT futures; Pionex spot tokens; Bitpanda). Switch it on under Settings › General › „Aktien (im Aufbau)"; a market switch **Krypto ↔ Aktien** then appears in the header. Each market has its own research pages, chart layouts, watchlists and strategy instances. The app still sends no orders.
+
+Stocks are not treated as relabelled coins (research notes: `docs/RECHERCHE-AKTIEN.md`): the price of a stock is made on the US exchange, the perpetual trades around the clock but is thin outside market hours, and its candles are not split-adjusted.
+
+- **Newcomer radar** — young and newly listed companies among the tradable instruments, scored by novelty, price strength and volume; usual lock-up expiry (180 days, calculated) noted at the IPO
+- **Stock radar** — the stock futures of the market-data source, scored by strength against the S&P 500 over 3/6/12 months (rank in the field), nearness to the 52-week high, volume against the same time of day, movement and trend; funding is a cost column only; days to the next earnings release
+- **Market conditions** — S&P 500, Nasdaq 100 and small caps against their 200-day line, VIX and its term structure, the eleven sectors against the index, rates, dollar, breadth of your own field; a rule-based verdict with its reasons
+- **Instrument page** — price and history, key figures, analyst consensus and price targets, earnings against estimates, shareholders, short interest, insider transactions, cash runway, usual lock-up for young companies; „what moved the price" as a web search via Perplexity on request
+- **Chart** — stock search by ticker or company name; splits are adjusted in the candles
+- **Strategies** — backtest and paper trading know trading sessions (New York time, US holidays), report results per session and with/without earnings windows, can restrict entries to the regular session and avoid earnings dates; the daily limit counts on the New York trading day; ranking over all stock futures
+
+Daily prices, key figures, analysts and earnings dates come from Yahoo Finance and need the switch „Sources with restricted terms of use". Not built yet: a stock market radar with tiles, journal and portfolio for stocks, real lock-up periods and offerings from SEC filings.
+
 ### Live-Trading window (Live-Analyse)
 
 A second tile grid, separate from the Marktradar — the workspace for the two to

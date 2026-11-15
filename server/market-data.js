@@ -390,5 +390,21 @@ export async function getSymbolMeta(symbol, opts = {}) {
         metaCache.set(key, { ts: Date.now(), map })
     }
 
-    return metaCache.get(key).map.get(sym) || null
+    const treffer = metaCache.get(key).map.get(sym)
+    if (treffer || market === 'spot') return treffer || null
+
+    // Aktien-Futures: Bitget hält sie aus der normalen Symbolliste heraus (`isRwa`).
+    // Fehlt ein Symbol dort, einmal in der vollen Liste nachsehen — sonst rechnet
+    // die Simulation einen Aktien-Future ohne Rundung und Mindestgrösse.
+    if (anbieter.id !== 'bitget') return null
+    const voll = `${key}|alle`
+    const c = metaCache.get(voll)
+    if (!c || (Date.now() - c.ts) > META_TTL) {
+        const map = new Map()
+        for (const [s, m] of await anbieter.symbole({ markt: market, alle: true })) {
+            map.set(s, { symbol: s, tickSize: m.tickSize, stepSize: m.stepSize, minQty: m.minQty, minNotional: m.minNotional })
+        }
+        metaCache.set(voll, { ts: Date.now(), map })
+    }
+    return metaCache.get(voll).map.get(sym) || null
 }

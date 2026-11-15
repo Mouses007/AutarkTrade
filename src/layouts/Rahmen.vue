@@ -39,7 +39,8 @@ import { kiCoachOffen, kiCoachBreite } from '../stores/app/kiCoach.js'
 import { appEinstellungen } from '../stores/settings.js'
 import { ladeSystemModus } from '../stores/system.js'
 import { hydrateLiveSettings } from '../stores/live.js'
-import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
+import { istModusAn, ersterAktiverModus, modeHome, pageById } from '../config/menu.js'
+import { marktAus } from '../config/markt.js'
 import { starteApp, leseZeitzone, leseBildschirmTyp, ladeZeitraeume, setzeFilterwerte, schliesseMobilMenue, schalteMobilMenue } from '../utils/journal/app.js'
 import { wischErgebnis } from '../utils/menueWisch.js'
 import { ladeVerfuegbareTags } from '../utils/journal/tagebuch.js'
@@ -188,8 +189,14 @@ watch([appEinstellungen, () => route.fullPath], () => {
     if (!u) return                                   // Unwissen ist kein Nein
     const m = route.meta?.mode
     if (!m || m === 'any' || m === 'journal') return
-    if (istModusAn(m, u)) return
-    router.replace(modeHome(ersterAktiverModus(u)))
+    if (!istModusAn(m, u)) return router.replace(modeHome(ersterAktiverModus(u)))
+    // Seiten, die nur ein Markt hat (Hype-Radar ↔ Aktien-Radar): per Adresse im
+    // falschen Markt aufgerufen — oder bei abgeschaltetem Aktien-Teil — geht es
+    // zur Startseite des Modus im aktiven Markt. Sonst stünde eine Aktien-Seite
+    // unter dem Krypto-Menü.
+    const seite = pageById(String(route.name || ''))
+    const markt = marktAus(u)
+    if (seite?.markt && seite.markt !== markt) router.replace(modeHome(m, markt))
 }, { immediate: true })
 
 /* ── Zensur (nur Journal) ─────────────────────────────── */

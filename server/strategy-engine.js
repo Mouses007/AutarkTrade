@@ -38,6 +38,7 @@ import { istAus as marktdatenAus } from './marktdaten/index.js'
 import { aussortierteZeilen } from './strategie-aussortiert.js'
 import { zeitpunkt } from '../shared/strategieChart.js'
 import { aktienKontext } from './aktien/kontext.js'
+import { bereinigeSplits } from './aktien/splits.js'
 import { sitzungVon, handelstagBeginn } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, terminListe } from '../shared/aktien-zahlen.js'
 
@@ -312,6 +313,20 @@ export function risikoKontextAbfragen(knex, instanceId, now, tagesBeginn = start
  * Stichtag der Risikoprüfung: Schluss der Auslösekerze. Ohne Kerzenzeit (alte
  * Detektoren) die Systemzeit — so meldeten sie den Auslöser schon immer.
  */
+/**
+ * Kerzen eines Aktien-Futures vor jedem Split umrechnen — wie im Backtest
+ * (`server/aktien/splits.js`). Für Coins und bei unbekannten Splits unverändert.
+ *
+ * Achtung, nicht gelöst: eine Position, die ÜBER einen Split offen bleibt,
+ * behält ihre alten Kurse. Die Börsen schliessen solche Positionen (Binance)
+ * oder rechnen sie um (Bitget); die Simulation tut beides nicht.
+ */
+async function splitBereinigt(symbol, candles) {
+    if (!candles?.length) return candles
+    const aktie = await aktienKontext(symbol)
+    return aktie?.splits?.length ? bereinigeSplits(candles, aktie.splits).kerzen : candles
+}
+
 export function risikoStichtag(ev, tfMs) {
     const beginn = Number(ev?.candleTime ?? ev?.triggeredAt) || 0
     return beginn > 0 ? beginn + (tfMs || 0) : Date.now()
@@ -397,7 +412,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     // (`sichtFensterKerzen`), samt Indikatorperioden und `ltfKerzen`.
     const bedarf = sichtFensterKerzen(instance.strategie, p, timeframeMs(timeframe), { endlich: true })
 
-    let candles = await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market })
+    let candles = await splitBereinigt(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }))
     if (!candles.length) return { skipped: 'zu wenige Kerzen' }
     const key = `${instance.id}|${symbol}|${timeframe}`
     if (lastProcessed.get(key) === candles[candles.length - 1].t) return { skipped: 'keine neue Kerze' }
@@ -412,7 +427,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     const kurzVon = candles[candles.length - 1].t
     if (candles.length < bedarf * 0.9 && nachgefragt.get(key) !== kurzVon) {
         nachgefragt.set(key, kurzVon)
-        const frisch = await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true })
+        const frisch = await splitBereinigt(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }))
         if (frisch.length > candles.length) candles = frisch
     }
     if (candles.length < 50) return { skipped: 'zu wenige Kerzen' }
@@ -433,7 +448,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         partialTpPct: p.partialTpPct,
         // Wartungsmarge je Symbol (0 in der Instanz = von der Börse holen),
         // damit Papierbetrieb und Backtest denselben Liquidationspreis rechnen.
-        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct),
+        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(await aktienKontext(symbol)) }),
     })
 
     // ── 2. Erkennen ──────────────────────────────────────────────────────
@@ -478,9 +493,9 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         // Set and Forget eine andere Wochenebene) als das Labor.
         const anzahl = Math.max((p.htfEmaPeriod || 50) + 20, htfBedarf(instance.strategie, p))
         try {
-            htfCandles = await getClosedCandles(
+            htfCandles = await splitBereinigt(symbol, await getClosedCandles(
                 symbol, p.htfTimeframe, anzahl, { market: instance.market },
-            )
+            ))
         } catch (e) {
             htfCandles = null
         }
@@ -986,7 +1001,7 @@ async function pflegeOffenePositionen() {
             const pflegeTf = isValidTimeframe(posTf) ? posTf : instance.timeframe
             const tfMs = timeframeMs(pflegeTf)
             const bedarf = Math.min(990, Math.max(60, Math.ceil((Date.now() - minAb) / tfMs) + 3))
-            const candles = await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market })
+            const candles = await splitBereinigt(symbol, await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }))
             if (!candles?.length) continue
             if (candles[0].t > minAb + tfMs * 1.5) {
                 logWarn('strategy-engine', `Kerzenlücke ${symbol}: Abdeckung beginnt erst ${new Date(candles[0].t).toISOString()} — Nachlauf ausgesetzt, um keine Stops zu überspringen`)
@@ -1005,7 +1020,7 @@ async function pflegeOffenePositionen() {
                 maxHoldMs: ((instance.params.maxHoldCandles ?? regeln?.maxHoldCandles ?? 0) || 0) * timeframeMs(pflegeTf),
                 partialTpR: instance.params.partialTpR,
                 partialTpPct: instance.params.partialTpPct,
-                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct),
+                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(await aktienKontext(symbol)) }),
             })
         } catch (e) {
             // Ohne Marktdaten steht es schon einmal bei der Instanz im Log (`ausGemeldet`).

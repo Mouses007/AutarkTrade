@@ -52,6 +52,14 @@ const BYBIT_URL = 'https://api.bybit.com/v5/market/risk-limit'
 export const MMR_VORGABE = 0.004
 
 /**
+ * Wartungsmarge eines Aktien-Futures, wenn keine Börse sie nennt. Binance
+ * verlangt für Aktien-Kontrakte 2,5 % (`maintMarginPercent` in `exchangeInfo`,
+ * gelesen 15.11.2026) — der BTC-Satz von 0,4 % liesse eine Aktien-Position in
+ * der Simulation weit über den Punkt hinaus laufen, an dem die Börse schliesst.
+ */
+export const MMR_VORGABE_AKTIEN = 0.025
+
+/**
  * Stufe 1 aus einer Binance-Klammertabelle ziehen.
  *
  * Genommen wird die Klammer mit Untergrenze 0, nicht `bracketSeq === 1`: die
@@ -288,8 +296,8 @@ export async function holeMarginRate(symbol, quelle) {
  * Prozent, nicht Bruch: die Schnittstelle zum Simulator rechnet in Prozent
  * (siehe Einheiten-Kanon in `shared/liquidation.js`).
  */
-export async function wartungsmargePctFuer(symbol, override = 0) {
-    return (await wartungsmargeMitQuelle(symbol, override)).pct
+export async function wartungsmargePctFuer(symbol, override = 0, opt = {}) {
+    return (await wartungsmargeMitQuelle(symbol, override, opt)).pct
 }
 
 /**
@@ -298,7 +306,7 @@ export async function wartungsmargePctFuer(symbol, override = 0) {
  * stand im Backtest auch beim Rückfall „boerse" — eine Annahme, die sich als
  * Messung ausgab.
  */
-export async function wartungsmargeMitQuelle(symbol, override = 0) {
+export async function wartungsmargeMitQuelle(symbol, override = 0, { aktie = false } = {}) {
     const eigen = Number(override)
     if (Number.isFinite(eigen) && eigen > 0) return { pct: eigen, quelle: 'vorgabe' }
     try {
@@ -307,7 +315,10 @@ export async function wartungsmargeMitQuelle(symbol, override = 0) {
     } catch (fehler) {
         logWarn('margin-rates', `Wartungsmarge ${symbol} nicht abrufbar: ${fehler.message}`)
     }
-    return { pct: MMR_VORGABE * 100, quelle: 'pauschal' }
+    // Kennt keine Börse das Symbol: für Aktien-Futures der Aktien-Satz, sonst der allgemeine.
+    return aktie
+        ? { pct: MMR_VORGABE_AKTIEN * 100, quelle: 'pauschalAktie' }
+        : { pct: MMR_VORGABE * 100, quelle: 'pauschal' }
 }
 
 export function setupMarginRateRoutes(app) {

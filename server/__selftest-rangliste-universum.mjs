@@ -137,8 +137,8 @@ console.log('\nRobustheit')
     let geworfen = false
     try { await loeseUniversumAuf({ art: 'zauberei' }, { handelbar, testbar }) } catch (e) { geworfen = true }
     check('eine unbekannte Universumsart wird abgelehnt', geworfen)
-    check('die vier Arten sind vollständig',
-        UNIVERSUM_ARTEN.join(',') === 'bitunix,top,manuell,ki', UNIVERSUM_ARTEN.join(','))
+    check('die fünf Arten sind vollständig',
+        UNIVERSUM_ARTEN.join(',') === 'bitunix,top,manuell,ki,aktien', UNIVERSUM_ARTEN.join(','))
 
     const leer = await loeseUniversumAuf({ art: 'manuell', symbole: [] }, { handelbar, testbar })
     check('ein leeres Universum kippt nicht um', leer.symbole.length === 0)
@@ -147,6 +147,27 @@ console.log('\nRobustheit')
     check('erfundene Symbole eines KI-Vorschlags landen in der Fehlliste',
         ki.symbole.join(',') === 'BTCUSDT' && ki.ohneHistorie.join(',') === 'ERFUNDENUSDT',
         `${ki.symbole.join(',')} | ${ki.ohneHistorie.join(',')}`)
+
+    // ── Aktien-Markt: gegen die Aktien-Futures des Stamms, nicht gegen die Coin-Liste ──
+    const aktien = async () => ({
+        testbar: new Set(['NVDAUSDT', 'TSLAUSDT', 'SOXSUSDT']),
+        handelbar: new Map([['NVDAUSDT', { maxLeverage: 50 }], ['TSLAUSDT', { maxLeverage: 50 }]]),
+    })
+    const alle = await loeseUniversumAuf({ art: 'aktien' }, { aktien })
+    check('«alle Aktien-Futures»: was auch Bitunix führt, nach Symbol geordnet',
+        alle.symbole.join(',') === 'NVDAUSDT,TSLAUSDT' && alle.nichtHandelbar.join(',') === 'SOXSUSDT', alle.symbole.join(','))
+    check('Hebel kommt von Bitunix', alle.meta.NVDAUSDT.maxLeverage === 50 && alle.meta.NVDAUSDT.handelbar === true)
+    const mitFremden = await loeseUniversumAuf({ art: 'aktien', nurHandelbar: 0 }, { aktien })
+    check('ohne «nur handelbar» laufen auch Titel ohne Bitunix-Markt mit', mitFremden.symbole.join(',') === 'NVDAUSDT,SOXSUSDT,TSLAUSDT')
+    const eigene = await loeseUniversumAuf({ art: 'manuell', anlageklasse: 'aktien', symbole: ['nvdausdt', 'BTCUSDT'] }, { aktien })
+    check('eigene Liste im Aktien-Markt: eine Aktie läuft, ein Coin hat dort keine Historie',
+        eigene.symbole.join(',') === 'NVDAUSDT' && eigene.ohneHistorie.join(',') === 'BTCUSDT', `${eigene.symbole} | ${eigene.ohneHistorie}`)
+    const gegenprobe = await loeseUniversumAuf({ art: 'manuell', symbole: ['NVDAUSDT', 'BTCUSDT'] }, { handelbar, testbar, aktien })
+    check('Gegenprobe: im Krypto-Markt fällt dieselbe Aktie weiter heraus',
+        gegenprobe.symbole.join(',') === 'BTCUSDT' && gegenprobe.ohneHistorie.join(',') === 'NVDAUSDT', `${gegenprobe.symbole} | ${gegenprobe.ohneHistorie}`)
+    let abgelehnt = ''
+    try { await loeseUniversumAuf({ art: 'top', anlageklasse: 'aktien', n: 10 }, { aktien }) } catch (e) { abgelehnt = e.message }
+    check('Top-Liste und KI-Thema gibt es für Aktien nicht — mit Begründung', /nur Coins/.test(abgelehnt), abgelehnt)
 }
 
 console.log(`\n${fehlgeschlagen === 0 ? '\x1b[32m' : '\x1b[31m'}${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen\x1b[0m`)

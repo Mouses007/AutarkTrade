@@ -4,7 +4,7 @@
  *   node server/aktien/__selftest-splits.mjs
  */
 import assert from 'node:assert/strict'
-import { ausSplits, bereinigeSplits, verdaechtigeSpruenge } from './splits.js'
+import { ausSplits, bereinigeSplits, bereinigeSeite, verdaechtigeSpruenge } from './splits.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -73,5 +73,47 @@ nah(r4.kerzen[0].v, 10, 'Volumen × 10')
 
 ok(bereinigeSplits([], [split]).kerzen.length === 0 && bereinigeSplits(kerzen, []).kerzen === kerzen, 'leere Eingaben')
 ok(verdaechtigeSpruenge(rev)[0].verhaeltnis === 0.1, 'Sprung nach oben ist ebenfalls verdächtig')
+
+// ── Tageskerze, IN die der Split fällt: eröffnet im alten, schliesst im neuen Massstab ──
+const tage = [
+    { t: 1 * TAG, o: 470, h: 485, l: 465, c: 480, v: 10 },
+    { t: 2 * TAG, o: 481, h: 498, l: 21, c: 23, v: 10 },       // Ex-Tag: Hoch 498 stammt aus dem alten Massstab
+    { t: 3 * TAG, o: 23, h: 24, l: 22, c: 23.5, v: 10 },
+]
+const rt = bereinigeSplits(tage, [{ t: 2 * TAG + 12 * H, faktor: 20 }])
+ok(rt.splits[0].angewendet && rt.splits[0].bei === 2 * TAG, 'Sprung an der Ex-Tag-Kerze gefunden')
+nah(rt.kerzen[1].o, 481 / 20, 'ihre Eröffnung wird umgerechnet')
+ok(rt.kerzen[1].h < 30 && rt.kerzen[1].h >= rt.kerzen[1].o && rt.kerzen[1].l === 21 && rt.kerzen[1].c === 23, `ihr Hoch aus dem alten Massstab ist begrenzt (${rt.kerzen[1].h.toFixed(2)}), Tief und Schluss bleiben`)
+ok(Math.max(...rt.kerzen.map((k) => k.h)) < 30, 'kein Hoch aus dem alten Massstab bleibt stehen')
+ok(tage[1].h === 498, 'Eingabe unverändert')
+// Gegenprobe: eine Kerze, die sauber im neuen Massstab eröffnet, bleibt wie sie ist
+ok(r.kerzen[50] === kerzen[50], 'Stundenkerze nach einer Handelspause: unverändert')
+// Zusammenlegung 1:10 in einer Tageskerze: Tief stammt aus dem alten Massstab
+const rz = bereinigeSplits([{ t: TAG, o: 2, h: 2.1, l: 1.9, c: 2, v: 1 }, { t: 2 * TAG, o: 2, h: 21, l: 1.95, c: 20, v: 1 }, { t: 3 * TAG, o: 20, h: 21, l: 19, c: 20, v: 1 }], [{ t: 2 * TAG, faktor: 0.1 }])
+ok(rz.kerzen[1].o === 20 && rz.kerzen[1].l === 20 && rz.kerzen[1].h === 21, 'Zusammenlegung: Eröffnung hochgerechnet, altes Tief begrenzt')
+const seiteTag = bereinigeSeite(tage, [{ t: 2 * TAG + 12 * H, faktor: 20 }], new Map())
+ok(Math.max(...seiteTag.kerzen.map((k) => k.h)) < 30 && seiteTag.angewendet === 1, 'seitenweise ebenso')
+
+// ── Seitenweise (Chart): neu nach alt, das Wissen um den Sprung wandert mit ──
+const wissen = new Map()
+const seiteNeu = kerzen.slice(70)          // ganz nach dem Split
+const seiteMitte = kerzen.slice(40, 70)    // enthält den Sprung (Kerze 50)
+const seiteAlt = kerzen.slice(0, 40)       // ganz davor
+const s1 = bereinigeSeite(seiteNeu, [split], wissen)
+ok(s1.kerzen === seiteNeu && s1.angewendet === 0 && wissen.size === 0, 'Seite nach dem Split: unverändert, noch kein Wissen')
+const s2 = bereinigeSeite(seiteMitte, [split], wissen)
+ok(s2.angewendet === 1 && wissen.get(split.t) === t0 + 50 * H, 'Seite mit dem Sprung: gefunden und gemerkt')
+nah(s2.kerzen[0].c, (480 + 4) / 20, 'davor geteilt')
+ok(s2.kerzen[10] === seiteMitte[10], 'ab dem Sprung unverändert')
+const s3 = bereinigeSeite(seiteAlt, [split], wissen)
+ok(s3.angewendet === 1 && Math.abs(s3.kerzen[0].c - 24) < 1e-9 && Math.abs(s3.kerzen[39].v - 20000) < 1e-9, 'ältere Seite ohne Sprung: dank Wissen ganz umgerechnet')
+ok(seiteAlt[0].c === 480, 'die Seite selbst bleibt unverändert')
+const ohneWissen = bereinigeSeite(seiteAlt, [split], new Map())
+ok(ohneWissen.kerzen === seiteAlt && ohneWissen.angewendet === 0, 'ohne Wissen bleibt eine Seite vor dem Split unverändert — unbekannt, nicht geraten')
+ok(bereinigeSeite(seiteNeu, [split], wissen).kerzen === seiteNeu, 'mit Wissen: Seite nach dem Split bleibt unverändert')
+ok(bereinigeSeite([], [split], wissen).kerzen.length === 0 && bereinigeSeite(seiteAlt, [], wissen).kerzen === seiteAlt, 'leere Eingaben')
+// Zusammengesetzt ergibt sich dieselbe Reihe wie beim Rechnen in einem Stück
+const gestueckelt = [...s3.kerzen, ...s2.kerzen, ...s1.kerzen]
+ok(gestueckelt.every((k, i) => Math.abs(k.c - r.kerzen[i].c) < 1e-9 && Math.abs(k.v - r.kerzen[i].v) < 1e-9), 'seitenweise gerechnet = in einem Stück gerechnet')
 
 console.log(`✓ Split-Wache: ${n} Prüfungen`)

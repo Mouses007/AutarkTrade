@@ -24,11 +24,16 @@
 
 import { ausCache, nurCoinSymbole, holeMarkt } from './marktradar-api.js'
 import { holeBitunixPaare } from './bitunix-api.js'
+import { getKnex } from './database.js'
+import * as marktdaten from './marktdaten/index.js'
+import { ladeAktienUniversum } from './coin-radar/aktien-universum.js'
 
 /** Symbole sehen überall im Projekt gleich aus (vgl. `SYMBOL_RE` der Strategie-API). */
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 
-export const UNIVERSUM_ARTEN = ['bitunix', 'top', 'manuell', 'ki']
+export const UNIVERSUM_ARTEN = ['bitunix', 'top', 'manuell', 'ki', 'aktien']
+/** Was im Aktien-Markt wählbar ist: alle Aktien-Futures der Marktdatenquelle oder eine eigene Liste. */
+export const UNIVERSUM_ARTEN_AKTIEN = ['aktien', 'manuell']
 
 /**
  * Auf Bitunix handelbar — Symbol → Metadaten.
@@ -50,12 +55,35 @@ export async function holeTestbar() {
 }
 
 /**
+ * Aktien-Markt: beide Listen aus dem Titel-Stamm (`server/aktien/`).
+ *
+ *   testbar    Aktien-Futures, die die Marktdatenquelle selbst führt — nur für
+ *              die gibt es Kerzen;
+ *   handelbar  davon die, deren Titel auch Bitunix als Future führt (Schlüssel
+ *              bleibt das Symbol der Quelle, der Hebel kommt von Bitunix).
+ *
+ * @returns {Promise<{handelbar: Map<string, {maxLeverage: number}>, testbar: Set<string>}>}
+ */
+export async function holeAktienQuellen() {
+    const quelle = (await marktdaten.fordere('kerzen', { markt: 'futures' })).id
+    const universum = await ladeAktienUniversum(getKnex(), quelle)
+    const handelbar = new Map()
+    for (const [symbol, t] of universum) {
+        const bitunix = (t.listungen || []).find((l) => l.handelsplatz === 'bitunix' && l.art === 'perp')
+        if (bitunix) handelbar.set(symbol, { maxLeverage: Number(bitunix.maxHebel) || 0 })
+    }
+    return { handelbar, testbar: new Set(universum.keys()) }
+}
+
+/**
  * Die drei Zahlen, die über der Universumsauswahl stehen.
  * Bewusst als eigene Funktion: sie ist der schnellste Weg zu prüfen, ob beide
  * Börsen antworten, ohne einen Lauf zu starten.
  */
-export async function quellenUebersicht() {
-    const [handelbar, testbar] = await Promise.all([holeHandelbar(), holeTestbar()])
+export async function quellenUebersicht(anlageklasse = 'krypto') {
+    const [handelbar, testbar] = anlageklasse === 'aktien'
+        ? await holeAktienQuellen().then((q) => [q.handelbar, q.testbar])
+        : await Promise.all([holeHandelbar(), holeTestbar()])
     const beides = [...testbar].filter((s) => handelbar.has(s))
     return {
         handelbar: handelbar.size,
@@ -110,17 +138,29 @@ export async function loeseUniversumAuf(universum, quellen = {}) {
     // Die drei Quellen sind einspeisbar — sonst wäre diese Funktion nur mit
     // Netzverbindung prüfbar, und ein Test, der online sein muss, wird nicht
     // geschrieben. Vorgabe ist immer der echte Abruf (Muster wie `walkForward`).
-    const [handelbar, testbar] = await Promise.all([
-        quellen.handelbar ? quellen.handelbar() : holeHandelbar(),
-        quellen.testbar ? quellen.testbar() : holeTestbar(),
-    ])
+    // Aktien-Markt: dieselbe Auflösung, aber gegen die Aktien-Futures des Stamms.
+    // Ohne das fiele jede Aktie als «ohne Historie» heraus — der Coin-Filter
+    // der Krypto-Liste entfernt sie mit Absicht.
+    const aktien = universum.anlageklasse === 'aktien' || art === 'aktien'
+    if (aktien && !UNIVERSUM_ARTEN_AKTIEN.includes(art)) {
+        throw new Error('Für Aktien gibt es «alle Aktien-Futures» oder eine eigene Liste — Top-Listen und KI-Themen kennen nur Coins')
+    }
+    const [handelbar, testbar] = aktien
+        ? await (quellen.aktien ? quellen.aktien() : holeAktienQuellen()).then((q) => [q.handelbar, q.testbar])
+        : await Promise.all([
+            quellen.handelbar ? quellen.handelbar() : holeHandelbar(),
+            quellen.testbar ? quellen.testbar() : holeTestbar(),
+        ])
 
     let kandidaten = []
     let ungueltig = []
     // Coins, die es bei Binance gar nicht als Perpetual gibt (nur bei `top`)
     const ohneMarkt = []
 
-    if (art === 'bitunix') {
+    if (art === 'aktien') {
+        // Alle Aktien-Futures der Marktdatenquelle, nach Symbol geordnet.
+        kandidaten = [...testbar].sort()
+    } else if (art === 'bitunix') {
         // Alles Handelbare — die Testbarkeit filtert gleich darunter.
         kandidaten = [...handelbar.keys()]
     } else if (art === 'top') {
