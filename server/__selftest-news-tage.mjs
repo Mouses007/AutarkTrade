@@ -11,7 +11,11 @@
  * Aufruf: node server/__selftest-news-tage.mjs
  */
 import { leseTage, tageText, tageSeitVorigem, wochentagNr, TAGE_VORGABE } from '../shared/news-tage.js'
-import { sollBerichtLaufen, leseRhythmus, berichtLueckeTage, aktualitaetFuer } from './marktradar-news.js'
+import { readFileSync } from 'node:fs'
+import {
+    sollBerichtLaufen, leseRhythmus, berichtLueckeTage, aktualitaetFuer,
+    sollUpdateLaufen, faelligerUpdatePlatz, basisTaugtFuerUpdate, leseUpdateStunden, UPDATE_SCHLUESSEL,
+} from './marktradar-news.js'
 
 let fehler = 0
 let bestanden = 0
@@ -118,6 +122,68 @@ pruefe('wöchentlich: nur der Wochentag, Tage-Liste egal',
         sollBerichtLaufen({ jetztLokal: zeit(2026, 8, tag, 12), stunde: 12, rhythmus: 'woechentlich', wochentag: 3, tage: '1,2' }))) === '[19]')
 pruefe('manuell: nie, auch mit Tagen',
     [17, 18, 19, 20, 21, 22, 23].every(tag => !sollBerichtLaufen({ jetztLokal: zeit(2026, 8, tag, 12), stunde: 12, rhythmus: 'manuell', tage: '1,2,3,4,5,6,7' })))
+
+// ── 8) Zwischenmeldungen nur an gewählten Tagen (Audit FUN-R-401) ────────
+{
+    const moFr = '1,2,3,4,5'
+    // 21.08.2026 = Freitag, 22. = Samstag, 23. = Sonntag, 24. = Montag
+    pruefe('Zwischenmeldung: Freitag (gewählt) ja', sollUpdateLaufen({ jetztLokal: zeit(2026, 8, 21, 18), rhythmus: 'tage', tage: moFr }) === true)
+    pruefe('Zwischenmeldung: Samstag (abgewählt) nein', sollUpdateLaufen({ jetztLokal: zeit(2026, 8, 22, 18), rhythmus: 'tage', tage: moFr }) === false)
+    pruefe('Zwischenmeldung: Sonntag (abgewählt) nein', sollUpdateLaufen({ jetztLokal: zeit(2026, 8, 23, 21), rhythmus: 'tage', tage: [1, 2, 3, 4, 5] }) === false)
+    pruefe('Zwischenmeldung: Samstag mit Vollbericht von heute ja',
+        sollUpdateLaufen({ jetztLokal: zeit(2026, 8, 22, 18), rhythmus: 'tage', tage: moFr, berichtHeute: true }) === true)
+    pruefe('Zwischenmeldung: ohne gültigen Tag nie', sollUpdateLaufen({ jetztLokal: zeit(2026, 8, 19, 18), rhythmus: 'tage', tage: '' }) === false)
+    pruefe('Zwischenmeldung: täglich und wöchentlich unverändert jeden Tag',
+        [17, 18, 19, 20, 21, 22, 23].every(tag => sollUpdateLaufen({ jetztLokal: zeit(2026, 8, tag, 18), rhythmus: 'taeglich', tage: '1' })
+            && sollUpdateLaufen({ jetztLokal: zeit(2026, 8, tag, 18), rhythmus: 'woechentlich', tage: '1' })))
+    pruefe('Zwischenmeldung: manuell nie, auch mit Bericht von heute',
+        sollUpdateLaufen({ jetztLokal: zeit(2026, 8, 19, 18), rhythmus: 'manuell', tage: moFr, berichtHeute: true }) === false)
+
+    /*
+     * Der Takt, nachgestellt mit den reinen Entscheidungsfunktionen (kein
+     * KI-Abruf, keine Datenbank): Mo–Fr, Bericht 10 Uhr, Zwischenmeldungen
+     * 18 und 21 Uhr, alle zehn Minuten von Donnerstag bis Dienstag.
+     */
+    const nachgestellt = (mitTagespruefung) => {
+        const stunden = leseUpdateStunden('18,21', 2)
+        const anspruch = {}
+        const laeufe = []
+        let letzter = 0
+        let vollAm = ''
+        for (let t = zeit(2026, 8, 20, 0, 5).getTime(); t < zeit(2026, 8, 26, 0, 0).getTime(); t += 600000) {
+            const lokal = new Date(t)
+            const tag = lokal.toDateString()
+            const lauf = (schluessel, art) => {
+                if (anspruch[schluessel] === tag) return false
+                anspruch[schluessel] = tag; letzter = t + 120000
+                laeufe.push(`${wochentagNr(lokal)}-${art}`)
+                return true
+            }
+            if (sollBerichtLaufen({ jetztLokal: lokal, stunde: 10, rhythmus: 'tage', tage: moFr })) {
+                if (lauf('bericht', 'B')) { vollAm = tag; continue }
+            }
+            const platz = faelligerUpdatePlatz({ jetztLokal: lokal, stunden })
+            if (!platz) continue
+            if (mitTagespruefung && !sollUpdateLaufen({ jetztLokal: lokal, rhythmus: 'tage', tage: moFr, berichtHeute: vollAm === tag })) continue
+            if (letzter && basisTaugtFuerUpdate({ basisAm: letzter, jetzt: t, rhythmus: 'tage' })) lauf(UPDATE_SCHLUESSEL(platz), `U${platz}`)
+        }
+        return laeufe
+    }
+    const alt = nachgestellt(false)
+    const neu = nachgestellt(true)
+    pruefe('Gegenprobe: ohne Tagesprüfung läuft die Kette am Wochenende weiter (der Befund)',
+        alt.filter(l => /^[67]-U/.test(l)).length === 4, alt.join(' '))
+    pruefe('Takt Mo–Fr: Sa/So keine Zwischenmeldung', !neu.some(l => /^[67]-/.test(l)), neu.join(' '))
+    pruefe('Takt Mo–Fr: werktags je ein Bericht und zwei Zwischenmeldungen',
+        neu.join(' ') === '4-B 4-U1 4-U2 5-B 5-U1 5-U2 1-B 1-U1 1-U2 2-B 2-U1 2-U2', neu.join(' '))
+
+    // Die Prüfung muss auch wirklich im Takt stehen, vor dem bezahlten Lauf.
+    const quelle = readFileSync(new URL('./marktradar-news.js', import.meta.url), 'utf8')
+    const takt = quelle.slice(quelle.indexOf('export function startNewsTakt'))
+    const iPruef = takt.indexOf('sollUpdateLaufen(')
+    const iLauf = takt.indexOf('erzeugeLagebericht({ aktualisierung: true')
+    pruefe('startNewsTakt fragt sollUpdateLaufen vor der Zwischenmeldung', iPruef > 0 && iLauf > iPruef && /if \(!erlaubt\) return/.test(takt.slice(iPruef, iLauf)))
+}
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)
 process.exit(fehler === 0 ? 0 : 1)

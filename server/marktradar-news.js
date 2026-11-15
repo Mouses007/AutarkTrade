@@ -2163,6 +2163,31 @@ export function faelligerUpdatePlatz({ jetztLokal, stunden = [] }) {
 }
 
 /**
+ * Darf heute überhaupt eine Zwischenmeldung laufen?
+ *
+ * Bei «an bestimmten Tagen» nur an einem gewählten Wochentag — oder wenn
+ * heute ein Vollbericht entstanden ist (von Hand an einem abgewählten Tag:
+ * wer ihn zieht, bekommt auch seine Nachträge). Ohne diese Prüfung lief die
+ * Kette am Wochenende weiter: Grundlage am Samstag war die Zwischenmeldung
+ * von Freitag 21 Uhr, jünger als ein Tag, also «taugt» — und so Sa und So je
+ * zwei bezahlte Läufe samt Benachrichtigung (Audit FUN-R-401).
+ *
+ * Täglich und wöchentlich bleiben wie bisher (dort entscheidet allein die
+ * Frist in `basisTaugtFuerUpdate`), «nur manuell» läuft nie.
+ *
+ * Rein und ohne Datenbank, damit der Selbsttest sie prüfen kann.
+ *
+ * @param {{jetztLokal: Date, rhythmus?: string, tage?: string|number[], berichtHeute?: boolean}} opt
+ */
+export function sollUpdateLaufen({ jetztLokal, rhythmus = 'taeglich', tage = '', berichtHeute = false }) {
+    const r = leseRhythmus(rhythmus)
+    if (r === 'manuell') return false
+    if (r !== 'tage') return true
+    if (berichtHeute) return true
+    return leseTage(Array.isArray(tage) ? tage.join(',') : tage).includes(wochentagNr(jetztLokal))
+}
+
+/**
  * Taugt dieser Bericht als Grundlage einer Aktualisierung?
  *
  * Eine Aktualisierung trägt nach, was seit dem letzten Bericht geschehen ist.
@@ -3734,7 +3759,19 @@ export function startNewsTakt() {
             if (leseRhythmus(s?.radarNewsRhythmus) === 'manuell') return
             const stunden = leseUpdateStunden(s?.radarNewsUpdateStunden, s?.radarNewsUpdates)
             const platz = faelligerUpdatePlatz({ jetztLokal: lokal, stunden })
-            if (platz) await erzeugeLagebericht({ aktualisierung: true, platz }).catch(() => { })
+            if (!platz) return
+            // «An bestimmten Tagen»: an einem abgewählten Tag keine Zwischenmeldung —
+            // ausser heute steht ein Vollbericht (FUN-R-401). Die Abfrage läuft nur
+            // in genau diesem Fall.
+            let erlaubt = sollUpdateLaufen({ jetztLokal: lokal, rhythmus: s?.radarNewsRhythmus, tage: s?.radarNewsTage })
+            if (!erlaubt && leseRhythmus(s?.radarNewsRhythmus) === 'tage') {
+                const heuteAb = tagesbeginn(jetzt.getTime(), zeitzoneAus(s?.timeZone))
+                const voll = await getKnex()('news_digests').where('erstelltAm', '>=', heuteAb)
+                    .where((q) => q.where('art', 'bericht').orWhereNull('art')).first('id')
+                erlaubt = sollUpdateLaufen({ jetztLokal: lokal, rhythmus: s?.radarNewsRhythmus, tage: s?.radarNewsTage, berichtHeute: !!voll })
+            }
+            if (!erlaubt) return
+            await erzeugeLagebericht({ aktualisierung: true, platz }).catch(() => { })
         } catch (e) {
             logWarn('news', `Takt: ${e.message}`)
         }
