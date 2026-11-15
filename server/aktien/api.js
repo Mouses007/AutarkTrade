@@ -25,6 +25,7 @@ import { aktienKontext } from './kontext.js'
 import { ausZusammenfassung, kursLinie, bewegungsFrage } from './titel-kern.js'
 import { holeZusammenfassung, holeChart, NichtGefunden, Gebremst } from '../newcomer-radar/kursquelle.js'
 import { ladeTitel, namensWarnung } from './titel-stamm.js'
+import { boersengangDatum } from '../newcomer-radar/kursquelle-kern.js'
 import { sendeWennAus, istAus } from '../quellen/aus.js'
 import { ladeLlmConfig, merkeKiGuthaben, istGuthabenFehler } from '../llm.js'
 import { rechercheThema } from '../news-recherche.js'
@@ -41,7 +42,7 @@ const bewegungCache = new Map()   // ticker → { zeit, wert }
 async function baueTitelSeite(ticker) {
     const gefunden = await ladeTitel(getKnex(), ticker)
     if (!gefunden) return { ok: false, grund: 'unbekannt' }
-    const { titel, kursSymbol } = gefunden
+    const { titel, kursSymbol, zuordnung } = gefunden
     const kopf = {
         ok: true,
         titel: { ticker: titel.ticker, name: titel.name, unterart: titel.unterart, listungen: titel.listungen },
@@ -62,7 +63,8 @@ async function baueTitelSeite(ticker) {
             nameQuelle: namensWarnung(titel.name, quellenName, ticker),
             datenFehler: zus.status === 'rejected' ? String(zus.reason?.message || zus.reason) : null,
             linie: chart.status === 'fulfilled' ? kursLinie(chart.value.kerzen) : [],
-            ipoDatum: chart.status === 'fulfilled' ? chart.value.meta.ipoDatum : null,
+            // «Junge Firma» und Haltefrist hängen daran: dieselbe Regel wie im Newcomer-Lauf (FUN-F-014).
+            ipoDatum: chart.status === 'fulfilled' ? boersengangDatum(zuordnung, chart.value.meta.ipoDatum) : null,
             stand: Date.now(),
         }
     } catch (e) {

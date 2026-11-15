@@ -13,9 +13,13 @@ export async function ladeTitel(knex, ticker) {
     // Genau dieser Ticker, nicht die Suche: «V» steht in Hunderten von Firmennamen (Audit DB-D-001).
     const [titel] = await leseStamm(knex, { anlageklasse: 'aktien', ticker })
     const gemerkt = (await knex.schema.hasTable('newcomer_titel'))
-        ? await knex('newcomer_titel').where('instrumentId', zeile.id).first('kursSymbol') : null
+        ? await knex('newcomer_titel').where('instrumentId', zeile.id).first('kursSymbol', 'zuordnung') : null
     // Kein Rückfall auf den blossen Ticker, wenn der Newcomer-Lauf nichts fand oder der Titel eine fremde Region trägt.
-    return { titel: titel || { ticker, name: zeile.name, unterart: zeile.unterart, listungen: [] }, kursSymbol: kursSymbolFuer(zeile, gemerkt || null) }
+    // `zuordnung` sagt der Seite, ob der erste Handel der Kursquelle der Börsengang ist (FUN-F-014).
+    return {
+        titel: titel || { ticker, name: zeile.name, unterart: zeile.unterart, listungen: [] },
+        kursSymbol: kursSymbolFuer(zeile, gemerkt || null), zuordnung: gemerkt?.zuordnung || null,
+    }
 }
 
 /**

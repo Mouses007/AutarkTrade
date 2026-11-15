@@ -20,7 +20,7 @@ import { leseStamm } from '../aktien/stamm-speicher.js'
 import { kennzahlen, rendite } from './kennzahlen.js'
 import { bewerte } from './bewertung.js'
 import { wechselkursSymbol, ausWechselkurs } from './waehrung.js'
-import { kursSymbolKandidaten, kursSymbolFuer, passtZurRegion, nameAehnlich } from './kursquelle-kern.js'
+import { kursSymbolKandidaten, kursSymbolFuer, passtZurRegion, nameAehnlich, boersengangDatum } from './kursquelle-kern.js'
 import { holeChart, sucheSymbol, NichtGefunden, Gebremst } from './kursquelle.js'
 
 const FRISCH_MS = 20 * 3600e3
@@ -141,7 +141,7 @@ async function bearbeite(knex, titel, gespeichert, referenz, jetzt, wechselkurse
         return 'ohneKurse'
     }
     // Bei einer Zweitlistung ist das Datum des ersten Handels nicht der Börsengang der Firma.
-    const ipoDatum = zuordnung === 'sucheFremd' ? null : chart.meta.ipoDatum
+    const ipoDatum = boersengangDatum(zuordnung, chart.meta.ipoDatum)
     // Hürden und Stärke gegen den Index gelten in US-Dollar; die Kerzen stehen in der Währung der Börse.
     const waehrung = chart.meta.waehrung
     const fx = await holeWechselkurs(waehrung, wechselkurse, jetzt)

@@ -177,7 +177,10 @@ export function werteAus(roh, zusatz = [], jetzt = Date.now()) {
     const berichte = von('berichte')
 
     const angebote12 = angebot.filter((z) => z.zeit > jahr)
-    const prospekt = boersengang.find((z) => z.form === '424B4') || null
+    // Der ÄLTESTE 424B4 ist der Börsenprospekt; jüngere gehören zu späteren Angeboten
+    // (Zweitplatzierung nach S-1) und nennen eine andere Haltefrist (Audit FUN-F-014).
+    // `boersengang` ist absteigend nach Zeit geordnet.
+    const prospekt = boersengang.findLast((z) => z.form === '424B4') || null
     const zaehle = (liste, ab) => {
         const aus = {}
         for (const z of liste) if (z.zeit > ab) aus[z.form] = (aus[z.form] || 0) + 1

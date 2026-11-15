@@ -74,6 +74,18 @@ ok(nv.vollstaendig === false && nv.prospekt === null && nv.boersengang.length ==
 ok(Number.isInteger(nv.kennzahl.angebote12m) && nv.angebot.some((z) => z.form === 'S-3ASR') && nv.firma.branche.startsWith('Semiconductors'), 'Angebote und Branche')
 ok(nv.angebot.every((z, i, a) => !i || a[i - 1].zeit >= z.zeit), 'nach Datum geordnet')
 
+// ── FUN-F-014: der ÄLTESTE 424B4 ist der Börsenprospekt, nicht der einer späteren Platzierung ──
+{
+    const zwei = werteAus({ cik: '9', name: 'Z', filings: { files: [], recent: {
+        form: ['424B4', 'S-1', '424B4', 'S-1'],
+        filingDate: ['2026-06-10', '2026-06-01', '2025-03-31', '2025-03-03'],
+        accessionNumber: ['0000000009-26-000002', '0000000009-26-000001', '0000000009-25-000002', '0000000009-25-000001'],
+        primaryDocument: ['folge.htm', 's1b.htm', 'ipo.htm', 's1a.htm'],
+    } } }, [], JETZT)
+    ok(zwei.prospekt.zeit === Date.UTC(2025, 2, 31) && zwei.prospekt.link.endsWith('/ipo.htm'), 'zwei 424B4: Börsenprospekt ist der ältere')
+    ok(zwei.boersengang[0].zeit === Date.UTC(2026, 5, 10), 'die Liste bleibt jüngstes zuerst')
+}
+
 // ── Unbekannt bleibt unbekannt ──
 const kurz = werteAus({ cik: '5', name: 'X', filings: { recent: { form: ['4'], filingDate: ['2026-11-01'], accessionNumber: ['0000000005-26-000001'] }, files: [{ name: 'CIK0000000005-submissions-001.json', filingTo: '2026-10-01' }] } }, [], JETZT)
 ok(kurz.kennzahl.angebote12m === null && kurz.insider.monate12 === null && kurz.berichte.monate12 === null, 'Zeitraum nicht ganz gesehen: null statt 0')

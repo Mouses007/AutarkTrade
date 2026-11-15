@@ -95,6 +95,20 @@ export function kursSymbolFuer(titel, zeile = null) {
     return kursSymbolKandidaten(titel?.ticker, titel?.region)[0] || null
 }
 
+/**
+ * Datum des Börsengangs aus dem «ersten Handel» der Kursquelle. Bei einer
+ * Zweitlistung (`sucheFremd`: über den Namen gefunden, anderer Ticker) ist der
+ * erste Handel dieser Listung nicht der Börsengang der Firma — dann `null`.
+ * EINE Regel für Newcomer-Lauf und Titel-Seite (Audit FUN-F-014).
+ * @param {string|null|undefined} zuordnung  wie das Kurssymbol gefunden wurde (`newcomer_titel.zuordnung`)
+ * @param {number|null|undefined} ersterHandel  ms
+ * @returns {number|null}
+ */
+export function boersengangDatum(zuordnung, ersterHandel) {
+    if (zuordnung === 'sucheFremd') return null
+    return Number.isFinite(ersterHandel) && ersterHandel > 0 ? ersterHandel : null
+}
+
 const FUELLWOERTER = new Set([
     'inc', 'incorporated', 'corp', 'corporation', 'co', 'company', 'plc', 'ltd', 'limited', 'ag', 'sa', 'se', 'nv', 'spa', 'ab', 'asa', 'oyj', 'as',
     'holding', 'holdings', 'group', 'the', 'and', 'class', 'a', 'b', 'c', 'adr', 'ads', 'ordinary', 'shares', 'common', 'stock', 'de', 'of', 'n', 'v', 's', 'p',

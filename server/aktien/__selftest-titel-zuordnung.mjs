@@ -69,6 +69,23 @@ gleich(t.kursSymbol, null, 'SAN mit gespeichertem keinTreffer: kein Kurssymbol (
 await knex('newcomer_titel').where('instrumentId', san).update({ kursSymbol: 'SAN.PA', zuordnung: 'suche', grund: null })
 gleich((await ladeTitel(knex, 'SAN')).kursSymbol, 'SAN.PA', 'gefundenes Symbol gilt')
 
+// ── FUN-F-014: Titel-Seite kennt die Zuordnung und nimmt dieselbe Börsengang-Regel wie der Lauf ──
+gleich((await ladeTitel(knex, 'SAN')).zuordnung, 'suche', 'ladeTitel liefert die gespeicherte Zuordnung')
+gleich((await ladeTitel(knex, 'V')).zuordnung, null, 'ohne Newcomer-Stand: keine Zuordnung')
+await knex('newcomer_titel').where('instrumentId', san).update({ zuordnung: 'sucheFremd' })
+{
+    const { boersengangDatum } = await import('../newcomer-radar/kursquelle-kern.js')
+    const ersterHandel = Date.UTC(2026, 5, 1)
+    gleich(boersengangDatum((await ladeTitel(knex, 'SAN')).zuordnung, ersterHandel), null, 'Zweitlistung: erster Handel ist kein Börsengang → keine «junge Firma», keine Haltefrist')
+    gleich(boersengangDatum('suche', ersterHandel), ersterHandel, 'Heimatlistung: Datum gilt')
+    gleich([boersengangDatum(null, ersterHandel), boersengangDatum('ticker', null), boersengangDatum('name', undefined)], [ersterHandel, null, null], 'ohne Zuordnung gilt das Datum; fehlt es, null')
+    const fs = await import('node:fs')
+    const lies = (p) => fs.readFileSync(new URL(p, import.meta.url), 'utf8')
+    ok(/ipoDatum: chart\.status === 'fulfilled' \? boersengangDatum\(zuordnung, chart\.value\.meta\.ipoDatum\) : null/.test(lies('./api.js')), 'Titel-Seite: Börsengang über die gemeinsame Regel')
+    ok(/const ipoDatum = boersengangDatum\(zuordnung, chart\.meta\.ipoDatum\)/.test(lies('../newcomer-radar/lauf.js')), 'Newcomer-Lauf: dieselbe Funktion, keine Kopie')
+}
+await knex('newcomer_titel').where('instrumentId', san).update({ zuordnung: 'suche' })
+
 t = await ladeTitel(knex, 'BYD')
 gleich(t.kursSymbol, null, 'BYD (Region HK): kein Kurssymbol aus dem blossen Ticker')
 await knex('newcomer_titel').insert({ instrumentId: byd, stand: 1, kursSymbol: 'BYD', zuordnung: 'ticker', grund: null, noten: '{}', kennzahlen: '{}', huerden: '[]' })
