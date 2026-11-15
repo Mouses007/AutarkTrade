@@ -93,4 +93,24 @@ ok(bewerteAktie({ rvol: 0.2, kerzen: {} }).teilnoten.imSpiel === 0, 'Volumen unt
 ok(!('kosten' in GEWICHTE_AKTIEN) && Object.values(GEWICHTE_AKTIEN).reduce((a, b) => a + b, 0) === 100, 'Aktien-Gewichte: Summe 100, ohne Funding')
 ok(STANDARD_GEWICHTE.kosten === 15 && bewerte({ fundingJahresRate: 0 }, { '1h': { atrPct: 3, rvol: 4, adx: 40 } }).note === 100, 'Coin-Bewertung unverändert')
 
+// ── Split im Kerzenfenster (Audit 15.11.2026, FUN-H-008): Kennzahlen erst nach der Bereinigung ──
+{
+    const { rechneZeiteinheit } = await import('./kennzahlen.js')
+    const { ohneSplitSpruengeJe } = await import('../aktien/splits.js')
+    // 300 ruhige Stundenkerzen (±0,4 %), Split 20:1 nach Kerze 280
+    const ruhig = Array.from({ length: 300 }, (_, i) => { const c = 480 * (1 + 0.004 * Math.sin(i / 5)); return { t: T0 + i * H, o: c, h: c * 1.004, l: c * 0.996, c, v: 1000 } })
+    const mitSprung = ruhig.map((k, i) => (i < 280 ? k : { ...k, o: k.o / 20, h: k.h / 20, l: k.l / 20, c: k.c / 20, v: k.v * 20 }))
+    const ohne = rechneZeiteinheit(ruhig), roh = rechneZeiteinheit(mitSprung)
+    ok(roh.atrPct > 5 * ohne.atrPct, `Gegenprobe: unbereinigt ist die ATR ein Vielfaches (${ohne.atrPct.toFixed(2)} → ${roh.atrPct.toFixed(2)} %)`)
+    const merk = new Map()
+    const sauber = (await ohneSplitSpruengeJe(new Map([['NVDAUSDT', mitSprung]]), async () => [{ t: T0 + 280 * H, faktor: 20, text: '20:1' }], merk)).get('NVDAUSDT')
+    const danach = rechneZeiteinheit(sauber)
+    nah(danach.atrPct, ohne.atrPct, 'bereinigt: ATR % wie ohne Split')
+    nah(danach.adx, ohne.adx, 'bereinigt: ADX wie ohne Split')
+    ok(merk.get('NVDAUSDT').splits[0].faktor === 20 && !merk.get('NVDAUSDT').offen, 'der Split steht im Merk — die Zeile wird gekennzeichnet')
+    const offen = new Map()
+    await ohneSplitSpruengeJe(new Map([['NVDAUSDT', mitSprung]]), async () => null, offen)
+    ok(offen.get('NVDAUSDT').offen === true, 'Splits unbekannt: offen — der Lauf bewertet den Titel nicht (`split_unbereinigt`)')
+}
+
 console.log(`✓ Aktien-Radar Kennzahlen: ${n} Prüfungen`)

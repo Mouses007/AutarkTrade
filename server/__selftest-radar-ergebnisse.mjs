@@ -9,7 +9,7 @@
  */
 import {
     waehleCoinRadar, waehleHype, rechneFenster, stichprobe, waehleFrueh, hochImFenster, laufIdFrueh, FELD_VERSATZ,
-    lebtNoch, renditeGleichesMass, duenneLaeufe, DECKEL_JE_ART,
+    lebtNoch, renditeGleichesMass, duenneLaeufe, DECKEL_JE_ART, messeCoin, NichtMessbar,
 } from './radar-ergebnisse.js'
 
 let fehler = 0
@@ -185,6 +185,52 @@ function festerZufall(start = 1) {
     ])
     p('je Stunde bleibt der erste Lauf', weg.join() === '2,3', weg.join())
     p('Warteschlange je Art: Frühphase und Hype haben eigene Plätze', DECKEL_JE_ART.frueh > 0 && DECKEL_JE_ART.hype > 0)
+}
+
+// ── Aktien-Radar: Split im Messfenster (Audit 15.11.2026, FUN-H-008) ────
+{
+    const H = 3600e3
+    const von = Date.UTC(2026, 6, 13)
+    // Sieben Tage Stundenkerzen (Horizont 7d misst auf 1h): 480, nach 80 Stunden Split 20:1 → 24, am Ende 25,2 (+5 %).
+    const S = von + 80 * H
+    const kerzen = Array.from({ length: 168 }, (_, i) => {
+        const t = von + i * H
+        const c = t < S ? 480 : (i === 167 ? 25.2 : 24)
+        return { t, o: t < S ? 480 : 24, h: c * 1.001, l: Math.min(c, t < S ? 480 : 24) * 0.999, c, v: 10 }
+    })
+    const auftrag = (art, horizont) => ({ art, horizont, symbol: 'KORUUSDT', erstelltAm: von })
+    let splitAbrufe = 0
+    const quellen = (splits) => ({ holeKerzen: async () => kerzen, holeSplits: async () => { splitAbrufe++; return splits } })
+
+    // Dasselbe Kursbild in anderer Kerzenlänge: `n` Kerzen ab `von`, Sprung 480 → 24 ab Kerze `ab` (ohne: nie)
+    const bild = (schritt, n, ab = Infinity) => Array.from({ length: n }, (_, i) => {
+        const c = i >= ab ? 24 : 480
+        return { t: von + i * schritt, o: c, h: c * 1.001, l: c * 0.999, c, v: 10 }
+    })
+    const nie = async () => { throw new Error('darf nicht gefragt werden') }
+
+    const sauber = await messeCoin(auftrag('aktienradar', '7d'), quellen([{ t: S, faktor: 20, text: '20:1' }]))
+    p('Aktien-Radar, Split 20:1 im Fenster und bekannt: +5 % statt −95 %',
+        Math.abs(sauber.renditePct - 5) < 1e-6 && Math.abs(sauber.preisStart - 24) < 1e-9 && sauber.maePct > -1 && sauber.mfePct < 6,
+        JSON.stringify(sauber))
+    p('…die Splits wurden einmal geholt', splitAbrufe === 1)
+
+    for (const unbekannt of [null, []]) {
+        let wurf = null
+        try { await messeCoin(auftrag('aktienradar', '7d'), quellen(unbekannt)) } catch (e) { wurf = e }
+        p(`Aktien-Radar, Sprung im Fenster, Splits ${JSON.stringify(unbekannt)}: nicht messbar statt −95 %`, wurf instanceof NichtMessbar, String(wurf?.message))
+    }
+
+    // Gegenprobe: dieselben Kerzen als Coin gemessen ergeben die −95 % (dort gibt es keine Splits)
+    for (const [art, horizont, n] of [['coinradar', '4h', 48], ['abverkauf', '24h', 288]]) {
+        const alsCoin = await messeCoin(auftrag(art, horizont), { holeKerzen: async () => bild(5 * 60e3, n, n / 2), holeSplits: nie })
+        p(`Gegenprobe ${art}: derselbe Sprung bleibt eine Kursbewegung (−95 %), nach Splits wird nicht gefragt`, Math.abs(alsCoin.renditePct + 95) < 1e-6, String(alsCoin.renditePct))
+    }
+
+    // Aktie ohne Sprung: kein Abruf, Messung wie beim Coin
+    const vorher = splitAbrufe
+    const ruhig = await messeCoin(auftrag('aktienradar', '1d'), { holeKerzen: async () => bild(15 * 60e3, 96), holeSplits: nie })
+    p('Aktien-Radar ohne Sprung im Fenster: gemessen, kein Abruf bei der Kursquelle', splitAbrufe === vorher && Math.abs(ruhig.renditePct) < 1e-9)
 }
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)

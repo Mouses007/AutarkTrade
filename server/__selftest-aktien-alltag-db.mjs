@@ -29,7 +29,7 @@ console.log = log
 const { leseEinstellungen, schreibeEinstellungen, VORGABEN } = await import('./coin-radar/einstellungen.js')
 const { setupCoinRadarRoutes } = await import('./coin-radar-api.js')
 const { setupBenachrichtigungsRoutes, melde } = await import('./benachrichtigungen.js')
-const { legeAnAktienRadar, legeAnCoinRadar } = await import('./radar-ergebnisse.js')
+const { legeAnAktienRadar, legeAnCoinRadar, messeFaellige } = await import('./radar-ergebnisse.js')
 const { ART_AKTIEN } = await import('./coin-radar/aktien-erfolg.js')
 const { meldeNeueListungen, pruefeZahlentermine, meldeNewcomer } = await import('./aktien/meldungen.js')
 const { versandGesperrt } = await import('./testbetrieb.js')
@@ -206,6 +206,33 @@ gleich(await melde('aktienListung', { betreff: 'x', text: 'y', schluessel: 'z' }
 gleich(await ansprueche(), [], 'gesperrter Versand hinterlässt keinen Anspruch (die Meldung ginge später noch hinaus)')
 gleich(await meldeNeueListungen([]), false, 'keine neue Listung: nichts')
 gleich(await meldeNeueListungen([{ ...nvda, anlageklasse: 'sonstige' }]), false, 'Rohstoff: nichts')
+
+// ── Erfolgskontrolle: Split im Messfenster (Audit 15.11.2026, FUN-H-008) ──
+{
+    await knex('radar_ergebnisse').delete()
+    const H = 3600e3
+    const von = Date.now() - 8 * 24 * H
+    const reihe = (ab) => Array.from({ length: 168 }, (_, i) => {
+        const c = i >= ab ? 24 : 480
+        return { t: von + i * H, o: c, h: c * 1.001, l: c * 0.999, c, v: 10 }
+    })
+    const auftrag = (symbol, art = ART_AKTIEN) => ({ art, laufId: 4711, symbol, horizont: art === ART_AKTIEN ? '7d' : '4h', gruppe: 'spitze',
+        erstelltAm: von, faelligAm: von + 7 * 24 * H, status: 'offen' })
+    await knex('radar_ergebnisse').insert([auftrag('KORUUSDT'), auftrag('SOXSUSDT'), auftrag('NVDAUSDT')])
+    const quellen = {
+        holeKerzen: async (symbol) => reihe(symbol === 'NVDAUSDT' ? Infinity : 80),
+        // KORU: die Kursquelle kennt den Split; SOXS: (noch) nicht
+        holeSplits: async (symbol) => (symbol === 'KORUUSDT' ? [{ t: von + 80 * H, faktor: 20, text: '20:1' }] : []),
+    }
+    gleich(await messeFaellige({ [ART_AKTIEN]: 20 }, quellen), { gemessen: 2, fehlgeschlagen: 0 }, 'zwei gemessen, der unbereinigte Titel zählt weder als Messung noch als Fehlschlag')
+    const z = Object.fromEntries((await knex('radar_ergebnisse').where('laufId', 4711)).map((r) => [r.symbol, r]))
+    ok(z.KORUUSDT.status === 'gemessen' && Math.abs(Number(z.KORUUSDT.renditePct)) < 1e-6 && Math.abs(Number(z.KORUUSDT.preisStart) - 24) < 1e-9,
+        `Split bekannt: bereinigt gemessen, 0 % statt −95 % (${z.KORUUSDT.renditePct})`)
+    ok(z.SOXSUSDT.status === 'ausgelassen' && /Split/.test(z.SOXSUSDT.fehler) && z.SOXSUSDT.renditePct == null && Number(z.SOXSUSDT.versuche || 0) === 0,
+        `Split unbekannt: ausgelassen, keine Rendite, kein neuer Versuch (${z.SOXSUSDT.status}, ${z.SOXSUSDT.renditePct})`)
+    ok(z.NVDAUSDT.status === 'gemessen' && Math.abs(Number(z.NVDAUSDT.renditePct)) < 1e-6, 'Titel ohne Sprung: gemessen wie bisher')
+    gleich(await messeFaellige({ [ART_AKTIEN]: 20 }, quellen), { gemessen: 0, fehlgeschlagen: 0 }, 'der ausgelassene Auftrag steht nicht mehr in der Warteschlange')
+}
 
 gleich(abrufe, 0, 'im ganzen Test ging kein Abruf ins Netz')
 

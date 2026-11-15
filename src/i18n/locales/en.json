@@ -9373,6 +9373,8 @@
     "huerde_zu_wenig_tiefe": "too little depth",
     "huerde_keine_marktdaten": "no market data",
     "huerde_keine_kerzen": "no candles",
+    "huerde_split_unbereinigt": "unexplained price jump (split?)",
+    "splitBereinigt": "Split {splits} inside the candle window: the candles before it have been adjusted.",
     "huerde_unbekannt": "unknown",
     "leerTitel": "No run yet",
     "leerText": "The run measures all stock futures of your market-data source. First sync the list under “Stocks”.",

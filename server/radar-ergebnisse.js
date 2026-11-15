@@ -26,6 +26,8 @@ import { beansprucheAufgabe } from './db-claim.js'
 import { FRUEH_REGEL_AUSWERTUNG, FRUEH_REGEL_OHNE_FREIGABE, fruehRegelFuer } from './radar-guete.js'
 import { freigabeAn, quelleErlaubt } from './quellen/freigabe.js'
 import { ART_AKTIEN, HORIZONTE_AKTIEN, KERZEN_AKTIEN, waehleAktienRadar } from './coin-radar/aktien-erfolg.js'
+import { aktienKontext } from './aktien/kontext.js'
+import { ohneSplitSprung } from './aktien/splits.js'
 
 /**
  * Wann gemessen wird.
@@ -423,8 +425,10 @@ const DURCHGANG_MS = 150e3
  *
  * @param {object} deckel  je Art höchstens so viele je Durchgang — der Takt
  *                         soll kurz sein, nicht vollständig.
+ * @param {{holeKerzen?: function, holeSplits?: function}} [quellen]  nur für Selbsttests:
+ *                         Kerzen und Splits der Coin-/Aktien-Messung stellen (kein Netz).
  */
-export async function messeFaellige(deckel = DECKEL_JE_ART) {
+export async function messeFaellige(deckel = DECKEL_JE_ART, quellen = undefined) {
     const knex = getKnex()
     const beginn = Date.now()
     // Altbestand der Frühphase in einem Zug auslassen (siehe unten); danach ist das ein leerer Schritt.
@@ -460,13 +464,20 @@ export async function messeFaellige(deckel = DECKEL_JE_ART) {
         }
         try {
             const werte = a.art === 'coinradar' || a.art === 'abverkauf' || a.art === ART_AKTIEN
-                ? await messeCoin(a)
+                ? await messeCoin(a, quellen)
                 : (a.art === 'frueh' ? await messeFrueh(a) : await messeHype(a))
             await knex('radar_ergebnisse').where('id', a.id).update({
                 ...werte, status: 'gemessen', gemessenAm: Date.now(),
             })
             gemessen++
         } catch (e) {
+            // Nicht messbar ist weder Ergebnis noch Ausfall: kein neuer Versuch, nicht in der Statistik.
+            if (e instanceof NichtMessbar) {
+                await knex('radar_ergebnisse').where('id', a.id)
+                    .update({ status: 'ausgelassen', fehler: String(e.message).slice(0, 200), gemessenAm: Date.now() })
+                    .catch(() => {})
+                continue
+            }
             /*
              * Ein Ausfall ist nicht dasselbe wie ein Ergebnis. Bis zum
              * 07.10.2026 wurde nach dem ersten Fehlschlag aufgegeben — ein
@@ -581,7 +592,7 @@ export function rechneFenster(kerzen, von, bis, schrittMs) {
  * nicht „die letzten 500 Kerzen" — so ist eine späte Messung genauso richtig
  * wie eine pünktliche.
  */
-async function messeCoin(a) {
+export async function messeCoin(a, { holeKerzen = getHistoricalCandles, holeSplits = async (symbol) => (await aktienKontext(symbol))?.splits ?? null } = {}) {
     // Dieselbe Messung für den Coin-Radar, die Abverkaufs-Wache und den Aktien-Radar —
     // alle drei sind Perpetuals der Marktdatenquelle.
     const dauer = (HORIZONTE[a.art] || HORIZONTE.coinradar)[a.horizont]
@@ -592,9 +603,31 @@ async function messeCoin(a) {
     // misst über Tage und Wochen — dort je Horizont eine eigene Kerzenlänge.
     const ze = a.art === ART_AKTIEN ? KERZEN_AKTIEN[a.horizont] : (dauer <= 3600e3 ? '1m' : '5m')
     const schritt = timeframeMs(ze)
-    const kerzen = await getHistoricalCandles(a.symbol, ze, von, bis,
+    let kerzen = await holeKerzen(a.symbol, ze, von, bis,
         { seite: Math.ceil(dauer / schritt) + 2 })
+    if (a.art === ART_AKTIEN) kerzen = await ohneSplitImFenster(a.symbol, kerzen, holeSplits)
     return { ...rechneFenster(kerzen, von, bis, schritt), nochHandelbar: 1 }
+}
+
+/** Ein Auftrag, der sich nicht messen lässt — er wird `ausgelassen`, nicht wiederholt und nicht gezählt. */
+export class NichtMessbar extends Error {}
+
+/**
+ * Aktien-Radar: die Kerzen der Futures sind nicht split-bereinigt. Ein Split
+ * 20:1 im Messfenster stand als −95 % in der Erfolgskontrolle, eine
+ * Zusammenlegung 1:20 als +1900 % (Audit 15.11.2026, FUN-H-008). Erklärt ein
+ * Split der Kursquelle den Sprung, werden die Kerzen davor umgerechnet
+ * (`aktien/splits.js`) — Start und Ende stehen dann im selben Massstab.
+ * Bleibt ein Sprung ≥ 1,8× unerklärt (Kursquelle aus oder kennt den Split noch
+ * nicht), wird NICHT gemessen: die Zahl wäre mit hoher Wahrscheinlichkeit ein
+ * Artefakt, und ein einziges davon verzerrt den Mittelwert eines Laufs.
+ * Die Splits werden nur geholt, wenn im Fenster überhaupt ein Sprung steht.
+ */
+async function ohneSplitImFenster(symbol, kerzen, holeSplits) {
+    const sortiert = (Array.isArray(kerzen) ? kerzen : []).slice().sort((x, y) => x.t - y.t)
+    const r = await ohneSplitSprung(sortiert, () => holeSplits(symbol))
+    if (r.offen) throw new NichtMessbar('Split im Messfenster nicht bereinigt — nicht gemessen')
+    return r.kerzen
 }
 
 /** Hype-Radar: lebt der Fund noch, und was ist aus Preis und Liquidität geworden? */

@@ -141,6 +141,11 @@ const zahlenText = (z) => {
     const g = tages(z)
     return g?.zahlenZeit ? t(g.zahlenGeschaetzt ? 'aktienradar.zahlenAmGeschaetzt' : 'aktienradar.zahlenAm', { zeit: zeit(g.zahlenZeit) }) : ''
 }
+// Splits im Kerzenfenster, vor denen der Lauf umgerechnet hat (`server/aktien/splits.js`)
+const splitText = (z) => {
+    const liste = tages(z)?.splits
+    return liste?.length ? t('aktienradar.splitBereinigt', { splits: liste.map((x) => `${x.text || x.faktor} (${zeit(x.t)})`).join(', ') }) : ''
+}
 const staerke = computed(() => lauf.value?.quellenStand?.staerke || null)
 const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
 </script>
@@ -223,7 +228,7 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
                             <td class="rechts" :class="{ bald: tages(z)?.zahlenIn != null && tages(z).zahlenIn <= 2 }" :title="zahlenText(z)">
                                 {{ tages(z)?.zahlenIn == null ? '—' : tages(z).zahlenIn === 0 ? t('aktienradar.zahlenHeute') : t('aktienradar.zahlenTage', { n: tages(z).zahlenIn }) }}
                             </td>
-                            <td class="rechts">{{ zahl(z.atrPct, 2) }}</td>
+                            <td class="rechts" :title="splitText(z)">{{ zahl(z.atrPct, 2) }}<span v-if="tages(z)?.splits?.length" class="leise"> *</span></td>
                             <td class="rechts" :title="rvolText(z)">{{ z.rvol == null ? '—' : zahl(z.rvol, 1) + '×' }}</td>
                             <td class="rechts">{{ zahl(z.adx, 0) }}</td>
                             <td class="rechts">{{ z.fundingJahresRate == null ? '—' : zahl(z.fundingJahresRate, 0) + ' %' }}</td>

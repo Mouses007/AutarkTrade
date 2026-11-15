@@ -9373,6 +9373,8 @@
     "huerde_zu_wenig_tiefe": "zu wenig Tiefe",
     "huerde_keine_marktdaten": "keine Marktdaten",
     "huerde_keine_kerzen": "keine Kerzen",
+    "huerde_split_unbereinigt": "unerklärter Kurssprung (Split?)",
+    "splitBereinigt": "Split {splits} im Kerzenfenster: die Kerzen davor sind umgerechnet.",
     "huerde_unbekannt": "unbekannt",
     "leerTitel": "Noch kein Lauf",
     "leerText": "Der Lauf misst alle Aktien-Futures deiner Marktdatenquelle. Zuerst unter «Aktien» den Stamm abgleichen.",

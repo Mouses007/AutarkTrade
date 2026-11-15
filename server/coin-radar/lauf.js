@@ -39,6 +39,8 @@ import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, GEWICHTE
 import { ladeTagesdaten, INDEX } from './aktien-tagesdaten.js'
 import { sitzungVon } from '../../shared/aktien-sitzung.js'
 import { ladeTermine } from '../aktien/termine.js'
+import { aktienKontext } from '../aktien/kontext.js'
+import { ohneSplitSpruengeJe } from '../aktien/splits.js'
 import { terminListe, tageBisZahlen } from '../../shared/aktien-zahlen.js'
 import * as marktdaten from '../marktdaten/index.js'
 import { ladeAktienUniversum, waehleReferenz, boersenFelder } from './aktien-universum.js'
@@ -224,14 +226,30 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         .select('symbol').where({ laufId: lauf.id, status: 'bewertet' })).map((z) => z.symbol))
     const offen = vermessen.filter((a) => !fertig.has(a.symbol))
 
+    /*
+     * Aktien: die Kerzen der Futures sind NICHT split-bereinigt. Ein Split 20:1
+     * im Fenster machte aus 0,8 % ATR deren 5 bis 80, aus den Teilnoten für
+     * Bewegung und Trend je 100 — der Titel stieg eine Woche lang in der
+     * Rangliste, Beta und Korrelation waren 33 Tage unbrauchbar (Audit
+     * 15.11.2026, FUN-H-008). Deshalb wie Backtest, Engine und Chart umrechnen
+     * (`aktien/splits.js`). Die Splits werden nur für Titel geholt, in deren
+     * Kerzen überhaupt ein Sprung steht. Bleibt einer unerklärt (Kursquelle
+     * aus oder kennt den Split noch nicht), fällt der Titel aus der Rangliste.
+     * Coins: die Reihen gehen unangetastet durch.
+     */
+    const splitJe = new Map()   // symbol → { splits: [{t, faktor, text}], offen }
+    const ohneSplits = async (jeSymbol) => (aktien
+        ? ohneSplitSpruengeJe(jeSymbol, async (symbol) => (await aktienKontext(symbol))?.splits ?? null, splitJe)
+        : jeSymbol)
+
     const kerzenJeZe = {}
     for (const ze of zeiteinheiten) {
         if (abbruch()) return { abgebrochen: true }
         melde({ schritt: 'kerzen', zeiteinheit: ze, gesamt: offen.length })
-        kerzenJeZe[ze] = await holeKerzenGebremst(
+        kerzenJeZe[ze] = await ohneSplits(await holeKerzenGebremst(
             offen.map((a) => a.symbol), ze,
             (f) => melde({ schritt: 'kerzen', zeiteinheit: ze, ...f }),
-        )
+        ))
     }
 
     /*
@@ -284,13 +302,13 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
     if (!abbruch() && referenz) {
         melde({ schritt: 'btc', gesamt: offen.length })
         try {
-            const btcKerzen = (await holeKerzenGebremst([referenz.symbol], BTC_ZEITEINHEIT))
+            const btcKerzen = (await ohneSplits(await holeKerzenGebremst([referenz.symbol], BTC_ZEITEINHEIT)))
                 .get(referenz.symbol)
             if (btcKerzen?.length) {
-                const jeSymbol4h = await holeKerzenGebremst(
+                const jeSymbol4h = await ohneSplits(await holeKerzenGebremst(
                     offen.map((a) => a.symbol), BTC_ZEITEINHEIT,
                     (f) => melde({ schritt: 'btc', ...f }),
-                )
+                ))
                 for (const [sym, kerzen] of jeSymbol4h) {
                     const v = vergleicheMitBtc(kerzen, btcKerzen)
                     if (v) btcVergleich.set(sym, v)
@@ -391,10 +409,14 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
              * Hürde zu führen wäre falsch — der Coin ist nicht illiquide,
              * es fehlen bloss die Daten. Ein eigener Grund macht das sichtbar.
              */
-            if (!ze[haupt] || ze[haupt].atrPct === null) {
+            // Ebenso (nur Aktien) ein Sprung, den kein bekannter Split erklärt: auf
+            // solchen Kerzen ist jede Kennzahl wertlos — nicht bewerten, und damit
+            // auch nicht in die Erfolgskontrolle (die nur Bewertete verfolgt).
+            const splitOffen = splitJe.get(a.symbol)?.offen === true
+            if (splitOffen || !ze[haupt] || ze[haupt].atrPct === null) {
                 zeilen.push({
                     laufId: lauf.id, symbol: a.symbol, status: 'huerde',
-                    huerdeGrund: 'keine_kerzen',
+                    huerdeGrund: splitOffen ? 'split_unbereinigt' : 'keine_kerzen',
                     umsatz24h: zahlOderNull(a.roh.umsatz24h),
                     spreadBp: zahlOderNull(a.roh.spreadBp),
                     tiefeUsd: zahlOderNull(a.roh.tiefeUsd),
@@ -428,6 +450,8 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
                     // Nächster Zahlentermin: Tage bis dahin (0 = heute oder gerade gemeldet), sonst null
                     zahlenIn: zahlenJe.get(a.symbol)?.tage ?? null, zahlenZeit: zahlenJe.get(a.symbol)?.zeit ?? null,
                     zahlenGeschaetzt: zahlenJe.get(a.symbol)?.geschaetzt ?? null,
+                    // Splits im Kerzenfenster, vor denen umgerechnet wurde (`[{t, faktor, text}]`) — sonst null
+                    splits: splitJe.get(a.symbol)?.splits.length ? splitJe.get(a.symbol).splits : null,
                 }
                 // Die Spalte `rvol` trägt bei Aktien den tageszeitbereinigten Wert — unbekannt bleibt leer.
                 ze[haupt] = { ...ze[haupt], rvol: tz?.rvol ?? null }
