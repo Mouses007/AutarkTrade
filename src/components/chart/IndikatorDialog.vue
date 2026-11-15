@@ -15,6 +15,8 @@ import { Symbol, Knopf } from '../basis'
 const props = defineProps({
     instanz: { type: Object, default: null },    // null = hinzufügen
     aktive: { type: Array, default: () => [] },  // Indikatoren des Panels — zum Einstellen und Entfernen
+    /** Das Panel zeigt einen Aktien-Future: Indikatoren mit `misstFuture` tragen in der Auswahl einen Hinweis (FACH-H-012). */
+    aktie: { type: Boolean, default: false },
 })
 const emit = defineEmits(['hinzu', 'speichere', 'schliesse', 'bearbeite', 'entferne', 'umschalten'])
 const { t, te } = useI18n()
@@ -64,12 +66,13 @@ const gruppeAus = (g) => g.haupt && entwurf.value.params[g.haupt.key] === false
 const hilfe = (key) => (te('chart.indHilfe.' + key) ? t('chart.indHilfe.' + key) : '')
 // Strategie-Parameter (LSOB/GUSS) tragen ihre Beschriftung aus der Strategie mit
 const name = (p) => (p.label ? t(p.label) : t('chart.indParam.' + p.key))
+const wahlText = (w) => (te('chart.indWahl.' + w) ? t('chart.indWahl.' + w) : null)
 const optionName = (p, o) => (p.optionLabel?.[o] ? t(p.optionLabel[o]) : p.roh ? o : t('chart.indWahl.' + o))
 
 const liste = computed(() => {
     const q = suche.value.trim().toLowerCase()
     return Object.keys(INDIKATOREN).filter((typ) => !INDIKATOREN[typ].intern)
-        .map((typ) => ({ typ, name: t(`chart.ind.${typ}.name`), text: t(`chart.ind.${typ}.text`), ort: INDIKATOREN[typ].ort }))
+        .map((typ) => ({ typ, name: t(`chart.ind.${typ}.name`), text: t(`chart.ind.${typ}.text`), ort: INDIKATOREN[typ].ort, future: props.aktie && INDIKATOREN[typ].misstFuture === true }))
         .filter((x) => !q || x.name.toLowerCase().includes(q) || x.typ.toLowerCase().includes(q))
 })
 
@@ -162,7 +165,7 @@ onMounted(async () => {
                     <div class="abschnitt">{{ t('chart.indAktiv') }}</div>
                     <div class="aktiveListe">
                         <div v-for="a in aktive" :key="a.id" class="aktiv" :class="{ aus: a.sichtbar === false }">
-                            <span class="name">{{ kurzname(a.typ, a.params, t('chart.ind.' + a.typ + '.kurz')) }}</span>
+                            <span class="name">{{ kurzname(a.typ, a.params, t('chart.ind.' + a.typ + '.kurz'), wahlText) }}</span>
                             <button :title="t(a.sichtbar === false ? 'chart.einblenden' : 'chart.ausblenden')" @click="emit('umschalten', a.id)" :aria-label="t(a.sichtbar === false ? 'chart.einblenden' : 'chart.ausblenden')">
                                 <Symbol :name="a.sichtbar === false ? 'augeAus' : 'auge'" /></button>
                             <button :title="t('chart.einstellungen')" @click="emit('bearbeite', a.id)" :aria-label="t('chart.einstellungen')"><Symbol name="einstellungen" /></button>
@@ -177,6 +180,7 @@ onMounted(async () => {
                         <span class="name">{{ x.name }}</span>
                         <span class="ort">{{ t('chart.indOrt.' + x.ort) }}</span>
                         <small>{{ x.text }}</small>
+                        <small v-if="x.future" class="futureHinweis">{{ t('chart.aktien.misstFuture') }}</small>
                     </button>
                 </div>
             </template>
@@ -381,6 +385,10 @@ onMounted(async () => {
     grid-column: 1 / -1;
     color: var(--muted);
     font-size: 11px;
+}
+
+.eintrag .futureHinweis {
+    color: var(--warn);
 }
 
 .form {

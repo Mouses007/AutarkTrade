@@ -9,7 +9,8 @@
  * gegen die Kerzen), dass die Preisquelle wirklich wirkt, und dass kaputte
  * gespeicherte Parameter nicht durchschlagen.
  */
-import { INDIKATOREN, rechneIndikator, saubereParams, vorgaben, kurzname, neueInstanz, standardVon, aufKerzen, jeKerzeSumme, benoetigteQuellen, veraenderung } from './chart/indikatorRegister.js'
+import { INDIKATOREN, rechneIndikator, saubereParams, vorgaben, kurzname, neueInstanz, standardVon, aufKerzen, jeKerzeSumme, benoetigteQuellen, veraenderung, vwapVectorQuellen, vwapVectorSchluessel } from './chart/indikatorRegister.js'
+import { TF_MS } from './chart/vwapVector.js'
 import { ema, rsi, macd, bollinger } from '../../shared/indicators.js'
 import { ema as serverEma } from '../../server/strategies/indicators.js'
 
@@ -151,6 +152,35 @@ console.log('\nBeschriftung und Instanzen\n')
 check('Kurzname EMA', kurzname('ema', { laenge: 21, quelle: 'c' }, 'EMA') === 'EMA 21')
 check('Kurzname zeigt abweichende Quelle', kurzname('sma', { laenge: 50, quelle: 'hl2' }, 'SMA') === 'SMA 50 hl2')
 check('Kurzname BB', kurzname('bb', { laenge: 20, mult: 2, basis: 'sma' }, 'BB') === 'BB 20 2')
+// Legende: Wert einer Wahl übersetzt, wenn es einen Text gibt (vorher «VWAP 0 usOpen»)
+{
+    const TEXTE = { usOpen: 'US-Eröffnung', hl2: '(H+L)/2' }
+    const wahlText = (w) => TEXTE[w] || null
+    check('Kurzname VWAP: Anker übersetzt', kurzname('vwap', { anker: 'usOpen', band: 0 }, 'VWAP', wahlText) === 'VWAP 0 US-Eröffnung')
+    check('Kurzname VWAP: ohne Text bleibt der rohe Wert', kurzname('vwap', { anker: 'week', band: 0 }, 'VWAP', wahlText) === 'VWAP 0 week')
+    check('Kurzname VWAP: ohne Übersetzer wie bisher', kurzname('vwap', { anker: 'usOpen', band: 0 }, 'VWAP') === 'VWAP 0 usOpen')
+    check('Kurzname: Preisquelle übersetzt', kurzname('sma', { laenge: 50, quelle: 'hl2' }, 'SMA', wahlText) === 'SMA 50 (H+L)/2')
+}
+// FACH-H-012: was der Perpetual selbst misst, ist gekennzeichnet (Hinweis im Aktien-Markt) — nicht gesperrt
+{
+    const future = Object.keys(INDIKATOREN).filter((t) => INDIKATOREN[t].misstFuture === true).sort()
+    check('misstFuture: genau OI, Long/Short, Funding, CVD, Delta, Footprint',
+        future.join() === ['cvd', 'deltaVol', 'footprint', 'funding', 'longShort', 'oi'].join(), future.join())
+    check('misstFuture: keiner davon ist aus der Auswahl genommen', future.every((t) => !INDIKATOREN[t].intern && !INDIKATOREN[t].nurKrypto))
+    check('Preis-Indikatoren tragen den Hinweis nicht', ['ema', 'vwap', 'rsi', 'vwapVector', 'momentum'].every((t) => !INDIKATOREN[t].misstFuture))
+}
+// FUN-R-402: die POC-Periode gehört in den Schlüssel der feinen Kerzen
+{
+    const basis = { symbol: 'BTCUSDT', markt: 'futures', interval: '1h', intra: null, boerse: 'binance' }
+    const q = (pocPerTf) => vwapVectorQuellen({ ...vorgaben('vwapVector'), showPocPer: true, pocPerTf }, 3_600_000, TF_MS, 1000).pocFein
+    check('12h und 1d teilen die Feinheit', q('12h') === q('1d') && q('12h') != null, `${q('12h')} / ${q('1d')}`)
+    check('Schlüssel unterscheidet 12h und 1d trotz gleicher Feinheit',
+        vwapVectorSchluessel({ ...basis, pocFein: q('12h'), pocPeriode: '12h' }) !== vwapVectorSchluessel({ ...basis, pocFein: q('1d'), pocPeriode: '1d' }))
+    check('Schlüssel ohne feine Kerzen hängt nicht an der Periode',
+        vwapVectorSchluessel({ ...basis, pocFein: null, pocPeriode: '12h' }) === vwapVectorSchluessel({ ...basis, pocFein: null, pocPeriode: '1d' }))
+    check('Schlüssel gleicher Eingaben ist gleich',
+        vwapVectorSchluessel({ ...basis, pocFein: '15m', pocPeriode: '1d' }) === vwapVectorSchluessel({ ...basis, pocFein: '15m', pocPeriode: '1d' }))
+}
 {
     const a = neueInstanz('ema')
     const b = neueInstanz('ema')

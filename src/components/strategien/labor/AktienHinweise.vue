@@ -129,6 +129,8 @@ const summeTrades = computed(() => (props.aktien?.sitzungen || []).reduce((n, s)
                 </tbody>
             </table>
             <p class="klein">{{ t('strategies.aktien.jeSitzungHinweis') }}</p>
+            <!-- Schalter lässt Kerzen zu, die die Sitzung berühren; die Tabelle ordnet nach dem Kerzenbeginn ein -->
+            <p v-if="aktien.nurRegulaer && aktien.nurRegulaerWirkt !== false" class="klein">{{ t('strategies.aktien.jeSitzungNurRegulaer') }}</p>
         </div>
     </div>
 </template>

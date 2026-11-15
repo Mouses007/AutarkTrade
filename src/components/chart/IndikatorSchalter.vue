@@ -18,7 +18,7 @@ import { Symbol } from '../basis'
 
 const props = defineProps({ panel: { type: Object, required: true } })
 const emit = defineEmits(['aendere', 'umschalten', 'volumen'])
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 // Texte: VWAP-Vector-Module unter chart.vvBox, alle anderen unter chart.indBox.
 const VV = (key, p, extra = {}) => ({ key, p, text: 'chart.vvBox.k_' + key, tipp: 'chart.vvBox.s_' + key, ...extra })
@@ -45,7 +45,8 @@ const offen = indBoxOffen
 
 const liste = computed(() => props.panel?.indikatoren || [])
 const volumenAn = computed(() => props.panel?.volumen !== false)
-const name = (i) => kurzname(i.typ, i.params, t('chart.ind.' + i.typ + '.kurz'))
+const wahlText = (w) => (te('chart.indWahl.' + w) ? t('chart.indWahl.' + w) : null)
+const name = (i) => kurzname(i.typ, i.params, t('chart.ind.' + i.typ + '.kurz'), wahlText)
 
 /** An = alle Parameter an; bei `alle: false` (HTF-EMAs, eine davon ist ab Werk aus) genügt einer. */
 function an(i, s) {

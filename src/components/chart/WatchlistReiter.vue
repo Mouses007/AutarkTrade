@@ -3,7 +3,10 @@
  * Watchlist mit Live-Kursen. Kurse kommen per `miniTicker` direkt von Binance
  * (ein Stream je Markt, nur für die Symbole der Liste); 24h-Veränderung ist
  * Schluss gegen Eröffnung des rollierenden 24h-Fensters — dieselbe Zahl, die
- * Binance selbst anzeigt.
+ * Binance selbst anzeigt. Im Aktien-Markt ist das NICHT die Zahl der Börse
+ * (gegen den letzten regulären Schluss; am Montagvormittag misst das Fenster
+ * gegen den dünnen Sonntag) — dort sagt eine Zeile, was die Zahl ist
+ * (FACH-H-012). Umrechnen hiesse je Titel Kerzen nachladen.
  *
  * Ohne Marktdatenquelle Binance (S12) gibt es keinen Stream: dann fragt die
  * Liste `/api/chart/ticker` alle 15 s ab (Bitget, Server-Cache 10 s). Bei
@@ -199,6 +202,7 @@ function loescheListe() {
         <button type="button" class="hinzu" :disabled="enthaeltAktives || !liste" @click="fuegeHinzu">
             <Symbol name="stern" /> {{ t('chart.watchlistHinzu', { symbol: aktivesSymbol }) }}
         </button>
+        <div v-if="aktien && symbole.length" class="at-gedaempft at-klein">{{ t('aktienTrennung.watchlist24h') }}</div>
         <div class="zeilen">
             <div v-for="(s, i) in symbole" :key="s.markt + s.symbol" class="zeile"
                 :class="{ an: istAktiv(s) }" @click="emit('waehle', s)"
@@ -210,7 +214,7 @@ function loescheListe() {
                     </span>
                 </span>
                 <span class="preis">{{ kurs(s) ? kurs(s).c.toFixed(stellen(kurs(s).c)) : '—' }}</span>
-                <span class="delta" :class="aenderung(s) == null ? '' : aenderung(s) >= 0 ? 'gewinnWert' : 'verlustWert'">
+                <span class="delta" :title="aktien ? t('aktienTrennung.watchlist24h') : null" :class="aenderung(s) == null ? '' : aenderung(s) >= 0 ? 'gewinnWert' : 'verlustWert'">
                     {{ aenderung(s) == null ? '' : (aenderung(s) >= 0 ? '+' : '') + aenderung(s).toFixed(2) + ' %' }}
                 </span>
                 <span class="werkzeug" @click.stop>

@@ -1589,7 +1589,7 @@ watch(sichtbareAnzahl, async () => {
         <TeilenDialog v-model="teilenOffen" :erzeuge="teilenBild" :dateiname="teilenName" :betreff="teilenBetreff" />
         <AlarmDialog v-if="alarmVorlage" :vorlage="alarmVorlage" :watchlists="watchlists" @schliesse="alarmVorlage = null" />
         <IndikatorDialog v-if="dialog" :key="dialog.instanz?.id || 'neu'" :instanz="dialog.instanz"
-            :aktive="daten.panels[dialog.panel]?.indikatoren || []" @hinzu="indikatorHinzu" @speichere="indikatorSpeichern"
+            :aktive="daten.panels[dialog.panel]?.indikatoren || []" :aktie="Boolean(aktieVon(daten.panels[dialog.panel]))" @hinzu="indikatorHinzu" @speichere="indikatorSpeichern"
             @bearbeite="(id) => indikatorAktion(dialog.panel, { aktion: 'bearbeiten', id })"
             @entferne="(id) => indikatorAktion(dialog.panel, { aktion: 'entfernen', id })"
             @umschalten="(id) => indikatorAktion(dialog.panel, { aktion: 'umschalten', id })"

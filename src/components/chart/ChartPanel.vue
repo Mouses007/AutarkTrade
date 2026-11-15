@@ -53,7 +53,7 @@ import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
 import { AktienEbene } from '../../utils/chart/overlays/AktienEbene.js'
 import { ladeAktienKontext, aktieVon, termineGrundSchluessel } from '../../utils/chart/aktienKontext.js'
 import { POC_FEIN_PERIODEN, TF_MS as VV_TF_MS } from '../../utils/chart/vwapVector.js'
-import { benoetigteQuellen, vwapVectorQuellen, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
+import { benoetigteQuellen, vwapVectorQuellen, vwapVectorSchluessel, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
 import { positionsTitel as positionsTitelFuer } from '../../utils/chart/overlays/positionsTitel.js'
 import { positionenAus } from '../../stores/chartPositionen.js'
@@ -86,6 +86,8 @@ const props = defineProps({
 })
 const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alarmVerschieben', 'alarmAendern', 'alarmBearbeiten', 'alleLoeschen', 'panel', 'vollbild', 'strategieKlick'])
 const { t, te, locale } = useI18n()
+// Legende: Wert einer Wahl (VWAP-Anker, Preisquelle) übersetzt statt roh («usOpen»)
+const wahlText = (w) => (te('chart.indWahl.' + w) ? t('chart.indWahl.' + w) : null)
 
 const huelle = ref(null)
 const chart = shallowRef(null)
@@ -309,7 +311,7 @@ function baueChart() {
     chart.value = c
     kerzenSerie.value = ks
     volumenSerie.value = vs
-    zeichner = new IndikatorZeichner(c, zuLwc, (ind) => kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.name')),
+    zeichner = new IndikatorZeichner(c, zuLwc, (ind) => kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.name'), wahlText),
         { kerzenSerie: ks, faerbeKerzen, tabellenText: (typ, kz) => tabellenZeilen(typ, kz, t),
             kerzenStil: () => kerzenStil.value, nurKursEinpassen: () => props.panel.einpassenAlles !== true, footprintZellen: (an) => { footprintZellen.value = an } })
     ebene = new ZeichenEbene({
@@ -911,7 +913,7 @@ async function ladeVwapVector() {
         if (q.pocFein && !pocFein) { pocFein = q.pocFein; pocPeriode = pp.pocPerTf }
     }
     const boerse = boerseVon()
-    const schluessel = `${symbol}|${markt}|${interval}|${intra}|${pocFein}|${boerse}`
+    const schluessel = vwapVectorSchluessel({ symbol, markt, interval, intra, pocFein, pocPeriode, boerse })
     if (vvCache.schluessel !== schluessel) { vvCache.schluessel = schluessel; vvCache.htf = {}; vvCache.intra = []; vvCache.fein = [] }
     // Nur schreiben, solange der Speicher noch zu DIESEM Abruf gehört — ein späte
     // Antwort für das alte Symbol mischte sonst dessen Kerzen in den neuen Bestand.
@@ -2082,7 +2084,7 @@ defineExpose({
                 </span>
             </div>
             <div v-for="ind in (panel.indikatoren || [])" :key="ind.id" class="indZeile" :class="{ aus: ind.sichtbar === false }">
-                <span class="indName">{{ kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.kurz')) }}</span>
+                <span class="indName">{{ kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.kurz'), wahlText) }}</span>
                 <InfoTipp v-if="te('chart.ind.' + ind.typ + '.info')" :schluessel="'chart.ind.' + ind.typ + '.info'" breit />
                 <span v-for="w in (indikatorWerte[ind.id] || [])" :key="w.key" :style="{ color: w.farbe }">{{ wertText(w.wert, ind.typ) }}</span>
                 <span class="indKnoepfe">

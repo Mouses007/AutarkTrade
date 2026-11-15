@@ -28,6 +28,10 @@
  *   extern    (optional) Name einer Datenquelle, die das Panel nachlädt — Open
  *             Interest, Funding, Momentum. `ext` sind dann deren Punkte; sie
  *             werden hier auf die Kerzenzeiten gelegt.
+ *   misstFuture  (optional) die Zahl stammt vom Perpetual selbst (Bestand, Funding,
+ *             Kontenquote, Kauf-/Verkaufsvolumen). Bei einem Coin ist das der Markt;
+ *             bei einem Aktien-Future ist es ein Nebenmarkt — die Auswahl sagt das
+ *             dort dazu (FACH-H-012). Gesperrt wird nichts: die Börse liefert die Zahl.
  */
 import {
     sma, ema, bollinger, vwap, vwapBand, rsi, macd, stochastic, stochRsi, atr, adx, obv, mfi, volumeSma, smaSerie,
@@ -311,6 +315,15 @@ export function vwapVectorQuellen(p, ivMs, tfMs, anzahlKerzen) {
     return { htf: hoeher, intra, pocFein }
 }
 
+/**
+ * Schlüssel, unter dem der Chart die nachgeladenen Kerzen des VWAP Vector merkt.
+ * Die POC-Periode gehört hinein (FUN-R-402): 12h und 1d nehmen beide 15m-Kerzen,
+ * reichen aber verschieden weit zurück (POC_FEIN_PERIODEN Perioden) — ohne sie
+ * blieb nach dem Wechsel 12h → 1d der kurze Bestand stehen.
+ */
+export function vwapVectorSchluessel({ symbol, markt, interval, intra, pocFein, pocPeriode, boerse }) {
+    return `${symbol}|${markt}|${interval}|${intra}|${pocFein}|${pocFein ? pocPeriode : null}|${boerse}`
+}
 
 // ── Strategie-Indikatoren LSOB / GUSS ────────────────────────────────────
 // Parameter der STRATEGIE (`strategie: true` → gehen an den Server, der sie mit
@@ -640,6 +653,7 @@ export const INDIKATOREN = {
     oi: {
         ort: 'eigen',
         extern: 'oi',
+        misstFuture: true,
         params: [P_TABELLE],
         tabelle: true,
         // Fläche mit Verlauf für den Bestand, darunter die Veränderung je Kerze
@@ -681,6 +695,7 @@ export const INDIKATOREN = {
     longShort: {
         ort: 'eigen',
         extern: 'oi',
+        misstFuture: true,
         params: [P_TABELLE],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#26a69a', breite: 2 }],
         linien: [50],
@@ -695,6 +710,7 @@ export const INDIKATOREN = {
     funding: {
         ort: 'eigen',
         extern: 'funding',
+        misstFuture: true,
         params: [P_TABELLE],
         ausgaben: [{ key: 'hist', art: 'histogramm', farbe: '#26a69a' }],
         linien: [0],
@@ -835,6 +851,7 @@ export const INDIKATOREN = {
         // dem TradingView-Skript des Nutzers (31.10.2026) — dessen Fehler nicht übernommen,
         // siehe cvdKerzen/maJeAbschnitt/preisDivergenzen in orderflow.js.
         extern: 'cvd',
+        misstFuture: true,
         params: [
             S('binance', true, 'cvdQuelle'),
             W('reset', 'keiner', ['keiner', 'tag', 'woche'], 'cvdQuelle'),
@@ -886,6 +903,7 @@ export const INDIKATOREN = {
     },
     deltaVol: {
         ort: 'eigen',
+        misstFuture: true,
         params: [S('deltaLinie', true)],
         ausgaben: [
             { key: 'kauf', art: 'histogramm', farbe: 'rgba(38,166,154,0.75)' },
@@ -927,6 +945,7 @@ export const INDIKATOREN = {
         ort: 'preis',
         zeichner: 'footprint',
         extern: 'footprint',
+        misstFuture: true,
         params: [
             W('darstellung', 'profil', ['profil', 'zellen', 'delta']),
             W('stufeArt', 'auto', ['auto', 'ticks']),
@@ -1015,14 +1034,19 @@ export function benoetigteQuellen(instanzen) {
         .map((i) => INDIKATOREN[i.typ]?.extern).filter(Boolean))]
 }
 
-/** Kurzbeschriftung für die Legende, z. B. „EMA 21" oder „BB 20 2". */
-export function kurzname(typ, params, name) {
+/**
+ * Kurzbeschriftung für die Legende, z. B. „EMA 21" oder „BB 20 2".
+ * `wahlText(wert)` übersetzt den Wert einer Wahl (Anker, Preisquelle) — ohne ihn
+ * oder ohne Text stand der rohe Wert da («VWAP 0 usOpen»).
+ */
+export function kurzname(typ, params, name, wahlText = null) {
     if (INDIKATOREN[typ]?.kurzOhneParams) return name
     const p = saubereParams(typ, params)
     if (INDIKATOREN[typ]?.kurz) return INDIKATOREN[typ].kurz(p, name)
     const zahlen = (INDIKATOREN[typ]?.params || []).filter((x) => x.typ === 'zahl' && !x.nichtImNamen).map((x) => p[x.key])
-    const quelle = p.quelle && p.quelle !== 'c' ? ` ${p.quelle}` : ''
-    const anker = p.anker ? ` ${p.anker}` : ''
+    const text = (w) => (wahlText && wahlText(w)) || w
+    const quelle = p.quelle && p.quelle !== 'c' ? ` ${text(p.quelle)}` : ''
+    const anker = p.anker ? ` ${text(p.anker)}` : ''
     return `${name}${zahlen.length ? ' ' + zahlen.join(' ') : ''}${anker}${quelle}`
 }
 

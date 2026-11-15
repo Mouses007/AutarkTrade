@@ -2610,7 +2610,8 @@
       "sitzung_nacht": "Overnight (20:00–04:00)",
       "sitzung_wochenende": "Weekend",
       "sitzung_feiertag": "US holiday",
-      "jeSitzungHinweis": "Times in New York time. Outside the regular session the future is thin; spread and slippage are larger there than the simulation assumes."
+      "jeSitzungHinweis": "Times in New York time. Outside the regular session the future is thin; spread and slippage are larger there than the simulation assumes.",
+      "jeSitzungNurRegulaer": "Even with “regular US session only”, a trade can appear outside “Regular”: the switch allows a candle as soon as it touches the regular session (the hourly candle from 09:00 runs until 10:00). The table sorts by the start of the candle, so it lands under “Pre-market”."
     },
     "reason_instanz_inaktiv": "Instance was restarted or paused meanwhile — nothing opened",
     "reason_no_target": "No usable target (anchor on the wrong side)",
@@ -7353,6 +7354,7 @@
       "zahlenHeute": "Earnings today",
       "zahlenMorgen": "Earnings tomorrow",
       "zahlenInTagen": "Earnings in {n} days",
+      "misstFuture": "Measures the future, not the stock.",
       "voraussichtlich": "expected",
       "termineUnbekannt": "Earnings: dates unknown — {grund}",
       "grund": {
@@ -8968,7 +8970,8 @@
     "titelHinzu": "Add stock",
     "reiterTitel": "Open stocks",
     "reiterNeu": "Open stock in a new tab",
-    "watchlistLeer": "Still empty — use “Add stock” below or add the chart's symbol above."
+    "watchlistLeer": "Still empty — use “Add stock” below or add the chart's symbol above.",
+    "watchlist24h": "Change over the future's last 24 h, not against the last regular close."
   },
   "markt": {
     "nurKrypto": "The market radar shows crypto data. The environment for stocks (index, VIX, sectors, rates) is under Research › Market conditions.",

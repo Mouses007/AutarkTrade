@@ -2610,7 +2610,8 @@
       "sitzung_nacht": "Nacht (20:00–04:00)",
       "sitzung_wochenende": "Wochenende",
       "sitzung_feiertag": "US-Feiertag",
-      "jeSitzungHinweis": "Zeiten in New Yorker Zeit. Ausserhalb der regulären Sitzung ist der Future dünn; Spread und Rutsch sind dort grösser, als die Simulation annimmt."
+      "jeSitzungHinweis": "Zeiten in New Yorker Zeit. Ausserhalb der regulären Sitzung ist der Future dünn; Spread und Rutsch sind dort grösser, als die Simulation annimmt.",
+      "jeSitzungNurRegulaer": "Trotz «nur reguläre US-Sitzung» kann ein Trade ausserhalb von «Regulär» stehen: Der Schalter lässt eine Kerze zu, sobald sie die reguläre Sitzung berührt (die Stundenkerze ab 09:00 reicht bis 10:00). Die Tabelle ordnet nach dem Beginn der Kerze ein, also unter «Vorbörslich»."
     },
     "reason_instanz_inaktiv": "Instanz inzwischen neu gestartet oder pausiert — nichts eröffnet",
     "reason_no_target": "Kein brauchbares Ziel (Anker auf der falschen Seite)",
@@ -7353,6 +7354,7 @@
       "zahlenHeute": "Zahlen heute",
       "zahlenMorgen": "Zahlen morgen",
       "zahlenInTagen": "Zahlen in {n} Tagen",
+      "misstFuture": "Misst den Future, nicht die Aktie.",
       "voraussichtlich": "voraussichtlich",
       "termineUnbekannt": "Quartalszahlen: Termine unbekannt — {grund}",
       "grund": {
@@ -8968,7 +8970,8 @@
     "titelHinzu": "Titel hinzufügen",
     "reiterTitel": "Offene Titel",
     "reiterNeu": "Titel in neuem Tab öffnen",
-    "watchlistLeer": "Noch leer — unten «Titel hinzufügen» oder das Symbol des Charts oben hinzufügen."
+    "watchlistLeer": "Noch leer — unten «Titel hinzufügen» oder das Symbol des Charts oben hinzufügen.",
+    "watchlist24h": "Veränderung über die letzten 24 h des Futures, nicht gegen den letzten regulären Schluss."
   },
   "markt": {
     "nurKrypto": "Der Marktradar zeigt Krypto-Daten. Das Umfeld für Aktien (Index, VIX, Sektoren, Zinsen) steht unter Research › Marktlage.",
