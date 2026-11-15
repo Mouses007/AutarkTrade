@@ -77,6 +77,17 @@ p('nur TP: SL unverändert (nicht in der Liste)', baueAktion(coinm, 'stops', { t
 p('Long: SL über dem Kurs → stopLoss', baueAktion(coinm, 'stops', { stopLoss: 90 }).fehler === 'stopLoss')
 p('SL hinter der Liquidation gewarnt', baueAktion(coinm, 'stops', { stopLoss: 65 }).warnungen.includes('stopHinterLiq'))
 p('nichts angegeben → leer', baueAktion(coinm, 'stops', {}).fehler === 'leer')
+// Audit BUG-R-104: ein auf 0 gerundeter Preis wird abgelehnt, nie gesendet
+{
+    const linear = { ...coinm, coinM: false, richtung: 'LONG', kurs: 0.01, liquidation: null }
+    const sl0 = baueAktion(linear, 'stops', { stopLoss: '0.001' }, { stellen: 2 })
+    const tp0 = baueAktion({ ...linear, richtung: 'SHORT' }, 'stops', { takeProfit: '0.001' }, { stellen: 2 })
+    p('SL rundet auf 0 → stopLossNull, keine Anfrage', sl0.fehler === 'stopLossNull' && !sl0.senden, JSON.stringify(sl0))
+    p('TP rundet auf 0 → takeProfitNull, keine Anfrage', tp0.fehler === 'takeProfitNull' && !tp0.senden, JSON.stringify(tp0))
+    const slOk = baueAktion(linear, 'stops', { stopLoss: '0.006' }, { stellen: 2 })
+    p('Gegenprobe: 0.006 bei 2 Stellen → 0.01 gesendet, Warnung gerundet', slOk.senden?.body.list[0].value === '0.01' && slOk.warnungen.includes('gerundet'), JSON.stringify(slOk))
+    p('Gegenprobe: leer (entfernen) bleibt erlaubt', baueAktion(linear, 'stops', { stopLoss: '' }, { stellen: 2 }).senden?.body.list[0].value === '')
+}
 
 console.log('Pausieren, Fortsetzen, Beenden')
 p('pauseCheck/pause sofort, Stops bleiben aktiv', baueAktion(coinm, 'pausieren').senden.body.mode === 'immediate' && baueAktion(coinm, 'pausieren').senden.body.stopLossEnabled === true)

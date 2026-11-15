@@ -188,6 +188,10 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
         if (slAn && sl != null && !istZahl(sl)) return { fehler: 'stopLoss' }
         if (tpAn && tp != null && !istZahl(tp)) return { fehler: 'takeProfit' }
         const slText = slAn && sl != null ? ip(sl) : '', tpText = tpAn && tp != null ? ip(tp) : ''
+        // Audit BUG-R-104: ein Preis unter der halben letzten Stelle des Kontrakts rundet auf «0»
+        // (v. a. ohne Symboltabelle) — das ginge als Stop bei 0 an Pionex. Ablehnen, nie senden.
+        if (slAn && sl != null && !(Number(slText) > 0)) return { fehler: 'stopLossNull' }
+        if (tpAn && tp != null && !(Number(tpText) > 0)) return { fehler: 'takeProfitNull' }
         if (slAn) liste.push({ type: 'stop_loss', stop_type: 'price', value: slText, stop_delay: 0 })
         if (tpAn) liste.push({ type: 'stop_profit', stop_type: 'price', value: tpText, stop_delay: 0 })
         gerundetWarnung([[sl, usdAusInstrument(bot, slText)], [tp, usdAusInstrument(bot, tpText)]], warnungen)

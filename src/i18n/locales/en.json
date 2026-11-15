@@ -8776,8 +8776,14 @@
         "einsatz": "Investment must be greater than 0.",
         "tage": "Invalid period.",
         "nichtFuerSpot": "For a spot grid the app can only stop it and start a new one.",
-        "anteil": "Enter a share between 1 and 100 %."
+        "anteil": "Enter a share between 1 and 100 %.",
+        "anteilZuKlein": "The share is too small: Pionex reduces in whole steps only, the smallest is {schritt} % of the position.",
+        "stopLossNull": "Stop loss is too small for this contract: it would be rounded to 0. Nothing was sent.",
+        "takeProfitNull": "Take profit is too small for this contract: it would be rounded to 0. Nothing was sent."
       },
+      "anteilTatsaechlich": "Pionex reduces in whole steps only. Instead of {gewuenscht} %: {tatsaechlich} % of the position.",
+      "protokollFehlerTitel": "Log not written",
+      "protokollFehlerText": "The request went to Pionex, but the result could not be written to the log (database error). Do not treat the change as unsent: do not send again, look at the bot at Pionex (or here after reloading) first.",
       "unklarTitel": "Outcome unclear",
       "unklarText": "The connection to Pionex broke off or the answer was ambiguous. Pionex may have executed the change. Do not send again — first look at the bot at Pionex (or here after reloading).",
       "neuPruefenText": "Check again before another attempt.",

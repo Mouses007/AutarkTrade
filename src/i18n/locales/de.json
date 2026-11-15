@@ -8776,8 +8776,14 @@
         "einsatz": "Einsatz muss grösser als 0 sein.",
         "tage": "Ungültiger Zeitraum.",
         "nichtFuerSpot": "Bei einem Spot-Grid kann die App nur beenden und einen neuen starten.",
-        "anteil": "Anteil zwischen 1 und 100 % eingeben."
+        "anteil": "Anteil zwischen 1 und 100 % eingeben.",
+        "anteilZuKlein": "Der Anteil ist zu klein: Pionex reduziert nur in ganzen Schritten, der kleinste ist {schritt} % der Position.",
+        "stopLossNull": "Stop-Loss ist für diesen Kontrakt zu klein: Er würde auf 0 gerundet. Es wurde nichts gesendet.",
+        "takeProfitNull": "Take-Profit ist für diesen Kontrakt zu klein: Er würde auf 0 gerundet. Es wurde nichts gesendet."
       },
+      "anteilTatsaechlich": "Pionex reduziert nur in ganzen Schritten. Statt {gewuenscht} %: {tatsaechlich} % der Position.",
+      "protokollFehlerTitel": "Protokoll nicht geschrieben",
+      "protokollFehlerText": "Die Anfrage ging an Pionex, das Ergebnis konnte aber nicht ins Protokoll geschrieben werden (Datenbankfehler). Die Änderung gilt nicht als ungesendet: nicht erneut senden, sondern den Bot bei Pionex (oder hier nach dem Neuladen) ansehen.",
       "unklarTitel": "Ausgang unklar",
       "unklarText": "Die Verbindung zu Pionex brach ab oder antwortete nicht eindeutig. Pionex kann die Änderung ausgeführt haben. Nicht erneut senden — zuerst den Bot bei Pionex (oder hier nach dem Neuladen) ansehen.",
       "neuPruefenText": "Für einen neuen Versuch zuerst neu prüfen.",

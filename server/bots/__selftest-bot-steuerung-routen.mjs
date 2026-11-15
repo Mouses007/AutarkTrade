@@ -52,8 +52,9 @@ globalThis.__botTest = {
         }
         if (/reduceCheck$/.test(pfad)) {
             pionex.reduzierPruefungen = (pionex.reduzierPruefungen || 0) + 1
-            if (body.reduceNum > 200) return { result: true, data: { checkResult: false, reason: 'REDUCE_TOO_MUCH', maxReduceNum: 200 } }
-            return { result: true, data: { checkResult: true, maxReduceNum: 200, reduceAmount: String(body.reduceNum * 0.01), reducePnl: '1.25', reduceGridprofit: '0.4', reduceInvestment: '3', reduceFee: '0.01', estimateLiquidationPriceDown: '0.6', estimateLiquidationPriceDownAfter: '0.55' } }
+            const max = pionex.maxReduce || 200
+            if (body.reduceNum > max) return { result: true, data: { checkResult: false, reason: 'REDUCE_TOO_MUCH', maxReduceNum: max } }
+            return { result: true, data: { checkResult: true, maxReduceNum: max, reduceAmount: String(body.reduceNum * 0.01), reducePnl: '1.25', reduceGridprofit: '0.4', reduceInvestment: '3', reduceFee: '0.01', estimateLiquidationPriceDown: '0.6', estimateLiquidationPriceDownAfter: '0.55' } }
         }
         if (/Check$|checkParams$/.test(pfad)) return { result: true, data: { checkResult: true } }
         pionex.sendungen++
@@ -62,6 +63,8 @@ globalThis.__botTest = {
         if (pionex.modus === 'abgelehnt') throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] nein')
         if (pionex.modus === 'gateway') throw new Error('Pionex API: 502 Bad Gateway')
         if (pionex.modus === 'gatewayJson') throw Object.assign(new Error('Pionex API: [INTERNAL_ERROR] try again later'), { status: 503 })
+        // BUG-R-106: die Datenbank fällt aus, WÄHREND die Sendung bei Pionex ist
+        if (pionex.dbWeg) await getKnex().schema.renameTable('bot_aenderungen', 'bot_aenderungen_weg')
         pionex.letzte = { pfad, body }
         return { result: true, data: pionex.neueId ? { buOrderId: pionex.neueId } : {} }
     },
@@ -177,6 +180,28 @@ try {
     const rAnders = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion: 'reduzieren', eingabe: { reduceNum: '60' }, token: r2.token, haken: true, hakenText: haken })
     p('andere Menge als geprüft → abgewiesen, nichts gesendet', rAnders.status >= 400 && pionex.sendungen === vorR + 1)
     p('Anteil 0 oder über 100 → 400', (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '150' } })).status === 400)
+    // Audit FUN-R-105: tatsächlicher Anteil zurück, Rundung auf 0 abgelehnt
+    p('25 % von 200: tatsächlicher Anteil 25 %', rp.anteil?.gewuenscht === 25 && rp.anteil?.tatsaechlich === 25, JSON.stringify(rp.anteil))
+    pionex.maxReduce = 3
+    const vorK = pionex.sendungen
+    const k10 = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '10' } })
+    p('Höchstmenge 3, 10 % → rundet auf 0: 400 anteilZuKlein, kein Token, kleinster Schritt genannt', k10.status === 400 && k10.d.code === 'anteilZuKlein' && !k10.d.token && k10.d.schritt === 33.3, JSON.stringify(k10.d))
+    const k20 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '20' } })).d
+    p('Höchstmenge 3, 20 % → 1 Schritt, tatsächlich 33 % statt 20 %', k20.bestanden && k20.eingabe?.reduceNum === '1' && k20.anteil?.gewuenscht === 20 && Math.abs(k20.anteil?.tatsaechlich - 100 / 3) < 1e-9, JSON.stringify(k20.anteil))
+    p('beides nur geprüft, nichts gesendet', pionex.sendungen === vorK)
+    pionex.maxReduce = 0
+
+    console.log('Datenbankfehler nach dem Senden (Audit BUG-R-106)')
+    const prD = await pruefe()
+    const vorD = pionex.sendungen
+    pionex.dbWeg = true
+    const sD = await sende(prD.token)
+    pionex.dbWeg = false
+    await knex.schema.renameTable('bot_aenderungen_weg', 'bot_aenderungen')
+    p('Protokoll scheitert nach dem Senden → kein 502, Ausgang der Sendung + protokollFehler', sD.status === 200 && sD.d.zustand === 'ausgefuehrt' && sD.d.ok === true && sD.d.protokollFehler === true && pionex.sendungen === vorD + 1, JSON.stringify(sD))
+    const sD2 = await sende(prD.token)
+    p('derselbe Token danach → verbraucht, keine zweite Sendung', sD2.status === 409 && sD2.d.code === 'verbraucht' && pionex.sendungen === vorD + 1, JSON.stringify(sD2.d))
+    p('ohne Datenbankfehler kein Vermerk', s1.d.protokollFehler === undefined)
 
     console.log('Bot-Planer: Mindesteinsatz')
     pionex.minEinsatz = 37.3; pionex.pruefungen = 0

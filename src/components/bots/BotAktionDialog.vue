@@ -79,8 +79,16 @@ function eingabeFuerServer() {
 }
 const meldung = (e) => {
     const d = e?.response?.data
-    return d?.code && te(`bots.st.fehler.${d.code}`) ? t(`bots.st.fehler.${d.code}`) : (d?.error || e.message)
+    // Platzhalter (z. B. {schritt} bei anteilZuKlein) kommen aus der Antwort des Servers
+    return d?.code && te(`bots.st.fehler.${d.code}`) ? t(`bots.st.fehler.${d.code}`, d) : (d?.error || e.message)
 }
+// FUN-R-105: Pionex reduziert nur in ganzen Schritten — weicht der tatsächliche Anteil vom gewünschten ab, sagen
+const anteilAbweichung = computed(() => {
+    const a = pruefung.value?.anteil
+    if (!a) return null
+    const gewuenscht = zahl(a.gewuenscht, 1), tatsaechlich = zahl(a.tatsaechlich, 1)
+    return gewuenscht === tatsaechlich ? null : { gewuenscht, tatsaechlich }
+})
 
 async function pruefen() {
     laedt.value = true; fehler.value = ''; ergebnis.value = null
@@ -185,6 +193,8 @@ const istZeilen = computed(() => {
                 </Hinweis>
                 <Hinweis v-else art="fehler" :titel="t('bots.st.abgelehnt')">{{ pruefung.pruefung?.data?.reason || pruefung.pruefung?.message || '' }}</Hinweis>
 
+                <Hinweis v-if="anteilAbweichung" art="warn">{{ t('bots.st.anteilTatsaechlich', anteilAbweichung) }}</Hinweis>
+
                 <table v-if="vergleich.length" class="tabelle">
                     <thead><tr><th></th><th>{{ t('bots.st.vorher') }}</th><th>{{ t('bots.st.nachher') }}</th></tr></thead>
                     <tbody><tr v-for="z in vergleich" :key="z.titel" :class="{ pionex: z.pionex }"><th>{{ z.titel }}</th><td>{{ z.vorher }}</td><td>{{ z.nachher }}</td></tr></tbody>
@@ -219,6 +229,7 @@ const istZeilen = computed(() => {
             <Hinweis v-if="ergebnis?.zustand === 'ausgefuehrt'" art="gut" :titel="t('bots.st.gesendet')">{{ t('bots.st.gesendetText') }}</Hinweis>
             <Hinweis v-else-if="ergebnis?.zustand === 'unklar'" art="warn" :titel="t('bots.st.unklarTitel')">{{ t('bots.st.unklarText') }} {{ ergebnis.antwort?.message || '' }}</Hinweis>
             <Hinweis v-else-if="ergebnis" art="fehler" :titel="t('bots.st.nichtAusgefuehrt')">{{ ergebnis.antwort?.message || '' }} {{ t('bots.st.neuPruefenText') }}</Hinweis>
+            <Hinweis v-if="ergebnis?.protokollFehler" art="warn" :titel="t('bots.st.protokollFehlerTitel')">{{ t('bots.st.protokollFehlerText') }}</Hinweis>
             <template v-if="ergebnis?.ist">
                 <p class="leise">{{ ergebnis.ist.status === 'nichtMehrLaufend' ? t('bots.st.istBeendet') : ergebnis.ist.status === 'nichtGefunden' ? t('bots.st.istNeuFehlt') : ergebnis.ist.fehler ? t('bots.st.istFehler') : ergebnis.ist.neueId ? t('bots.st.istNeu', { id: ergebnis.ist.neueId }) : t('bots.st.istTitel') }}</p>
                 <table v-if="istZeilen.length" class="tabelle">

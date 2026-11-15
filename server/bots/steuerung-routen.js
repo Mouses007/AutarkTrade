@@ -377,6 +377,7 @@ export function setupBotSteuerungRoutes(app) {
             if (bot.fehler) return res.status(400).json({ ok: false, code: bot.fehler })
             if (!STEUERBAR.has(bot.typ)) return res.status(400).json({ ok: false, code: 'typ' })
             let eingabe = req.body?.eingabe || {}
+            let anteilInfo
             const stellen = await stellenFuer(bot)
             // Reduzieren: Anteil in % → reduceNum. Erst eine Prüfung mit 1 Schritt, die Pionex' Höchstmenge
             // (maxReduceNum) nennt; die umgerechnete Eingabe geht an den Browser zurück und wird so gesendet.
@@ -388,7 +389,13 @@ export function setupBotSteuerungRoutes(app) {
                 const vor = await frage(k, probe.pruefen.pfad, probe.pruefen.body)
                 const max = reduzierAusPruefung(vor?.data)?.max
                 if (!(max >= 1)) return res.json({ ok: true, aktion, bestanden: false, grund: null, pruefung: { result: vor?.result ?? false, message: vor?.message || 'Pionex nennt keine Höchstmenge zum Reduzieren', code: null, data: vor?.data || null }, nachher: {}, warnungen: [], token: null, testbetrieb: istTestbetrieb() })
-                eingabe = { ...eingabe, reduceNum: String(Math.max(1, Math.min(max, Math.round(max * anteil / 100)))) }
+                // Audit FUN-R-105: Pionex kennt nur ganze Schritte. Früher wurde stillschweigend auf mindestens
+                // einen Schritt aufgerundet (Höchstmenge 3, 10 % → 33 %). Rundet der Anteil auf 0, wird abgelehnt;
+                // sonst geht der tatsächliche Anteil an den Dialog zurück.
+                const schritte = Math.min(max, Math.round(max * anteil / 100))
+                if (schritte < 1) return res.status(400).json({ ok: false, code: 'anteilZuKlein', schritt: Number((100 / max).toFixed(1)) })
+                anteilInfo = { gewuenscht: anteil, tatsaechlich: schritte / max * 100 }
+                eingabe = { ...eingabe, reduceNum: String(schritte) }
             }
             const a = baueAktion(bot, aktion, eingabe, { stellen })
             if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
@@ -412,6 +419,7 @@ export function setupBotSteuerungRoutes(app) {
                 liq: pruefung?.data ? liqAusPruefung(bot, pruefung.data) : null,
                 reduzieren: aktion === 'reduzieren' ? reduzierAusPruefung(pruefung?.data) : undefined,
                 eingabe: aktion === 'reduzieren' ? eingabe : undefined,
+                anteil: anteilInfo,
                 vorher: bot.plan ? null : einstellungVon(bot), nachher: a.nachher, warnungen: a.warnungen,
                 anfrage: a.senden, token: t, testbetrieb: istTestbetrieb(),
             })
@@ -427,6 +435,7 @@ export function setupBotSteuerungRoutes(app) {
         // oder ein zweiter Tab kommt hier nicht durch, solange die erste Sendung läuft.
         if (laeuft.has(id)) return res.status(429).json({ ok: false, code: 'laeuft' })
         laeuft.add(id)
+        let gesendet = false
         try {
             const z = await zeile()
             const zust = zustimmungAus(z)
@@ -466,21 +475,31 @@ export function setupBotSteuerungRoutes(app) {
             }
             zuletztGesendet.set(id, Date.now())
             const sendeZeit = Date.now()
+            // Ab hier ist die Anfrage bei Pionex (oder unterwegs): kein Fehler danach darf wie «nicht gesendet» aussehen.
+            gesendet = true
             const s = await sende(k, a.senden.pfad, a.senden.body)
             // Soll/Ist (Audit SEC-06): Pionex verarbeitet asynchron — kurz warten, dann frisch lesen.
             let ist = null
-            if (s.zustand !== 'abgelehnt') {
-                await new Promise((ok) => setTimeout(ok, NACHLESEN_MS))
-                try {
-                    const lauf = await holeLaufendeBots()
-                    // Ein Start erzeugt einen NEUEN Bot — der alte (oder der Plan) ist nicht gemeint
-                    const neu = a.aktion === 'starten' ? findeNeuenBot(lauf, bot, sendeZeit, s.antwort) : lauf.find((b) => b.id === bot.id)
-                    ist = neu ? { ...einstellungVon(neu), ...(a.aktion === 'starten' ? { neueId: neu.id } : {}) } : { status: a.aktion === 'starten' ? 'nichtGefunden' : 'nichtMehrLaufend' }
-                } catch (e) { ist = { fehler: fehlerText(e) } }
+            // Audit BUG-R-106: eigenes try nach dem Senden. Scheitert das Protokoll (Datenbank), bleibt der
+            // Ausgang der Sendung die Antwort — mit dem Vermerk, dass die Zeile nicht geschrieben wurde.
+            let protokollFehler = false
+            try {
+                if (s.zustand !== 'abgelehnt') {
+                    await new Promise((ok) => setTimeout(ok, NACHLESEN_MS))
+                    try {
+                        const lauf = await holeLaufendeBots()
+                        // Ein Start erzeugt einen NEUEN Bot — der alte (oder der Plan) ist nicht gemeint
+                        const neu = a.aktion === 'starten' ? findeNeuenBot(lauf, bot, sendeZeit, s.antwort) : lauf.find((b) => b.id === bot.id)
+                        ist = neu ? { ...einstellungVon(neu), ...(a.aktion === 'starten' ? { neueId: neu.id } : {}) } : { status: a.aktion === 'starten' ? 'nichtGefunden' : 'nichtMehrLaufend' }
+                    } catch (e) { ist = { fehler: fehlerText(e) } }
+                }
+                await getKnex()('bot_aenderungen').where('id', zeileId).update({
+                    ok: s.zustand === 'ausgefuehrt', zustand: s.zustand, antwort: JSON.stringify(s.antwort ?? { message: s.text }), ist: JSON.stringify(ist),
+                })
+            } catch (e) {
+                protokollFehler = true
+                logWarn('bots', `Protokoll nach dem Senden (${a.aktion} an ${bot.id}, Zeile ${zeileId}) nicht geschrieben: ${e.message}`)
             }
-            await getKnex()('bot_aenderungen').where('id', zeileId).update({
-                ok: s.zustand === 'ausgefuehrt', zustand: s.zustand, antwort: JSON.stringify(s.antwort ?? { message: s.text }), ist: JSON.stringify(ist),
-            })
             vergesseBot(bot.id)
             const meldung = `${a.aktion} an ${bot.id}: ${s.zustand}${s.text ? ` (${s.text})` : ''}`
             if (s.zustand === 'ausgefuehrt') logInfo('bots', meldung)
@@ -488,9 +507,12 @@ export function setupBotSteuerungRoutes(app) {
             res.json({
                 ok: s.zustand === 'ausgefuehrt', zustand: s.zustand, soll: a.nachher, ist,
                 antwort: { result: s.antwort?.result ?? null, message: s.text || s.antwort?.message || null, data: s.antwort?.data || null },
+                ...(protokollFehler ? { protokollFehler: true } : {}),
             })
         } catch (e) {
             logWarn('bots', `Senden ${id}: ${e.message}`)
+            // BUG-R-106, Auffangnetz: ein unerwarteter Fehler NACH dem Senden ist «unklar», kein 502
+            if (gesendet) { if (!res.headersSent) res.json({ ok: false, zustand: 'unklar', soll: null, ist: null, antwort: { result: null, message: fehlerText(e), data: null }, protokollFehler: true }); return }
             fehlerAntwort(res, e)
         } finally {
             laeuft.delete(id)
