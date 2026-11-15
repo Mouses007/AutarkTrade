@@ -612,6 +612,18 @@ console.log('\nAktien-Kontext: Splits frisch holen')
         const gebremst = await aktienKontext('KORUUSDT', { splitsFrisch: true })
         pruefe('zweite Nachfrage innerhalb von zehn Minuten: gebremst, kein weiterer Abruf', gebremst.splits.length === 1 && splitAbrufe === 2, `${splitAbrufe} Abrufe`)
         pruefe('Coin bleibt Coin, auch mit `splitsFrisch` — kein Abruf', (await aktienKontext('BTCUSDT', { splitsFrisch: true })) === null && splitAbrufe === 2)
+
+        // «Kein Aktien-Future» gilt nur 30 Sekunden: wird der Stamm erst danach abgeglichen
+        // (erster Lauf, neue Listung), rechnete der Backtest sonst zehn Minuten lang wie für einen Coin.
+        pruefe('Symbol noch nicht im Stamm: Coin', (await aktienKontext('SPAETUSDT')) === null)
+        const [sid] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'SPAET', unterart: 'aktie', name: 'Spaet Inc' })
+        await knex('instrument_listungen').insert({ instrumentId: sid, handelsplatz: 'binance', symbol: 'SPAETUSDT', art: 'perp', aktiv: 1 })
+        pruefe('gleich danach: die Antwort ist noch gemerkt', (await aktienKontext('SPAETUSDT')) === null)
+        const jetztEcht = Date.now
+        Date.now = () => jetztEcht() + 31_000
+        try {
+            pruefe('nach 30 Sekunden: als Aktien-Future erkannt', (await aktienKontext('SPAETUSDT'))?.ticker === 'SPAET')
+        } finally { Date.now = jetztEcht }
     } finally {
         globalThis.fetch = fetchEcht
         leereKontextCache()

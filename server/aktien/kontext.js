@@ -21,6 +21,12 @@ import { CHART_BOERSEN } from './chart-symbole.js'
 import { ladeTermine } from './termine.js'
 
 const KONTEXT_MS = 10 * 60_000
+/**
+ * «Kein Aktien-Future» gilt nur kurz: die Antwort kostet eine Datenbankabfrage,
+ * und ein eben erst abgeglichener Stamm (erster Lauf, neue Listung) soll nicht
+ * zehn Minuten lang als Coin gerechnet werden.
+ */
+const KEIN_TITEL_MS = 30_000
 const SPLITS_MS = 12 * 60 * 60_000
 /** So oft höchstens darf ein Aufrufer die Splits eines Symbols am Speicher vorbei holen (`splitsFrisch`). */
 const FRISCH_MS = 10 * 60_000
@@ -108,13 +114,14 @@ export async function aktienKontext(symbol, { splitsFrisch = false } = {}) {
     const sym = String(symbol || '').toUpperCase()
     const c = kontextCache.get(sym)
     const frisch = splitsFrisch && !(Date.now() - (frischGeholt.get(sym) || 0) < FRISCH_MS)
-    if (c && !frisch && Date.now() - c.zeit < KONTEXT_MS) return c.wert
+    if (c && !frisch && Date.now() - c.zeit < (c.wert ? KONTEXT_MS : KEIN_TITEL_MS)) return c.wert
     if (frisch) {
         frischGeholt.set(sym, Date.now())
         if (c?.wert?.kursSymbol) splitsCache.delete(c.wert.kursSymbol)
     }
-    let wert = null
-    try { wert = await baue(sym) } catch { wert = null }
+    let wert
+    // Ein gescheiterter Aufbau (Datenbank gerade nicht da) wird nicht gemerkt — nächste Frage, neuer Versuch.
+    try { wert = await baue(sym) } catch { return null }
     kontextCache.set(sym, { zeit: Date.now(), wert })
     return wert
 }
