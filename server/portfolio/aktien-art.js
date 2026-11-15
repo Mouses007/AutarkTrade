@@ -96,11 +96,83 @@ export async function stammKurseUsd(knex, tickers) {
     return aus
 }
 
-/** Kürzel der Aktien/ETFs, die der letzte Bitpanda-Abruf gemeldet hat (`portfolio_quellen.stand.aktien`). */
-export async function bitpandaAktienKuerzel(knex) {
+/** Aktien/ETFs, die der letzte Bitpanda-Abruf gemeldet hat: KÜRZEL → `aktie` | `etf` (`portfolio_quellen.stand.aktien`). */
+export async function bitpandaAktienArten(knex) {
+    const aus = new Map()
     try {
         const z = await knex('portfolio_quellen').where('quelle', 'bitpanda').first()
         const a = JSON.parse(z?.stand || '{}').aktien
-        return new Set(Object.keys(a && typeof a === 'object' ? a : {}).map((s) => s.toUpperCase()))
-    } catch { return new Set() }
+        for (const [s, k] of Object.entries(a && typeof a === 'object' ? a : {})) aus.set(s.toUpperCase(), KLASSEN.includes(k) ? k : 'aktie')
+    } catch { /* ohne Stand keine Aktien */ }
+    return aus
+}
+
+/** Kürzel der Aktien/ETFs, die der letzte Bitpanda-Abruf gemeldet hat. */
+export async function bitpandaAktienKuerzel(knex) {
+    return new Set((await bitpandaAktienArten(knex)).keys())
+}
+
+/**
+ * Art einer Seite nach QUELLE und Kürzel — nie nach dem Kürzel allein: `SUI`
+ * ist bei Bitpanda die Aktie Sun Communities, bei einer anderen Quelle der Coin.
+ * @param {Map<string, string>} arten  aus `bitpandaAktienArten`
+ * @returns {(quelle: string, asset: string) => 'aktie'|'etf'|null}
+ */
+export function aktienKlasseVon(arten) {
+    return (quelle, asset) => (quelle === 'bitpanda' && asset ? arten?.get(String(asset).toUpperCase()) || null : null)
+}
+
+/**
+ * Bewegungen ohne ihre Aktien-Seiten — für den Krypto-Steuerbericht. Rein.
+ *
+ * Eine Aktie gehört ins Wertschriftenverzeichnis, nicht in die Krypto-Beilage.
+ * Die Geld- oder Coin-Seite derselben Bewegung bleibt aber stehen (sonst
+ * stimmte der EUR-Bestand bei Bitpanda nicht mehr): aus «Kauf SUI gegen EUR»
+ * wird ein Abgang von EUR, aus «Verkauf SUI gegen EUR» ein Zugang. Bewegungen,
+ * die nur aus einer Aktie bestehen, fallen ganz weg. Eine neue Bewertung der
+ * Aktie findet hier NICHT statt.
+ *
+ * @param {Array} bewegungen
+ * @param {(quelle: string, asset: string) => string|null} klasse  siehe `aktienKlasseVon`
+ * @returns {{ bewegungen: Array, betroffen: Set, kuerzel: Map<string, {klasse: string, ersteZeit: number}> }}
+ *   `betroffen` = ids der gekürzten Bewegungen (sie sind keine «Veränderung» des Krypto-Berichts mehr).
+ */
+export function ohneAktienSeiten(bewegungen, klasse) {
+    const aus = [], betroffen = new Set(), kuerzel = new Map()
+    const merke = (asset, k, zeit) => {
+        const a = String(asset).toUpperCase()
+        const e = kuerzel.get(a)
+        if (!e) kuerzel.set(a, { klasse: k, ersteZeit: Number(zeit) })
+        else if (Number(zeit) < e.ersteZeit) e.ersteZeit = Number(zeit)
+    }
+    for (const b of bewegungen || []) {
+        const kA = b.asset ? klasse(b.quelle, b.asset) : null
+        const kG = b.gegenAsset ? klasse(b.quelle, b.gegenAsset) : null
+        if (!kA && !kG) { aus.push(b); continue }
+        if (kA) merke(b.asset, kA, b.zeit)
+        if (kG) merke(b.gegenAsset, kG, b.zeit)
+        if (b.id != null) betroffen.add(b.id)
+        // Gebühr in Aktien-Stücken gehört zur Aktie; eine Gebühr in Geld oder Coin bleibt.
+        const gebuehr = b.gebuehrAsset && !klasse(b.quelle, b.gebuehrAsset) ? {} : { gebuehrAsset: null, gebuehrMenge: null }
+        let rest = null
+        if (kA && b.gegenAsset && !kG) rest = { asset: b.gegenAsset, menge: b.gegenMenge, kontrakt: null }
+        else if (kG && b.asset && !kA) rest = { asset: b.asset, menge: b.menge }
+        if (!rest || !(Math.abs(Number(rest.menge)) > 0)) continue
+        aus.push({ ...b, ...rest, ...gebuehr, gegenAsset: null, gegenMenge: null, art: Number(rest.menge) < 0 ? 'auszahlung' : 'einzahlung' })
+    }
+    return { bewegungen: aus, betroffen, kuerzel }
+}
+
+/**
+ * Hinweis des Krypto-Steuerberichts auf die ausgelassenen Aktien/ETFs. Rein.
+ * @param {Map<string, string>} liste  KÜRZEL → `aktie` | `etf`
+ * @returns {{art: 'aktien', n: number, kuerzel: string[], text: string}|null}
+ */
+export function aktienHinweis(liste) {
+    const kuerzel = [...(liste?.keys() || [])].sort()
+    if (!kuerzel.length) return null
+    return {
+        art: 'aktien', n: kuerzel.length, kuerzel,
+        text: `${kuerzel.length} Aktien/ETF bei Bitpanda nicht enthalten – sie gehören ins Wertschriftenverzeichnis, nicht in die Beilage Kryptowährungen: ${kuerzel.join(', ')}.`,
+    }
 }

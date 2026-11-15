@@ -52,7 +52,8 @@ import { setzeSpam } from './spam.js'
 import { totalverlustUebersicht } from './totalverlust-seite.js'
 import { stakingUebersicht } from './staking.js'
 import { wachtAus, setzeWacht, wachtbar } from './wacht.js'
-import { istDcaKauf, dcaArt, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon } from './dca.js'
+import { istDcaKauf, dcaArt, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon, dcaKursWege, dcaAktienBestand } from './dca.js'
+import { bitpandaAktienArten, aktienKlasseVon } from './aktien-art.js'
 import { kerzen as marktKerzen } from '../marktdaten/index.js'
 import { steuerBerichtHtml, berichtCss, BERICHT_JS } from './steuer-bericht.js'
 import fs from 'fs'
@@ -104,6 +105,12 @@ async function dcaKaeufe(k) {
     return zeilen.filter(istDcaKauf)
 }
 
+/** Art eines DCA-Kaufs (`aktie` | `etf` | null) — nach Quelle und Kürzel, siehe `aktien-art.js`. */
+async function dcaKlasseVon(k) {
+    const klasse = aktienKlasseVon(await bitpandaAktienArten(k))
+    return (z) => klasse(z.quelle, z.asset)
+}
+
 /** Umstellungen eingestellter Coins (Bitpanda `merger_crypto`): AGIX → FET, BEST → VSN, MIOTA → IOTA. */
 async function dcaUmstellungen(k) {
     return umstellungenAus(await k('portfolio_bewegungen').where('art', 'tausch').where('roh', 'like', '%merger_crypto%')
@@ -135,20 +142,36 @@ export async function dcaAnsicht({ nurLaufende = false } = {}) {
     const [u, kaeufe, umstellungen] = await Promise.all([berechneUebersicht(), dcaKaeufe(k), dcaUmstellungen(k)])
     const ortName = ortNameVon(u)
     const posten = new Map(u.posten.filter((p) => !p.kontrakt && !p.spam).map((p) => [p.schluessel, p]))
+    // Sparplan auf eine Aktie/einen ETF (Bitpanda, nach Quelle UND Kürzel): nie über `${a}USDT`
+    // (FUN-P-003). Kurs wie in der Übersicht — Bitpandas Wert der Position bzw. der Aktien-Future
+    // (`aktienZeilenKurs`), gelesen aus den Aktien-Zeilen der Quelle; nicht mehr gehalten = kein Kurs.
+    const klasseVon = await dcaKlasseVon(k)
+    const aktien = dcaAktienBestand(u.quellen)
     const kurs = new Map()
-    for (const a of new Set(kaeufe.map((z) => heutigerCoin(z.asset, umstellungen).asset))) {
+    for (const a of new Set(kaeufe.filter((z) => !klasseVon(z)).map((z) => heutigerCoin(z.asset, umstellungen).asset))) {
         const p = posten.get(a)
-        if (p && !p.ohneKurs && p.usdKurs != null) { kurs.set(a, p.usdKurs * u.fx.chf); continue }
+        // Eine Zeile, in der auch eine Aktie liegt, trägt womöglich deren Kurs — dann der Coin-Tageskurs.
+        if (p && !p.klasse && !p.ohneKurs && p.usdKurs != null) { kurs.set(a, p.usdKurs * u.fx.chf); continue }
         // Nicht mehr gehalten: Tageskerze von heute (ein Abruf je Coin, danach im Kurs-Cache).
         const t = await tagesKursUsd(a, new Date().toISOString().slice(0, 10)).catch(() => null)
         if (t?.usd != null) kurs.set(a, t.usd * u.fx.chf)
     }
     return dcaUebersicht(kaeufe, {
-        umstellungen, quelleName: ortName, nurLaufende,
-        kursChfVon: (a) => kurs.get(a) ?? null,
-        bestandVon: (a) => {
+        umstellungen, quelleName: ortName, nurLaufende, klasseVon,
+        kursChfVon: (a, klasse) => (klasse ? aktien.get(a)?.kursChf : kurs.get(a)) ?? null,
+        bestandVon: (a, klasse) => {
+            const ak = aktien.get(a)
+            if (klasse) return ak ? { menge: ak.menge, chf: ak.chf, orte: [{ name: ortName('bitpanda'), menge: ak.menge, chf: ak.chf }] } : null
             const p = posten.get(a)
             if (!p) return null
+            if (ak) {
+                // Dieselbe Zeile führt Aktie und Coin (eine Zeile je Kürzel): der Aktien-Teil gehört nicht zum Coin.
+                const m = p.menge - ak.menge
+                if (!(m > Math.abs(p.menge) * 1e-6)) return null
+                const orte = p.orte.filter((o) => o.quelle !== 'bitpanda' && Math.abs(o.menge) > m * 1e-6).sort((x, y) => y.menge - x.menge)
+                const kc = kurs.get(a)
+                return { menge: m, chf: kc != null ? m * kc : null, orte: orte.map((o) => ({ name: ortName(o.quelle), menge: o.menge, chf: kc != null ? o.menge * kc : null })) }
+            }
             const orte = p.orte.filter((o) => Math.abs(o.menge) > p.menge * 1e-6).sort((a, b) => b.menge - a.menge)
             return { menge: p.menge, chf: p.ohneKurs ? null : p.chf, orte: orte.map((o) => ({ name: ortName(o.quelle), menge: o.menge, chf: o.chf })) }
         },
@@ -244,15 +267,14 @@ export function setupPortfolioRoutes(app) {
             const k = getKnex()
             const [kaeufe, umstellungen] = await Promise.all([dcaKaeufe(k), dcaUmstellungen(k)])
             if (!kaeufe.length) return res.json({ ok: true, punkte: [], ohneKerzen: [] })
-            const schluessel = `${kaeufe.length}|${Math.max(0, ...kaeufe.map((z) => Number(z.zeit)))}`
+            // Aktien/ETFs (Bitpanda) bekommen KEINE Monatskerzen des gleichnamigen Coins (FUN-P-003):
+            // sie stehen im Verlauf zum letzten Kaufpreis und werden als geschätzt genannt.
+            const klasseVon = await dcaKlasseVon(k)
+            const wege = dcaKursWege(kaeufe, umstellungen, klasseVon)
+            const schluessel = `${kaeufe.length}|${Math.max(0, ...kaeufe.map((z) => Number(z.zeit)))}|${[...wege.aktien].sort().join(',')}`
             if (dcaVerlaufSpeicher?.schluessel !== schluessel || Date.now() - dcaVerlaufSpeicher.zeit >= 6 * 3600e3) {
                 const start = Date.parse(monatVon(Math.min(...kaeufe.map((z) => Number(z.zeit)))) + '-01T00:00:00Z')
-                const assets = new Set()
-                for (const z of kaeufe) {
-                    const a = String(z.asset).toUpperCase()
-                    assets.add(a)
-                    if (umstellungen[a]) assets.add(umstellungen[a].nach)
-                }
+                const assets = wege.coins
                 // USD → CHF am Monatsende (für den laufenden Monat: heute). Fehlt einer (EZB nicht
                 // erreichbar), gilt der des Vormonats — ein fehlender Kurs liesse sonst den Coin auf
                 // „geschätzt“ fallen, obwohl die Kerze da ist.
@@ -260,7 +282,7 @@ export function setupPortfolioRoutes(app) {
                 let letzteFx = null
                 const heute = new Date().toISOString().slice(0, 10)
                 const monatsKurse = new Map()
-                const ohneKerzen = []
+                const ohneKerzen = [...wege.aktien].filter((a) => !assets.has(a))
                 for (const a of assets) {
                     const sym = KURS_ALIAS[a] || a
                     let kz = []
@@ -284,7 +306,7 @@ export function setupPortfolioRoutes(app) {
                 dcaVerlaufSpeicher = { schluessel, zeit: Date.now(), monatsKurse, ohneKerzen }
             }
             const { monatsKurse, ohneKerzen } = dcaVerlaufSpeicher
-            const punkte = dcaVerlauf(req.query.nurLaufende === '1' ? laufendeKaeufe(kaeufe) : kaeufe, monatsKurse, { umstellungen })
+            const punkte = dcaVerlauf(req.query.nurLaufende === '1' ? laufendeKaeufe(kaeufe, { klasseVon }) : kaeufe, monatsKurse, { umstellungen, klasseVon })
             res.json({ ok: true, punkte, ohneKerzen })
         } catch (e) { fehler(res, e) }
     })

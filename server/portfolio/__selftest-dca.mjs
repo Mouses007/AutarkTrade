@@ -14,7 +14,8 @@
  *   - der Rhythmus folgt den letzten Käufen, nicht dem Plan von 2019;
  *   - im Verlauf knickt ein Coin ohne Monatskurs nicht auf null.
  */
-import { istDcaKauf, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monate } from './dca.js'
+import { istDcaKauf, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monate, dcaKursWege, dcaAktienBestand, dcaSchluessel } from './dca.js'
+import { aktienKlasseVon } from './aktien-art.js'
 
 let bestanden = 0, fehlgeschlagen = 0
 function check(name, ok, detail) {
@@ -190,6 +191,57 @@ console.log('\nVerlauf')
     check('ohne Monatskurs: letzter Kaufpreis, als geschätzt markiert', nah(p('2022-05').wertChf, 0.0025 * (50 / 0.0013)) && p('2022-05').geschaetzt.includes('BTC'))
     check('nach der Umstellung über FET × Faktor', nah(p('2024-07').wertChf, 0.0025 * (50 / 0.0013) + 180 * umst.AGIX.faktor * 1.2) && !p('2024-07').geschaetzt.includes('AGIX'))
     check('mit Monatskurs nicht geschätzt', !p('2026-07').geschaetzt.includes('BTC') && nah(p('2026-07').wertChf - (180 * 24 / 80), (0.0025 + 0.0007 * 3) * 58000, 1e-6))
+}
+
+console.log('\nSparplan auf eine Aktie (SUI = Sun Communities bei Bitpanda) nimmt keinen Coin-Kurs (FUN-P-003)')
+{
+    const klasse = aktienKlasseVon(new Map([['SUI', 'aktie']]))
+    const klasseVon = (z) => klasse(z.quelle, z.asset)
+    const aktie = [kauf('bitpanda', '2026-08-01T00:00:00Z', 'SUI', 0.5, 60, 'EUR', 56), kauf('bitpanda', '2026-09-01T00:00:00Z', 'SUI', 0.5, 60, 'EUR', 56), kauf('bitpanda', '2026-10-01T00:00:00Z', 'SUI', 0.5, 60, 'EUR', 56)]
+    const coin = [kauf('i:Crypto.com', '2026-08-15T00:00:00Z', 'SUI', 20, 50, 'CHF', 50, JSON.stringify({ dca: 'Crypto.com Karte' })), kauf('i:Crypto.com', '2026-09-15T00:00:00Z', 'SUI', 20, 50, 'CHF', 50, JSON.stringify({ dca: 'Crypto.com Karte' }))]
+    const SUI_COIN = 3   // CHF je Sui — der Kurs, den die Aktie NICHT bekommen darf
+
+    const nurAktie = dcaKursWege(aktie, {}, klasseVon)
+    check('Kursweg: Aktie geht nicht in die Coin-Kursabfrage', !nurAktie.coins.has('SUI') && nurAktie.aktien.has('SUI'))
+    const beide = dcaKursWege([...aktie, ...coin, ...zeilen.filter((z) => z.asset === 'AGIX')], umst, klasseVon)
+    check('Kursweg: der Coin SUI einer anderen Quelle schon', beide.coins.has('SUI') && beide.aktien.has('SUI'))
+    check('Kursweg: Umstellungs-Ziel bleibt dabei (AGIX → FET)', beide.coins.has('AGIX') && beide.coins.has('FET'))
+    check('Schlüssel trennt Aktie und Coin', dcaSchluessel(aktie[0], klasseVon) !== dcaSchluessel(coin[0], klasseVon) && dcaSchluessel(coin[0], klasseVon) === 'SUI')
+
+    // Nicht mehr gehalten: kein Kurs — auch wenn es für das Kürzel einen Coin-Kurs gäbe.
+    const gefragt = []
+    const opt = { jetzt: JETZT, klasseVon, kursChfVon: (a, k) => { gefragt.push([a, k]); return k ? null : SUI_COIN }, bestandVon: () => null }
+    const u = dcaUebersicht(aktie, opt)
+    check('Aktie nicht gehalten: kein Kurs, kein Wert, kein Gewinn', u.coins.length === 1 && u.coins[0].klasse === 'aktie' && u.coins[0].kursChf === null && u.coins[0].wertHeuteChf === null && u.coins[0].gewinnChf === null, JSON.stringify(u.coins[0]))
+    check('als «ohne Kurs» genannt statt mit Coin-Kurs gerechnet', u.summe.ohneKurs.join() === 'SUI' && u.summe.wertHeuteChf === 0)
+    check('Kurs wird als Aktie angefragt', gefragt.length === 1 && gefragt[0][1] === 'aktie')
+
+    // Gehalten: Bitpandas eigener Wert der Position (über die Übersicht), nicht der Coin.
+    const ab = dcaAktienBestand([{ quelle: 'bitget', posten: [{ schluessel: 'SUI', menge: 40, chf: 120, klasse: null }] },
+        { quelle: 'bitpanda', posten: [{ schluessel: 'SUI', menge: 1.5, chf: 165, klasse: 'aktie' }, { schluessel: 'BTC', menge: 1, chf: 60000, klasse: null }, { schluessel: 'T', menge: 2, chf: null, klasse: 'aktie' }] }])
+    check('Aktien-Bestand nur aus Bitpandas Aktien-Zeilen', ab.size === 2 && nah(ab.get('SUI').kursChf, 110) && ab.get('T').kursChf === null && ab.get('T').chf === null)
+    const beideU = dcaUebersicht([...aktie, ...coin], {
+        jetzt: JETZT, klasseVon,
+        kursChfVon: (a, k) => (k ? ab.get(a)?.kursChf ?? null : SUI_COIN),
+        bestandVon: (a, k) => (k ? { menge: ab.get(a).menge, chf: ab.get(a).chf } : { menge: 40, chf: 120 }),
+    })
+    const za = beideU.coins.find((c) => c.klasse === 'aktie'), zc = beideU.coins.find((c) => !c.klasse)
+    check('Aktie und Coin SUI sind zwei Zeilen', beideU.coins.length === 2 && za.schluessel !== zc.schluessel && za.asset === 'SUI' && zc.asset === 'SUI')
+    check('Aktie: Wert über Bitpandas Bewertung (1.5 × 110), nicht 1.5 × Sui', nah(za.wertHeuteChf, 165) && !nah(za.wertHeuteChf, 1.5 * SUI_COIN))
+    check('Coin: weiter über den Coin-Kurs', nah(zc.wertHeuteChf, 40 * SUI_COIN) && zc.anzahl === 2)
+    check('«Noch da» je Art aus dem eigenen Bestand', nah(za.nochDa.menge, 1.5) && nah(zc.nochDa.menge, 40))
+    check('ohne klasseVon wie bisher eine Zeile', dcaUebersicht([...aktie, ...coin], { jetzt: JETZT }).coins.length === 1)
+
+    // Verlauf: Monatskerzen des Coins SUI gelten nur für den Coin.
+    const mk = new Map([['SUI', new Map([['2026-08', SUI_COIN], ['2026-09', SUI_COIN], ['2026-10', SUI_COIN]])]])
+    const v = dcaVerlauf(aktie, mk, { bisMonat: '2026-10', klasseVon })
+    check('Verlauf Aktie: letzter Kaufpreis (geschätzt), nicht Stücke × Sui-Kurs', nah(v.at(-1).wertChf, 1.5 * (56 / 0.5)) && v.at(-1).geschaetzt.join() === 'SUI', JSON.stringify(v.at(-1)))
+    const falsch = dcaVerlauf(aktie, mk, { bisMonat: '2026-10' })
+    check('Gegenprobe: ohne die Art wäre es der Coin-Kurs', nah(falsch.at(-1).wertChf, 1.5 * SUI_COIN))
+    const vb = dcaVerlauf([...aktie, ...coin], mk, { bisMonat: '2026-10', klasseVon })
+    check('Verlauf gemischt: Coin über Kerzen, Aktie geschätzt', nah(vb.at(-1).wertChf, 40 * SUI_COIN + 1.5 * 112) && vb.at(-1).geschaetzt.join() === 'SUI')
+    const lk = laufendeKaeufe([...aktie, ...coin], { jetzt: JETZT, klasseVon })
+    check('laufende Käufe je Art', lk.length === 5)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

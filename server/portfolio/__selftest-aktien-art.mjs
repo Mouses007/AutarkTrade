@@ -8,7 +8,10 @@
  * geprüft wird hier die Regel, nicht die Feldnamen jener Antwort.
  */
 import { readFileSync } from 'node:fs'
-import { klasseAusAsset, klasseAusStamm, aktienZeilenKurs, KLASSEN } from './aktien-art.js'
+import { klasseAusAsset, klasseAusStamm, aktienZeilenKurs, KLASSEN, bitpandaAktienArten, bitpandaAktienKuerzel, aktienKlasseVon, ohneAktienSeiten, aktienHinweis } from './aktien-art.js'
+import { bestandAm, veraenderungen, einkommen, fifo, bestandesrechnung } from './steuer-rechnung.js'
+import { steuerCsv } from './steuer.js'
+import knexLib from 'knex'
 import { ausBitpandaPortfolio } from './normal.js'
 import { ausBitpanda } from '../aktien/einordnung.js'
 import { bewertbareSeiten } from './abruf.js'
@@ -80,6 +83,66 @@ console.log('\nBewegungen: ein Aktienkauf wird über den bezahlten Betrag bewert
     const kauf = { quelle: 'bitpanda', art: 'kauf', asset: 'AAPL', menge: 2, gegenAsset: 'EUR', gegenMenge: 400 }
     const s = bewertbareSeiten(kauf)
     check('Geldseite EUR, kein Kurs über das Kürzel', s.geld?.[0] === 'EUR' && s.kurs === null, JSON.stringify(s))
+}
+
+console.log('\nSteuerbericht: Aktie SUI (Sun Communities) bei Bitpanda gehört nicht ins Krypto-Vermögen (FACH-P-001)')
+{
+    // Stand der Quelle wie nach einem Bitpanda-Abruf — Wegwerf-Datenbank im Speicher.
+    const knex = knexLib({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
+    await knex.schema.createTable('portfolio_quellen', (t) => { t.string('quelle'); t.text('stand') })
+    await knex('portfolio_quellen').insert([
+        { quelle: 'bitpanda', stand: JSON.stringify({ aktien: { SUI: 'aktie', VWCE: 'etf' } }) },
+        { quelle: 'bitget', stand: JSON.stringify({ aktien: { BTC: 'aktie' } }) },      // zählt nicht: nur Bitpanda meldet Aktien
+    ])
+    const arten = await bitpandaAktienArten(knex)
+    check('Arten aus dem Bitpanda-Stand', arten.get('SUI') === 'aktie' && arten.get('VWCE') === 'etf' && arten.size === 2)
+    check('Kürzel-Menge unverändert nutzbar', (await bitpandaAktienKuerzel(knex)).has('SUI'))
+    await knex.destroy()
+    const klasse = aktienKlasseVon(arten)
+    check('Bitpanda SUI = Aktie', klasse('bitpanda', 'sui') === 'aktie')
+    check('SUI einer anderen Quelle = Coin (nicht nach Kürzel allein)', klasse('bitget', 'SUI') === null && klasse('i:Bitpanda', 'SUI') === null && klasse('a7', 'SUI') === null)
+    check('Coin bei Bitpanda bleibt Coin', klasse('bitpanda', 'BTC') === null)
+
+    const T = (s) => Date.parse(s)
+    const bew = [
+        { id: 1, quelle: 'bitpanda', zeit: T('2025-02-01T10:00:00Z'), art: 'einzahlung', asset: 'EUR', menge: 2000 },
+        { id: 2, quelle: 'bitpanda', zeit: T('2025-03-01T10:00:00Z'), art: 'kauf', asset: 'SUI', menge: 4, gegenAsset: 'EUR', gegenMenge: -480, gebuehrAsset: 'EUR', gebuehrMenge: 1, chfWert: 460 },
+        { id: 3, quelle: 'bitpanda', zeit: T('2025-04-01T10:00:00Z'), art: 'kauf', asset: 'BTC', menge: 0.01, gegenAsset: 'EUR', gegenMenge: -800, chfWert: 760 },
+        { id: 4, quelle: 'bitget', zeit: T('2025-05-01T10:00:00Z'), art: 'kauf', asset: 'SUI', menge: 100, gegenAsset: 'USDT', gegenMenge: -350, chfWert: 300 },
+        { id: 5, quelle: 'bitpanda', zeit: T('2025-06-01T10:00:00Z'), art: 'verkauf', asset: 'SUI', menge: -1, gegenAsset: 'EUR', gegenMenge: 130, chfWert: 122 },
+        { id: 6, quelle: 'bitpanda', zeit: T('2025-07-01T10:00:00Z'), art: 'belohnung', asset: 'SUI', menge: 0.01, chfWert: 1.2 },
+        { id: 7, quelle: 'bitpanda', zeit: T('2025-08-01T10:00:00Z'), art: 'kauf', asset: 'VWCE', menge: 2, gegenAsset: 'EUR', gegenMenge: -250, chfWert: 240 },
+        { id: 8, quelle: 'bitpanda', zeit: T('2026-02-01T10:00:00Z'), art: 'kauf', asset: 'SUI', menge: 1, gegenAsset: 'EUR', gegenMenge: -120, chfWert: 115 },
+    ]
+    const bis = T('2025-12-31T22:59:59Z'), von = T('2024-12-31T23:00:00Z')
+    const vorher = bestandAm(bew, bis)
+    check('vorher: die Aktie stünde als Coin im Bestand', nah(vorher.get('bitpanda\u0000SUI'), 3.01))
+    const o = ohneAktienSeiten(bew, klasse)
+    const m = bestandAm(o.bewegungen, bis)
+    check('Aktie SUI bei Bitpanda steht nicht im Vermögen', !m.has('bitpanda\u0000SUI') && !m.has('bitpanda\u0000VWCE'), JSON.stringify([...m]))
+    check('kein Kürzel SUI bei Bitpanda → nichts, was über den Sui-Kurs bewertet würde', ![...m.keys()].some((key) => key.startsWith('bitpanda') && key.includes('SUI')))
+    check('echter Coin SUI bei Bitget bleibt enthalten', nah(m.get('bitget\u0000SUI'), 100))
+    check('Coin bei Bitpanda bleibt', nah(m.get('bitpanda\u0000BTC'), 0.01))
+    check('Geldseite bleibt: EUR-Guthaben stimmt weiter', nah(m.get('bitpanda\u0000EUR'), vorher.get('bitpanda\u0000EUR')) && nah(m.get('bitpanda\u0000EUR'), 2000 - 480 - 1 - 800 + 130 - 250))
+    check('Eingabe unverändert (rein)', bew[1].asset === 'SUI' && bew[1].art === 'kauf')
+    const v = veraenderungen(o.bewegungen, von, bis).filter((x) => !o.betroffen.has(x.id))
+    check('Veränderungen ohne die Aktie', v.map((x) => x.id).join() === '1,3,4' && !v.some((x) => x.zu?.asset === 'VWCE'), JSON.stringify(v.map((x) => x.id)))
+    check('Erträge: Aktien-Stücke sind kein Krypto-Einkommen', einkommen(o.bewegungen, von, bis).zeilen.length === 0 && einkommen(bew, von, bis).zeilen.length === 1)
+    const f = fifo(o.bewegungen, { von, bis })
+    check('Veräusserungen: kein Abgang der Aktie, Lose nur für Coins', f.abgaenge.every((a) => a.asset !== 'SUI') && [...f.lose.keys()].sort().join() === 'BTC,SUI', JSON.stringify([...f.lose.keys()]))
+    check('Los SUI ist allein der Coin (100 Stück)', nah((f.lose.get('SUI') || []).reduce((s, l) => s + l.menge, 0), 100))
+    const br = bestandesrechnung(o.bewegungen, von, bis, new Map(), new Map([['SUI', 100], ['BTC', 0.01]]))
+    check('Bestandesrechnung SUI = nur der Coin', nah(br.find((z) => z.asset === 'SUI').zugang, 100) && !br.some((z) => z.asset === 'VWCE'))
+    check('betroffen = die gekürzten Bewegungen', [...o.betroffen].sort().join() === '2,5,6,7,8')
+    const liste = new Map([...o.kuerzel].filter(([, e]) => e.ersteZeit <= bis).map(([a, e]) => [a, e.klasse]))
+    const h = aktienHinweis(liste)
+    check('Hinweis: 2 Aktien/ETF mit Kürzeln', h?.art === 'aktien' && h.n === 2 && h.kuerzel.join() === 'SUI,VWCE' && /Wertschriftenverzeichnis/.test(h.text), JSON.stringify(h))
+    check('ohne Aktien kein Hinweis', aktienHinweis(new Map()) === null && ohneAktienSeiten(bew, () => null).bewegungen.length === bew.length)
+    // Tausch Coin ↔ Aktie: die Coin-Seite bleibt als Abgang des Coins.
+    const t = ohneAktienSeiten([{ id: 9, quelle: 'bitpanda', zeit: 1, art: 'tausch', asset: 'SUI', menge: 1, gegenAsset: 'BTC', gegenMenge: -0.002, gebuehrAsset: 'SUI', gebuehrMenge: 0.001, chfWert: 120 }], klasse).bewegungen
+    check('Tausch BTC → Aktie: BTC-Abgang bleibt, Gebühr in Aktien-Stücken nicht', t.length === 1 && t[0].asset === 'BTC' && t[0].menge === -0.002 && t[0].art === 'auszahlung' && !t[0].gegenAsset && !t[0].gebuehrAsset)
+    const csv = steuerCsv({ jahr: 2025, vermoegen: [], vermoegenSumme: 0, einkommen: { zeilen: [], summe: 0 }, aktienNichtEnthalten: h.kuerzel })
+    check('CSV nennt die ausgelassenen Aktien', /Nicht enthalten: 2 Aktien\/ETF bei Bitpanda \(SUI, VWCE\)/.test(csv))
 }
 
 console.log(`\naktien-art: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

@@ -20,6 +20,13 @@
  * Explorer-Schlüssel) können einen vergangenen Stichtag nicht belegen. Sie
  * werden für Vorjahre ausgelassen und als Hinweis genannt; im laufenden Jahr
  * zählt ihr heutiger Bestand (provisorisch).
+ *
+ * Aktien und ETFs bei Bitpanda (`aktien-art.js`) gehören NICHT in diesen
+ * Bericht: Er ist die Beilage «Kryptowährungen», Wertschriften stehen im
+ * Wertschriftenverzeichnis. Ihre Seiten werden aus den Bewegungen genommen
+ * (`ohneAktienSeiten`, nach Quelle und Kürzel — ein gleichnamiger Coin an einem
+ * anderen Ort bleibt) und als Hinweis `aktien` genannt. Bewertet werden sie
+ * hier nie, schon gar nicht über den Coin, der gleich heisst (FACH-P-001).
  */
 import { getKnex } from '../database.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset, einstandZusammen, ortSchluessel, bestandesrechnung, veraenderungen } from './steuer-rechnung.js'
@@ -34,6 +41,7 @@ import { spamPruefer } from './spam.js'
 import { STABIL, FIAT } from './normal.js'
 import { uebergaben } from './uebergabe.js'
 import { futuresSteuerjahr } from './futures-steuer.js'
+import { bitpandaAktienArten, aktienKlasseVon, ohneAktienSeiten, aktienHinweis } from './aktien-art.js'
 
 const SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
     'transferMit', 'einordnung', 'chfWert', 'sicherheit', 'kontrakt', 'kette']
@@ -207,7 +215,12 @@ export async function berechneSteuerjahr(jahr) {
     // Vermögen noch als Einkommen ohne Wert.
     const istSpam = await spamPruefer()
     const roh = (await k('portfolio_bewegungen').select(SPALTEN)).map((b) => ({ ...b, zeit: Number(b.zeit) }))
-    const bew = (await ladeGegenKontrakte(k, roh)).filter((b) => !istSpam(b.asset, b.kontrakt))
+    // Aktien/ETFs bei Bitpanda heraus (nach Quelle UND Kürzel), die Geldseite bleibt.
+    const aktienKlasse = aktienKlasseVon(await bitpandaAktienArten(k))
+    const ohne = ohneAktienSeiten((await ladeGegenKontrakte(k, roh)).filter((b) => !istSpam(b.asset, b.kontrakt)), aktienKlasse)
+    const bew = ohne.bewegungen
+    // Im Bestand zählt die Art der Zeile selbst (`klasse`), sonst der Stand der Quelle.
+    const istAktienZeile = (z) => !!z.klasse || !!aktienKlasse(z.quelle, z.asset)
     // Identität je Token (Kürzel oder Kürzel|Vertrag) — einmal aus ALLEN Bewegungen,
     // denn der Transfer-Beleg kann an einer unvollständigen Quelle hängen.
     const ident = tokenIdentitaet(bew)
@@ -229,7 +242,7 @@ export async function berechneSteuerjahr(jahr) {
     const liveTokens = []
     if (laufend) {
         // Laufendes Jahr: unvollständige Quellen mit ihrem HEUTIGEN Bestand (provisorisch).
-        const heuteBestand = (await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt', 'ort')).filter((x) => !istSpam(x.asset, x.kontrakt))
+        const heuteBestand = (await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt', 'ort', 'klasse')).filter((x) => !istAktienZeile(x) && !istSpam(x.asset, x.kontrakt))
         for (const z of heuteBestand.filter((x) => unbelegt.includes(x.quelle))) {
             const fremd = ident.fremd(z.asset, z.kontrakt, z.ort)
             const key = ortSchluessel(z.quelle, z.asset, fremd)
@@ -306,7 +319,8 @@ export async function berechneSteuerjahr(jahr) {
     // Bestand ab (Bitpanda: EUR +40, eine Bankbewegung fehlt), ist auch der
     // Stichtag für dieses Asset nicht belegt → markieren statt still mitzählen.
     const heute = new Map()
-    for (const z of await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt', 'ort')) {
+    for (const z of await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt', 'ort', 'klasse')) {
+        if (istAktienZeile(z)) continue
         const key = ortSchluessel(z.quelle, z.asset, ident.fremd(z.asset, z.kontrakt, z.ort))
         heute.set(key, (heute.get(key) || 0) + Number(z.menge))
     }
@@ -370,6 +384,15 @@ export async function berechneSteuerjahr(jahr) {
     }
     if (nachEnde.length) hinweise.push({ art: 'beendet', liste: nachEnde, text: 'Bestand an Orten, die nicht mehr genutzt werden — nach ihrem „genutzt bis“ nicht gezählt. Fehlt der Abgang (Verkauf, Auszahlung) in den Daten?' })
     if (ausgeblendet.length) hinweise.push({ art: 'totalverlust', text: `Als Totalverlust markiert und für ${jahr} nicht im Vermögen: ${ausgeblendet.join(', ')}.` })
+    // Aktien/ETFs: was bis zum Stichtag bewegt wurde oder (laufendes Jahr) heute dort liegt.
+    const aktienListe = new Map([...ohne.kuerzel].filter(([, e]) => e.ersteZeit <= bis).map(([a, e]) => [a, e.klasse]))
+    if (laufend) {
+        for (const z of await k('portfolio_bestaende').where('quelle', 'bitpanda').select('quelle', 'asset', 'klasse')) {
+            if (istAktienZeile(z) && !aktienListe.has(String(z.asset).toUpperCase())) aktienListe.set(String(z.asset).toUpperCase(), z.klasse || aktienKlasse(z.quelle, z.asset))
+        }
+    }
+    const aktienH = aktienHinweis(aktienListe)
+    if (aktienH) hinweise.push(aktienH)
     if (estv.fehler) hinweise.push({ art: 'estv', text: `ESTV-Kursliste ${jahr} konnte nicht gelesen werden (${estv.fehler}) — es gelten Börsenkurse; Kurse der ESTV von Hand eintragen.` })
     else if (estv.nichtErschienen) hinweise.push({ art: 'estv', text: `Die ESTV-Kursliste ${jahr} ist noch nicht erschienen (jeweils am 1. Januar) — bis dahin gelten Börsenkurse.` })
 
@@ -422,7 +445,8 @@ export async function berechneSteuerjahr(jahr) {
     }
     const bestandJahr = bestandesrechnung(belegbar, von, bis, jeId(m0, k0, spamAm), jeId(mengen, kurse, (key) => spamOrte.has(key)), ident)
         .map((z) => ({ ...z, name: coinName(z.asset, estvNamen, !!z.kontrakt) }))
-    const veraenderungJahr = veraenderungen(belegbar, von, bis, ident).map((v) => ({ ...v, quelle: name(v.quelle) }))
+    // Eine um die Aktie gekürzte Bewegung (Kauf SUI gegen EUR) ist keine Veränderung des Krypto-Berichts.
+    const veraenderungJahr = veraenderungen(belegbar, von, bis, ident).filter((v) => !ohne.betroffen.has(v.id)).map((v) => ({ ...v, quelle: name(v.quelle) }))
 
     // ── Devisenkurse am Bewertungstag (EZB) ──
     const fxTag = laufend ? gestern : `${jahr}-12-31`
@@ -463,6 +487,7 @@ export async function berechneSteuerjahr(jahr) {
         kanton: kt, estv, totalverlustAusgeblendet: ausgeblendet, bestandesrechnung: bestandJahr, veraenderungen: veraenderungJahr, devisen,
         kostenbasisSumme: vermoegen.reduce((s, p) => s + (p.kostenbasis || 0), 0),
         futures,
+        aktienNichtEnthalten: aktienH ? aktienH.kuerzel : [],
         vermoegenGesamt: vermoegenSumme + (futures?.guthabenChf || 0),
         hinweise,
     }
@@ -511,6 +536,7 @@ export function steuerCsv(s) {
     zeilen.push(['Total', '', '', '', '', s.einkommen.summe].map(z).join(';'))
     zeilen.push('', 'VERÄNDERUNGEN (Käufe, Verkäufe, Tausch, Ein- und Auszahlungen);Ort;Art;Abgang Coin;Abgang Menge;Zugang Coin;Zugang Menge;Wert CHF')
     for (const v of s.veraenderungen || []) zeilen.push([d(v.zeit), v.quelle, v.art, v.ab?.asset, v.ab?.menge, v.zu?.asset, v.zu?.menge, v.chfWert].map(z).join(';'))
+    if (s.aktienNichtEnthalten?.length) zeilen.push('', z(`Nicht enthalten: ${s.aktienNichtEnthalten.length} Aktien/ETF bei Bitpanda (${s.aktienNichtEnthalten.join(', ')}) — sie gehören ins Wertschriftenverzeichnis, nicht in die Beilage Kryptowährungen.`))
     zeilen.push('', 'Methode: Stichtag 31.12. 23:59:59 Europe/Zurich; Kurse: ESTV-Kursliste, sonst Tagesschlusskurs der Börse (Spalte Kursquelle); USD/CHF und EUR/CHF der EZB.')
     return '\ufeff' + zeilen.join('\n') + '\n'
 }

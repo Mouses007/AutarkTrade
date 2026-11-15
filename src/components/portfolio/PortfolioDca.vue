@@ -154,11 +154,12 @@ const kurve = computed(() => {
                         <span>Coin</span><span>{{ t('portfolio.dcaEingesetzt') }}</span><span>{{ t('portfolio.stMenge') }}</span>
                         <span>{{ t('portfolio.dcaSchnitt') }}</span><span>{{ t('portfolio.dcaWertOhne') }}</span><span>{{ t('portfolio.dcaNochDa') }}</span><span>{{ t('portfolio.dcaGewinn') }}</span>
                     </div>
-                    <template v-for="c in coins" :key="c.asset">
-                        <button type="button" class="dca-zeile" :class="{ beendet: !c.aktiv, auf: offen.has(c.asset) }" :aria-expanded="offen.has(c.asset)" @click="klappe(c.asset)">
+                    <template v-for="c in coins" :key="c.schluessel">
+                        <button type="button" class="dca-zeile" :class="{ beendet: !c.aktiv, auf: offen.has(c.schluessel) }" :aria-expanded="offen.has(c.schluessel)" @click="klappe(c.schluessel)">
                             <span class="dca-coin">
-                                <Symbol :name="offen.has(c.asset) ? 'runter' : 'pfeilRechts'" :groesse="12" class="at-gedaempft" />
+                                <Symbol :name="offen.has(c.schluessel) ? 'runter' : 'pfeilRechts'" :groesse="12" class="at-gedaempft" />
                                 <span class="punkt" :style="{ background: farbeVon(c.asset) }" /><b>{{ c.asset }}</b>
+                                <span v-if="c.klasse" class="dca-marke" :title="t('portfolio.dcaAktieOhneKurs')">{{ t('aktien.art_' + c.klasse) }}</span>
                                 <span v-if="c.aktiv" class="dca-marke">{{ t('portfolio.dcaLaeuft') }}</span>
                                 <small class="at-gedaempft">{{ t('portfolio.dcaKaeufeZeitraum', { n: c.anzahl, von: datum(c.von), bis: datum(c.bis) }) }}</small>
                             </span>
@@ -171,7 +172,8 @@ const kurve = computed(() => {
                                 {{ chf(c.gewinnChf, { vorzeichen: true }) }}<small>{{ c.gewinnPct != null ? (c.gewinnPct >= 0 ? '+' : '') + prozent(c.gewinnPct) : '' }}</small>
                             </span>
                         </button>
-                        <div v-if="offen.has(c.asset)" class="dca-detail">
+                        <div v-if="offen.has(c.schluessel)" class="dca-detail">
+                            <p v-if="c.klasse" class="at-gedaempft">{{ t('portfolio.dcaAktieOhneKurs') }}</p>
                             <h4>{{ t('portfolio.dcaPlaeneTitel') }}</h4>
                             <div v-for="p in c.plaene" :key="`${p.quelle}|${p.waehrung}`" class="dca-plan" :class="{ beendet: !p.aktiv }">
                                 <span><b>{{ p.quelleName }}</b> · {{ artText(p) }}<span v-if="p.aktiv" class="dca-marke">{{ t('portfolio.dcaLaeuft') }}</span></span>

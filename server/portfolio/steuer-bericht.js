@@ -188,6 +188,7 @@ ${dv ? `<tr><th>Devisenkurse EZB zum ${tagIso(dv.datum)}</th><td class="z">USD/C
 ${dv ? `<li>Devisenkurse: EZB-Referenzkurs, letzter Handelstag bis ${tagIso(dv.datum)} — USD/CHF ${fx(dv.usdChf)}, EUR/CHF ${fx(dv.eurChf)}.</li>` : ''}
 <li>Verwendete Kursquellen: ${[...jeQuelle].map(([q, n]) => `${esc(q)} (${n})`).join(', ')}.</li>
 <li>Werbe-Tokens (Spam-Airdrops ohne Wert) sind nicht aufgeführt.</li>
+${s.aktienNichtEnthalten?.length ? `<li>Nicht enthalten: ${s.aktienNichtEnthalten.length} Aktien/ETF bei Bitpanda (${s.aktienNichtEnthalten.map(esc).join(', ')}) — sie gehören ins Wertschriftenverzeichnis, nicht in diese Beilage.</li>` : ''}
 </ul></section>`)
     h.push(`<footer class="ende">Krypto-Steuerbericht ${s.jahr}${kt ? ` · Kanton ${esc(kt.name)}` : ''} · erstellt ${datum(o.erstellt || Date.now())} mit AutarkTrade ${esc(o.version || '')}</footer>`)
     h.push('</body></html>')

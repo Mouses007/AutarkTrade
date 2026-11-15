@@ -68,6 +68,56 @@ export function umstellungenAus(zeilen) {
     return aus
 }
 
+const AKTIE = '|aktie'
+
+/**
+ * Schlüssel eines DCA-Kaufs: das Kürzel, für eine Aktie/einen ETF (`klasseVon(z)`,
+ * nach Quelle und Kürzel — `aktien-art.js`) mit Zusatz. So bleiben die Aktie SUI
+ * bei Bitpanda und der Coin SUI einer anderen Quelle zwei Zeilen mit zwei Kursen.
+ */
+export function dcaSchluessel(z, klasseVon = () => null) {
+    const a = String(z.asset).toUpperCase()
+    return klasseVon(z) ? a + AKTIE : a
+}
+
+/**
+ * Welche Kürzel dürfen über den Coin-Kurs (`${a}USDT`) bewertet werden? Nur die
+ * von Käufen, die KEINE Aktie sind (samt ihren Umstellungs-Zielen). Rein.
+ * @returns {{ coins: Set<string>, aktien: Set<string> }}  `aktien`: Kürzel mit Aktien-Käufen — nie über den Coin
+ */
+export function dcaKursWege(kaeufe, umstellungen = {}, klasseVon = () => null) {
+    const coins = new Set(), aktien = new Set()
+    for (const z of kaeufe) {
+        const a = String(z.asset).toUpperCase()
+        if (klasseVon(z)) { aktien.add(a); continue }
+        coins.add(a)
+        let n = a
+        for (let i = 0; i < 5 && umstellungen[n]; i++) { n = umstellungen[n].nach; coins.add(n) }
+    }
+    return { coins, aktien }
+}
+
+/**
+ * Aktien-/ETF-Zeilen von Bitpanda aus der Übersicht: KÜRZEL → Menge, Wert und Kurs (CHF),
+ * so wie die Übersicht sie bewertet (Bitpandas Wert der Position, sonst Aktien-Future,
+ * sonst kein Kurs). Rein.
+ * @param {Array<{quelle: string, posten: Array<{schluessel, menge, chf, klasse}>}>} quellen
+ * @returns {Map<string, {menge: number, chf: number|null, kursChf: number|null}>}
+ */
+export function dcaAktienBestand(quellen) {
+    const aus = new Map()
+    for (const p of (quellen || []).find((q) => q.quelle === 'bitpanda')?.posten || []) {
+        if (!p.klasse) continue
+        const a = String(p.schluessel).toUpperCase()
+        const e = aus.get(a) || { menge: 0, chf: 0, kursChf: null }
+        e.menge += Number(p.menge) || 0
+        e.chf = e.chf == null || p.chf == null ? null : e.chf + p.chf
+        aus.set(a, e)
+    }
+    for (const e of aus.values()) e.kursChf = e.chf != null && e.menge > 0 ? e.chf / e.menge : null
+    return aus
+}
+
 /** Der Coin, in dem ein Bestand heute bewertet wird (Umstellungen folgen, auch mehrfach). */
 export function heutigerCoin(asset, umstellungen = {}) {
     let a = String(asset).toUpperCase(), f = 1
@@ -82,13 +132,15 @@ export function heutigerCoin(asset, umstellungen = {}) {
  *        `nurLaufende`: Coins ohne laufenden Plan fallen aus Liste und Summen; ein beendeter
  *        Plan eines Coins mit laufendem Plan bleibt, er gehört zu dessen Zahlen.
  */
-export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => null, bestandVon = () => null, umstellungen = {}, quelleName = (q) => q, nurLaufende = false } = {}) {
+export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => null, bestandVon = () => null, umstellungen = {}, quelleName = (q) => q, nurLaufende = false, klasseVon = () => null } = {}) {
     const coins = new Map()
     for (const z of kaeufe) {
         if (!istDcaKauf(z)) continue
         const asset = String(z.asset).toUpperCase()
-        if (!coins.has(asset)) coins.set(asset, { asset, kaeufe: [] })
-        coins.get(asset).kaeufe.push({
+        const klasse = klasseVon(z) || null
+        const id = dcaSchluessel(z, klasseVon)
+        if (!coins.has(id)) coins.set(id, { id, asset, klasse, kaeufe: [] })
+        coins.get(id).kaeufe.push({
             quelle: z.quelle, zeit: Number(z.zeit), menge: Number(z.menge),
             betrag: z.gegenMenge != null ? -Number(z.gegenMenge) : null, waehrung: z.gegenAsset ? String(z.gegenAsset).toUpperCase() : null,
             chf: z.chfWert != null ? Math.abs(Number(z.chfWert)) : null, art: dcaArt(z),
@@ -126,13 +178,14 @@ export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => n
         const mitChf = k.filter((x) => x.chf != null)
         const investiertChf = mitChf.reduce((s, x) => s + x.chf, 0)
         const mengeMitChf = mitChf.reduce((s, x) => s + x.menge, 0)
-        const heute = heutigerCoin(c.asset, umstellungen)
-        const kurs = kursChfVon(heute.asset)
+        // Eine Aktie folgt keiner Coin-Umstellung (AGIX → FET gilt dem Coin).
+        const heute = c.klasse ? { asset: c.asset, faktor: 1 } : heutigerCoin(c.asset, umstellungen)
+        const kurs = kursChfVon(heute.asset, c.klasse)
         const wertHeuteChf = kurs != null ? menge * heute.faktor * kurs : null
         // Gewinn nur über die Käufe mit bekanntem Einsatz — sonst rechnete ein Kauf ohne CHF-Wert als geschenkt.
         const wertMitChf = kurs != null ? mengeMitChf * heute.faktor * kurs : null
         liste.push({
-            asset: c.asset, heuteAsset: heute.asset, faktor: heute.faktor, umgestellt: heute.asset !== c.asset,
+            schluessel: c.id, klasse: c.klasse, asset: c.asset, heuteAsset: heute.asset, faktor: heute.faktor, umgestellt: heute.asset !== c.asset,
             anzahl: k.length, von: k[0].zeit, bis: k.at(-1).zeit, menge, investiertChf, ohneChf: k.length - mitChf.length,
             schnittChf: mengeMitChf > 0 ? investiertChf / mengeMitChf : null,
             kursChf: kurs, wertHeuteChf,
@@ -140,7 +193,7 @@ export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => n
             gewinnPct: wertMitChf != null && investiertChf > 0 ? wertMitChf / investiertChf - 1 : null,
             aktiv: planListe.some((p) => p.aktiv),
             plaene: planListe,
-            heuteImPortfolio: bestandVon(heute.asset),
+            heuteImPortfolio: bestandVon(heute.asset, c.klasse),
         })
     }
     liste.sort((a, b) => (b.aktiv - a.aktiv) || b.investiertChf - a.investiertChf || a.asset.localeCompare(b.asset))
@@ -148,10 +201,11 @@ export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => n
     // Ein AGIX- und ein FET-Plan teilen sich EINEN FET-Bestand — sonst zählte er doppelt.
     const frei = new Map()
     for (const c of liste) {
-        if (!frei.has(c.heuteAsset)) frei.set(c.heuteAsset, Math.max(0, Number(c.heuteImPortfolio?.menge) || 0))
+        const topf = c.klasse ? `${c.heuteAsset}${AKTIE}` : c.heuteAsset      // Aktie und gleichnamiger Coin teilen keinen Bestand
+        if (!frei.has(topf)) frei.set(topf, Math.max(0, Number(c.heuteImPortfolio?.menge) || 0))
         const gekauft = c.menge * c.faktor
-        const da = Math.min(gekauft, frei.get(c.heuteAsset))
-        frei.set(c.heuteAsset, frei.get(c.heuteAsset) - da)
+        const da = Math.min(gekauft, frei.get(topf))
+        frei.set(topf, frei.get(topf) - da)
         const weg = gekauft - da
         c.nochDa = {
             menge: da, anteil: gekauft > 0 ? da / gekauft : null,
@@ -182,9 +236,9 @@ export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => n
 }
 
 /** Die Käufe der Coins mit laufendem Plan — für den Verlauf, passend zu `nurLaufende`. */
-export function laufendeKaeufe(kaeufe, { jetzt = Date.now() } = {}) {
-    const laufend = new Set(dcaUebersicht(kaeufe, { jetzt, nurLaufende: true }).coins.map((c) => c.asset))
-    return kaeufe.filter((z) => laufend.has(String(z.asset).toUpperCase()))
+export function laufendeKaeufe(kaeufe, { jetzt = Date.now(), klasseVon = () => null } = {}) {
+    const laufend = new Set(dcaUebersicht(kaeufe, { jetzt, nurLaufende: true, klasseVon }).coins.map((c) => c.schluessel))
+    return kaeufe.filter((z) => laufend.has(dcaSchluessel(z, klasseVon)))
 }
 
 /** 'YYYY-MM' eines Zeitpunkts (UTC). */
@@ -214,8 +268,10 @@ export function monate(von, bis) {
  * @param {{ umstellungen?, bisMonat? }} opt
  * @returns {Array<{ monat, eingesetztChf, wertChf, geschaetzt: string[] }>}
  */
-export function dcaVerlauf(kaeufe, monatsKurse, { umstellungen = {}, bisMonat = monatVon(Date.now()) } = {}) {
-    const k = kaeufe.filter(istDcaKauf).map((z) => ({ asset: String(z.asset).toUpperCase(), zeit: Number(z.zeit), menge: Number(z.menge), chf: z.chfWert != null ? Math.abs(Number(z.chfWert)) : null }))
+export function dcaVerlauf(kaeufe, monatsKurse, { umstellungen = {}, bisMonat = monatVon(Date.now()), klasseVon = () => null } = {}) {
+    // `asset` ist hier der Schlüssel (`dcaSchluessel`): eine Aktie findet so weder die
+    // Monatskerzen noch die Umstellung des Coins, der gleich heisst.
+    const k = kaeufe.filter(istDcaKauf).map((z) => ({ asset: dcaSchluessel(z, klasseVon), zeit: Number(z.zeit), menge: Number(z.menge), chf: z.chfWert != null ? Math.abs(Number(z.chfWert)) : null }))
         .sort((a, b) => a.zeit - b.zeit)
     if (!k.length) return []
     const menge = new Map(), letzterPreis = new Map()
@@ -236,7 +292,7 @@ export function dcaVerlauf(kaeufe, monatsKurse, { umstellungen = {}, bisMonat = 
                 const neu = monatsKurse.get(u.nach)?.get(monat)
                 if (neu != null) p = neu * u.faktor
             }
-            if (p == null) { p = letzterPreis.get(asset); if (p != null) geschaetzt.push(asset) }
+            if (p == null) { p = letzterPreis.get(asset); if (p != null && !geschaetzt.includes(asset.split(AKTIE)[0])) geschaetzt.push(asset.split(AKTIE)[0]) }
             if (p != null) wert += m * p
         }
         aus.push({ monat, eingesetztChf: eingesetzt, wertChf: wert, geschaetzt })
