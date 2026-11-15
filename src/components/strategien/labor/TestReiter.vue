@@ -21,6 +21,8 @@ import { useI18n } from 'vue-i18n'
 import StrategieChart from '../StrategieChart.vue'
 import AusstiegsPruefung from './AusstiegsPruefung.vue'
 import AktienHinweise from './AktienHinweise.vue'
+import SymbolSuche from '../../chart/SymbolSuche.vue'
+import { strategieMarkt, ladeStrategieMarkt, KRYPTO } from '../../../utils/strategien/markt.js'
 import QuelleAus from '../../quellen/QuelleAus.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../../basis'
 import { formGeldStellen } from '../../../utils/journal/format.js'
@@ -37,6 +39,10 @@ const props = defineProps({
 const { t, te } = useI18n()
 
 const ergebnis = ref(null)
+// Aktien-Markt: Aktien-Suche statt freiem Textfeld, Symbolvorgaben der Matrix aus dem Stamm.
+ladeStrategieMarkt().then((m) => {
+    if (m.markt === 'aktien' && robust.value.symbole === KRYPTO.symbole.join(', ')) robust.value.symbole = m.symbole.join(', ')
+})
 const laeuft = ref(false)
 const fehler = ref('')
 // Marktdaten abgeschaltet (Einstellungen › Datenquellen): die Route antwortet
@@ -116,7 +122,7 @@ const robust = ref({
     laeuft: '', fehler: '',
     // Mehrere Symbole für die Matrix — der Einzellauf verleitet dazu, ein
     // Zufallsplateau für eine Eigenschaft der Strategie zu halten.
-    symbole: 'BTCUSDT, ETHUSDT, SOLUSDT',
+    symbole: KRYPTO.symbole.join(', '),
     stabilitaet: null, montecarlo: null, walkforward: null, matrixStab: null,
 })
 
@@ -206,7 +212,8 @@ const urteilKlasse = (u) => (u === 'plateau' ? 'gut'
             <div class="raster unten">
                 <div class="b2 m3">
                     <label class="at-label">{{ t('strategies.symbol') }}</label>
-                    <input v-model="form.symbol" class="at-feld klein" />
+                    <SymbolSuche v-if="strategieMarkt === 'aktien'" :symbol="form.symbol" @waehle="form.symbol = $event.symbol" />
+                    <input v-else v-model="form.symbol" class="at-feld klein" />
                 </div>
                 <div class="b2 m3">
                     <label class="at-label">{{ t('strategies.timeframe') }}</label>

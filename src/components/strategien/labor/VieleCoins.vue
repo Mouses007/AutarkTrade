@@ -19,6 +19,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import { strategieMarkt, ladeStrategieMarkt } from '../../../utils/strategien/markt.js'
 import { useI18n } from 'vue-i18n'
 import { Knopf, Pille, Symbol, Hinweis, Kreisel } from '../../basis'
 import QuelleAus from '../../quellen/QuelleAus.vue'
@@ -32,6 +33,7 @@ const props = defineProps({
     instanzen: { type: Array, default: () => [] },
 })
 const { t } = useI18n()
+ladeStrategieMarkt()
 const route = useRoute()
 
 const modus = ref(route.query.modus === 'vergleich' ? 'vergleich' : 'rangliste')
@@ -243,6 +245,7 @@ const matrixZahl = (v, n = 3) => (v === null || v === undefined || !Number.isFin
 
 <template>
 <div class="vieleCoins">
+    <Hinweis v-if="strategieMarkt === 'aktien'" art="warn" class="abstandUnten">{{ t('strategien.labor.ranglisteNurKrypto') }}</Hinweis>
     <div class="modusWahl">
         <button type="button" :class="['ctl-pill', { aktiv: modus === 'rangliste' }]" @click="modus = 'rangliste'">
             <Symbol name="listeNummer" class="vor" />{{ t('strategien.labor.modusRangliste') }}

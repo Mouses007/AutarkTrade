@@ -34,6 +34,8 @@ import { varianteAus } from './ausstiege.js'
 import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliessePositionManuell, BETRIEBSARTEN, ladeRegelStrategienAusDb } from './strategy-engine.js'
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
 import { neustartInstanz } from './strategie-neustart.js'
+import { anlageklasseVon } from './aktien/kontext.js'
+import { normMarkt } from './migrationen/aktien.js'
 import { sendeWennAus } from './quellen/aus.js'
 import { setupAus, positionAus, tradeAus, aussortiertAus } from '../shared/strategieChart.js'
 
@@ -116,10 +118,14 @@ function standDerStrategie(strategyId, fassungen) {
     }
 }
 
+const GEMISCHT_FEHLER = (aktien) => `Aktien und Coins lassen sich nicht in einer Instanz mischen (Aktien: ${aktien.join(', ')}). `
+    + 'Eine Instanz hat eine Tagesgrenze und einen Markt — bitte zwei Instanzen anlegen.'
+
 /** DB-Zeile → API-Form (JSON geparst, objectId wie überall im Projekt). */
 export function instanzNachAussen(row) {
     return {
         ...row,
+        anlageklasse: normMarkt(row.anlageklasse),
         objectId: String(row.id),
         enabled: Boolean(row.enabled),
         symbols: parseJson(row.symbols, []),
@@ -308,7 +314,12 @@ export function setupStrategyRoutes(app) {
     app.get('/api/strategies/instances', async (req, res) => {
         try {
             const knex = getKnex()
-            const rows = await knex('strategy_instances').orderBy('id', 'desc')
+            // `?markt=krypto|aktien` zeigt nur die Instanzen dieses Markts; ohne
+            // Angabe alle (Bibliothek und Regel-Editor zählen über beide).
+            let abfrage = knex('strategy_instances')
+            if (req.query.markt === 'aktien') abfrage = abfrage.where('anlageklasse', 'aktien')
+            else if (req.query.markt === 'krypto') abfrage = abfrage.where((q) => q.where('anlageklasse', 'krypto').orWhereNull('anlageklasse'))
+            const rows = await abfrage.orderBy('id', 'desc')
             // Kennzahlen je Instanz gleich mitliefern — die Übersicht soll ohne
             // n weitere Abrufe auskommen.
             const kz = await kennzahlenJeInstanz(knex)
@@ -333,9 +344,13 @@ export function setupStrategyRoutes(app) {
             const geprueft = pruefeInstanzEingabe(body)
             if (geprueft.fehler) return res.status(400).json({ error: geprueft.fehler.join('; ') })
 
+            // Markt der Instanz aus ihren Symbolen: lauter Aktien-Futures oder keiner.
+            const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols))
+            if (markt.gemischt) return res.status(400).json({ error: GEMISCHT_FEHLER(markt.aktien) })
+
             const knex = getKnex()
             const isPg = knex.client.config.client === 'pg'
-            const datensatz = { ...geprueft.werte, enabled: 0, paramsVersion: 1 }
+            const datensatz = { ...geprueft.werte, enabled: 0, paramsVersion: 1, anlageklasse: markt.klasse }
             const id = isPg
                 ? (await knex('strategy_instances').insert(datensatz).returning('id'))[0]?.id
                 : (await knex('strategy_instances').insert(datensatz))[0]
@@ -443,8 +458,12 @@ export function setupStrategyRoutes(app) {
             // Ergebnisse später einem konkreten Parametersatz zuordnen (A/B).
             const paramsGeaendert = geprueft.werte.params !== vorhanden.params
                 || geprueft.werte.risk !== vorhanden.risk
+            // Ändern sich die Symbole, kann sich der Markt ändern — gemischt bleibt verboten.
+            const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols))
+            if (markt.gemischt) return res.status(400).json({ error: GEMISCHT_FEHLER(markt.aktien) })
             const aktualisierung = {
                 ...geprueft.werte,
+                anlageklasse: markt.klasse,
                 updatedAt: knex.fn.now(),
             }
             if (paramsGeaendert) aktualisierung.paramsVersion = (Number(vorhanden.paramsVersion) || 1) + 1

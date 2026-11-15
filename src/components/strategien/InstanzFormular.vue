@@ -12,6 +12,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import StrategyParamForm from '../StrategyParamForm.vue'
 import { Knopf, Pille, Symbol, Hinweis, Reiter } from '../basis'
+import SymbolSuche from '../chart/SymbolSuche.vue'
+import { strategieMarkt, ladeStrategieMarkt } from '../../utils/strategien/markt.js'
 
 const entwurf = defineModel({ type: Object, required: true })
 const props = defineProps({
@@ -43,6 +45,11 @@ function tfUmschalten(tf) {
 function tfHauptGewechselt() { entwurf.value.timeframes = tfListe().filter((x) => x !== entwurf.value.timeframe) }
 
 const symbolEingabe = ref('')
+// Aktien-Markt: Titel über die Aktien-Suche hinzufügen (das Textfeld bleibt für Kenner des Symbols).
+ladeStrategieMarkt()
+function aktieHinzu(symbol) {
+    if (symbol && !entwurf.value.symbols.includes(symbol)) entwurf.value.symbols.push(symbol)
+}
 function symbolHinzu() {
     const roh = symbolEingabe.value.toUpperCase().trim()
     if (!/^[A-Z0-9]{2,20}$/.test(roh)) return
@@ -111,9 +118,10 @@ const reiterListe = computed(() => [
             <div class="feld breit">
                 <span class="at-label">{{ t('strategies.symbols') }}</span>
                 <div class="symbolZeile">
-                    <input v-model="symbolEingabe" class="at-feld klein" placeholder="BTCUSDT"
+                    <input v-model="symbolEingabe" class="at-feld klein" :placeholder="strategieMarkt === 'aktien' ? 'NVDAUSDT' : 'BTCUSDT'"
                         :aria-label="t('strategies.symbols')" @keydown.enter.prevent="symbolHinzu" />
                     <Knopf klein nurSymbol symbol="plus" :titel="t('common.hinzufuegen')" @click="symbolHinzu" />
+                    <SymbolSuche v-if="strategieMarkt === 'aktien'" :symbol="t('strategies.aktieSuchen')" @waehle="aktieHinzu($event.symbol)" />
                 </div>
                 <div class="pillen">
                     <Pille v-for="s in entwurf.symbols" :key="s" ton="neutral" class="klickZiel" @click="symbolWeg(s)">

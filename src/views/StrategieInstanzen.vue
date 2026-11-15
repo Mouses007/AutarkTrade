@@ -24,6 +24,7 @@ import { apiFehlerText } from '../utils/apiError.js'
 import { logError } from '../utils/logger.js'
 import { geld, rText, prozent, tonVon } from '../utils/strategien/format.js'
 import { Knopf, Pille, Symbol, Hinweis } from '../components/basis'
+import { ladeStrategieMarkt } from '../utils/strategien/markt.js'
 
 const { t, te } = useI18n()
 const route = useRoute()
@@ -48,11 +49,16 @@ const ansicht = computed(() => {
 // Der KI-Coach erfährt, welche Instanz offen ist (für get_strategy_config und Co.).
 useKiSeitenStand(() => (ansicht.value === 'instanz' ? { instanzId: Number(route.params.id) } : { ansicht: ansicht.value }))
 
+/** Vorgaben des aktiven Markts (Startsymbol einer neuen Instanz). */
+let marktVorgaben = { markt: 'krypto', symbol: 'BTCUSDT' }
+
 async function laden() {
     try {
+        // Jeder Markt zeigt seine eigenen Instanzen (krypto | aktien).
+        marktVorgaben = await ladeStrategieMarkt()
         const [reg, inst, status, zw] = await Promise.all([
             axios.get('/api/strategies/registry'),
-            axios.get('/api/strategies/instances'),
+            axios.get('/api/strategies/instances', { params: { markt: marktVorgaben.markt } }),
             axios.get('/api/strategies/engine/status'),
             axios.get('/api/strategies/positions/zwischenstand').catch(() => ({ data: {} })),
         ])
@@ -102,7 +108,7 @@ async function neuVorbereiten() {
     const basis = {
         strategyId: s.id, name: '', mode: 'paper',
         broker: registry.value.broker?.[0]?.id || 'bitunix', market: 'futures',
-        timeframe: s.supportedTimeframes[0], timeframes: [], symbols: ['BTCUSDT'],
+        timeframe: s.supportedTimeframes[0], timeframes: [], symbols: [marktVorgaben.symbol],
         params: Object.fromEntries(s.params.map((p) => [p.key, p.default])),
         risk: { ...registry.value.riskDefaults }, agents: {},
     }

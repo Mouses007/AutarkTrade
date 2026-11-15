@@ -28,6 +28,7 @@ import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/journal/zeit.js'
 import { Hinweis, Reiter } from '../components/basis'
+import { ladeStrategieMarkt, KRYPTO } from '../utils/strategien/markt.js'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -146,12 +147,15 @@ async function direktlinks() {
 
 async function laden() {
     try {
+        // Im Aktien-Markt: nur dessen Instanzen, und das Formular beginnt mit einem Aktien-Future.
+        const markt = await ladeStrategieMarkt()
         const [reg, inst] = await Promise.all([
             axios.get('/api/strategies/registry'),
-            axios.get('/api/strategies/instances'),
+            axios.get('/api/strategies/instances', { params: { markt: markt.markt } }),
         ])
         registry.value = reg.data
         instanzen.value = inst.data
+        if (form.value.symbol === KRYPTO.symbol) form.value.symbol = markt.symbol
         if (!form.value.strategyId && reg.data.strategies.length) {
             form.value.strategyId = reg.data.strategies[0].id
             strategieGewechselt()

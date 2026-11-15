@@ -2498,6 +2498,7 @@
     "reason_zu_spaet_erkannt": "Detected too late — the trigger candle had already passed",
     "reason_ausserhalb_sitzung": "Outside the regular US session",
     "reason_zahlentermin": "Earnings date — entry around earnings blocked",
+    "aktieSuchen": "Search stock",
     "aktien": {
       "zahlenUnbekannt_quelleAus": "Earnings dates unknown: Yahoo Finance is switched off (Settings › Data sources). Which trades fell around earnings cannot be told.",
       "zahlenUnbekannt_abrufFehlgeschlagen": "Earnings dates unknown: the price source did not answer.",
@@ -8074,6 +8075,7 @@
       "alsInstanzHinweis": "Takes over strategy, parameters, risk, symbol and timeframe of this run.",
       "parameterOben": "Computed with the strategy and values from the box above.",
       "modusRangliste": "Ranking across many coins",
+      "ranglisteNurKrypto": "The ranking and the comparison across many symbols work with coins only so far: stocks are dropped there. Single stocks can be tested in the «Test» tab.",
       "modusVergleich": "Compare parameters",
       "backtests": "Backtests",
       "keineBacktests": "No saved backtests yet — every run in the “Test” tab lands here.",

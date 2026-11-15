@@ -40,6 +40,9 @@ export async function neustartInstanz(knex, id, { quelle = 'neustart' } = {}) {
             mode: alt.mode === 'shadow' ? 'shadow' : 'paper',
             broker: alt.broker,
             market: alt.market,
+            // Der Markt der Instanz (krypto | aktien) wandert mit — sonst fiele die Kopie auf Krypto zurück.
+            // Nur wenn die Spalte schon da ist: die Strategien-Migration kann vor der Aktien-Migration laufen.
+            ...('anlageklasse' in alt ? { anlageklasse: alt.anlageklasse || 'krypto' } : {}),
             timeframe: alt.timeframe,
             timeframes: alt.timeframes,
             symbols: alt.symbols,

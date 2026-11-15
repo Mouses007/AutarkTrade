@@ -39,7 +39,8 @@ async function ladeSplits(kursSymbol) {
     return wert
 }
 
-async function baue(symbol) {
+/** Der Titel des Stamms hinter einem Future-Symbol — nur Datenbank, kein Netz. `null` = kein Aktien-Future. */
+async function stammZeile(symbol) {
     const knex = getKnex()
     let boerse = null
     try { boerse = (await marktdaten.fordere('kerzen', { markt: 'futures' })).id } catch { /* Marktdaten aus */ }
@@ -49,6 +50,31 @@ async function baue(symbol) {
         .whereIn('l.handelsplatz', CHART_BOERSEN)
         .select('i.id', 'i.ticker', 'i.name', 'i.unterart', 'l.handelsplatz')
     const zeile = zeilen.find((z) => z.handelsplatz === boerse) || zeilen[0]
+    return zeile ? { ...zeile, boerse: boerse || zeile.handelsplatz } : null
+}
+
+/**
+ * Anlageklasse einer Symbolliste (für Strategie-Instanzen): `aktien`, wenn
+ * JEDES Symbol ein Aktien-Future ist, `krypto`, wenn keines es ist. Gemischt
+ * ist ein Fehler — eine Instanz hat EINE Tagesgrenze und EINEN Markt.
+ * Ist die Frage nicht zu beantworten (keine Datenbank), gilt Krypto.
+ *
+ * @returns {Promise<{klasse: 'krypto'|'aktien', gemischt: boolean, aktien: string[]}>}
+ */
+export async function anlageklasseVon(symbole = []) {
+    const aktien = []
+    for (const s of symbole) {
+        let zeile = null
+        try { zeile = await stammZeile(String(s).toUpperCase()) } catch { zeile = null }
+        if (zeile) aktien.push(String(s).toUpperCase())
+    }
+    const gemischt = aktien.length > 0 && aktien.length < symbole.length
+    return { klasse: aktien.length && !gemischt ? 'aktien' : 'krypto', gemischt, aktien }
+}
+
+async function baue(symbol) {
+    const knex = getKnex()
+    const zeile = await stammZeile(symbol)
     if (!zeile) return null
     let kursSymbol = null
     if (await knex.schema.hasTable('newcomer_titel')) {
@@ -58,7 +84,7 @@ async function baue(symbol) {
     const [{ splits, grund }, zahlen] = await Promise.all([ladeSplits(kursSymbol), ladeTermine(kursSymbol)])
     return {
         ticker: zeile.ticker, name: zeile.name || null, unterart: zeile.unterart,
-        boerse: boerse || zeile.handelsplatz, kursSymbol,
+        boerse: zeile.boerse, kursSymbol,
         // null = unbekannt (Quelle aus oder Abruf gescheitert) — NICHT «keine Splits»
         splits, splitsGrund: grund,
         // Zahlentermine (`{naechster, vergangene}`), ebenfalls null = unbekannt

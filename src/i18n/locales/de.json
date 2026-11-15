@@ -2498,6 +2498,7 @@
     "reason_zu_spaet_erkannt": "Zu spät erkannt — die Auslösekerze war schon vorbei",
     "reason_ausserhalb_sitzung": "Ausserhalb der regulären US-Sitzung",
     "reason_zahlentermin": "Zahlentermin — Einstieg rund um Quartalszahlen gesperrt",
+    "aktieSuchen": "Aktie suchen",
     "aktien": {
       "zahlenUnbekannt_quelleAus": "Zahlentermine unbekannt: Yahoo Finance ist ausgeschaltet (Einstellungen › Datenquellen). Welche Trades um Quartalszahlen lagen, lässt sich nicht sagen.",
       "zahlenUnbekannt_abrufFehlgeschlagen": "Zahlentermine unbekannt: Die Kursquelle hat nicht geantwortet.",
@@ -8074,6 +8075,7 @@
       "alsInstanzHinweis": "Übernimmt Strategie, Parameter, Risiko, Symbol und Zeiteinheit dieses Laufs.",
       "parameterOben": "Gerechnet wird mit Strategie und Werten aus dem Kasten oben.",
       "modusRangliste": "Rangliste über viele Coins",
+      "ranglisteNurKrypto": "Die Rangliste und der Vergleich über viele Symbole rechnen bisher nur mit Coins: Aktien fallen dort heraus. Einzelne Aktien lassen sich im Reiter «Test» prüfen.",
       "modusVergleich": "Parameter vergleichen",
       "backtests": "Backtests",
       "keineBacktests": "Noch keine gespeicherten Backtests — jeder Lauf im Reiter „Test“ landet hier.",

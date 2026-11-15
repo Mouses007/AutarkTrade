@@ -25,6 +25,7 @@
  */
 import { ref, computed, onBeforeMount } from 'vue'
 import axios from 'axios'
+import { ladeStrategieMarkt } from '../../utils/strategien/markt.js'
 import { useI18n } from 'vue-i18n'
 import ZahlOderParam from '../ZahlOderParam.vue'
 import StrategieChart from './StrategieChart.vue'
@@ -57,6 +58,8 @@ const speichert = ref(false)
 
 // ── Backtest direkt aus dem Editor ──────────────────────────────────────
 const test = ref({ symbol: 'BTCUSDT', timeframe: props.start.rules?.timeframes?.[0] || '1h', tage: 180 })
+// Im Aktien-Markt testet der Editor auf einem Aktien-Future.
+ladeStrategieMarkt().then((m) => { if (test.value.symbol === 'BTCUSDT') test.value.symbol = m.symbol })
 const testLaeuft = ref(false)
 const testErgebnis = ref(null)
 // Marktdaten abgeschaltet: der Server antwortet 200 mit `{ aus: true, … }`.
