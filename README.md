@@ -351,11 +351,13 @@ presented as a finding — three sessions on a Tuesday are noise.
 - **Overlay Data** — symbol, direction, leverage, P&L, entry/exit, strategy tags, RRR, comment
 - **Privacy Option** — hide P&L dollar amounts, show only percentage
 
-### KI-Agent (AI Reports & Chat)
+### KI-Coach (AI side panel, reports & chat)
 - **Multiple Providers** — Ollama (local), Anthropic, OpenAI, Google Gemini, Mistral, xAI, Qwen, Perplexity, Moonshot, Z.ai, OpenRouter and OpenAI-compatible endpoints, always with your own key; every AI output is labelled "KI-generiert – keine Anlageberatung – Fakten prüfen"
 - **Report Generation** — monthly, weekly, custom date range with preset templates
 - **Trade Review Chat** — per-trade AI follow-up questions in Daily view
-- **Autonomous Agent** — chat agent that queries your journal data on its own, reads the current Marktradar readings, and answers questions about using the app itself (built-in documentation); quick-access button in the top navigation
+- **KI-Coach side panel** — the robot button in the top bar opens the coach as a panel on the right of *any* page; the page stays visible and usable (from ~1200 px the content moves aside, on a phone the panel is full width). The coach knows which page you are on and what is selected there (tab, expanded row, filters, open chart) and reads the app's data with tools: journal, Marktradar, leverage zones, the stored news briefing, live-trading sessions, Hype-Radar (candidates, raw list, scan, exchange watcher, a single token by ticker/name/contract), Coin-Radar, stock and newcomer radar, chart, portfolio, strategy instances and backtests, learning progress — and answers questions about using the app from the built-in documentation. Conversations are stored and survive a page change
+- **Voice input** — a microphone button dictates the question (the browser's speech recognition; needs https or localhost, not available in Firefox — otherwise the button is greyed out and says why)
+- **Injection guard** — token names and the news briefing are third-party text: they reach the coach shortened and marked as quotes, and once such text was read the writing tools (backtest, parameter suggestion) are locked for that question
 - **Screenshot Analysis** — include chart images in AI analysis
 - **Token Statistics** — track usage and estimated costs per provider
 - **Global AI Toggle** — enable/disable all AI features at once
@@ -643,7 +645,7 @@ Starts the Vite dev server with Hot Module Replacement on port 39482, proxied th
 2. Import trades via **API fetch** — or enter single trades manually
 3. Evaluate your trades in **Playbook** — add tags, stress/emotion levels, notes
 4. Review your performance in **Dashboard** and **Auswertung**
-5. Use the **KI-Agent** for AI-powered trade analysis
+5. Ask the **KI-Coach** (robot button, top right) about the page you are on, or create **AI reports** under Journal
 6. Generate **Share Cards** to share your trades on social media
 
 ---
