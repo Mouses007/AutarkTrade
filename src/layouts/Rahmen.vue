@@ -31,9 +31,11 @@ import TradeEvalPopup from '../components/TradeEvalPopup.vue'
 import PageInfo from '../components/PageInfo.vue'
 import BetaHinweis from '../components/BetaHinweis.vue'
 import PositionsWarnung from '../components/rahmen/PositionsWarnung.vue'
+import KiCoachLeiste from '../components/ki/KiCoachLeiste.vue'
 
 import { seitenId, bildschirmTyp, seitenmenueMobilOffen, appMode, privacyMode } from '../stores/ui.js'
 import { sideMenuEingeklappt } from '../stores/app/rahmen.js'
+import { kiCoachOffen, kiCoachBreite } from '../stores/app/kiCoach.js'
 import { appEinstellungen } from '../stores/settings.js'
 import { ladeSystemModus } from '../stores/system.js'
 import { hydrateLiveSettings } from '../stores/live.js'
@@ -83,6 +85,17 @@ const mitMenue = computed(() => !ohneRahmen.value && !route.meta?.ohneSeitenmenu
 
 const desktop = computed(() => bildschirmTyp.value === 'computer')
 const menueSchmal = computed(() => desktop.value && sideMenuEingeklappt.value)
+
+/* ── KI-Coach-Leiste ──────────────────────────────────── */
+const kiAn = computed(() => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0)
+const zeigeKiLeiste = computed(() => kiAn.value && !ohneRahmen.value)
+// Ab 1200 px rückt der Inhalt zur Seite, damit die Leiste nichts verdeckt;
+// darunter liegt sie über der Seite (der Inhalt würde sonst zu schmal).
+const breitGenug = ref(false)
+let breitAbfrage = null
+const merkeBreit = () => { breitGenug.value = !!breitAbfrage?.matches }
+const kiPlatz = computed(() => (zeigeKiLeiste.value && kiCoachOffen.value && breitGenug.value
+    ? { paddingRight: `min(${kiCoachBreite.value}px, 60vw)` } : null))
 
 /* ── Seiten-ID folgt jeder Navigation ─────────────────── */
 // Früher nur beim Mount gesetzt: nach router.push blieb die alte Seite stehen.
@@ -251,6 +264,9 @@ function wischEnde() { wischStart = null }
 
 onMounted(() => {
     bewerteZensur()
+    breitAbfrage = window.matchMedia('(min-width: 1200px)')
+    merkeBreit()
+    breitAbfrage.addEventListener('change', merkeBreit)
     document.addEventListener('touchstart', wischBeginn, { passive: true })
     document.addEventListener('touchmove', wischZug, { passive: true })
     document.addEventListener('touchend', wischEnde, { passive: true })
@@ -263,6 +279,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     useStopGlobalPolling()
+    breitAbfrage?.removeEventListener('change', merkeBreit)
     if (zensurStopp) { zensurStopp(); zensurStopp = null }
     clearTimeout(groesseTakt)
     document.removeEventListener('touchstart', wischBeginn)
@@ -280,7 +297,7 @@ onBeforeUnmount(() => {
     <NachObenKnopf />
     <Kopfleiste v-if="!ohneRahmen" :mit-titel="mitMenue && desktop" />
 
-    <div class="at-rahmen" :class="{ 'ohne-menue': !mitMenue }" v-cloak>
+    <div class="at-rahmen" :class="{ 'ohne-menue': !mitMenue }" :style="kiPlatz" v-cloak>
         <!-- id="sideMenu": utils.js (schalteMobilMenue/schliesseMobilMenue) sucht diese ID. -->
         <aside v-if="mitMenue" id="sideMenu" class="at-menuespalte"
             :class="desktop ? { schmal: menueSchmal } : { mobil: true, offen: seitenmenueMobilOffen }">
@@ -319,6 +336,7 @@ onBeforeUnmount(() => {
     <BildVollbild />
     <BildMarkierung />
     <TradeEvalPopup />
+    <KiCoachLeiste v-if="zeigeKiLeiste" />
 </template>
 
 <style scoped>

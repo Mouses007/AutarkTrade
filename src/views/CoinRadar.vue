@@ -1019,6 +1019,7 @@ import Symbol from '@/components/basis/Symbol.vue'
  * einen Zustand.
  */
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { sichereUrl } from '../utils/sanitize.js'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -1302,6 +1303,16 @@ const beharrlichKlasse = computed(() => {
 
 // ── Sortieren & Filtern ─────────────────────────────────────────────────
 const sortFeld = ref('rang')
+
+// Der KI-Coach erfährt Reiter, aufgeklappten Coin und Filter dieser Seite.
+useKiSeitenStand(() => {
+    const z = [...(rangZeilen.value || []), ...(zeilen.value || [])].find((x) => x.id === offen.value)
+    return {
+        reiter: reiter.value,
+        ...(z?.symbol ? { aufgeklappt: String(z.symbol).toUpperCase() } : {}),
+        filter: { filter: filter.value, sortFeld: sortFeld.value },
+    }
+})
 const sortAb = ref(false)
 
 /**

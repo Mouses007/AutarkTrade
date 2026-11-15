@@ -13,6 +13,7 @@
  * localStorage — ein Layout soll auf NAS, Dev-Rechner und Handy dasselbe sein.
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import ChartPanel from '../components/chart/ChartPanel.vue'
@@ -811,6 +812,17 @@ function alleLoeschen() {
 }
 
 const aktivesPanelRef = computed(() => panelRefs.value[aktivIndex.value] || null)
+// Der KI-Coach in der Leiste bekommt den offenen Chart wie der Chat im KI-Reiter.
+useKiSeitenStand(() => {
+    const p = aktivesPanel.value
+    if (!p?.symbol) return null
+    let bis = null
+    try { bis = aktivesPanelRef.value?.sichtbarerZeitraum()?.bis || null } catch { bis = null }
+    return {
+        symbol: p.symbol, zeiteinheit: p.interval, markt: p.markt === 'spot' ? 'spot' : 'futures',
+        chart: { symbol: p.symbol, interval: p.interval, markt: p.markt, bis: bis && bis < Date.now() - 60_000 ? bis : null },
+    }
+})
 
 // ── Alarme ──────────────────────────────────────────────────────────────
 const alarmVorlage = ref(null)

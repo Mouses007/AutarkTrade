@@ -16,6 +16,7 @@
  * FOMC-Protokoll ist eine Nachricht mit Datum, keine Kennzahl.
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { sichereUrl } from '../utils/sanitize.js'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -135,6 +136,8 @@ function schriftZuruecksetzen() {
 }
 
 const bericht = ref(null)
+// Der KI-Coach erfährt, welcher Lagebericht offen ist.
+useKiSeitenStand(() => (bericht.value?.id ? { berichtId: Number(bericht.value.id) } : null))
 
 // Videoliste des Berichts ohne Livestreams: die sollen gar nicht erwähnt
 // werden (Nutzerwunsch). Neue Berichte loggen sie serverseitig nicht mehr;

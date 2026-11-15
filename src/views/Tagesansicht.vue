@@ -29,6 +29,7 @@ function merkeKerzen(schluessel, wert) {
  */
 import { scrolleZu } from '../utils/scrolleZu.js'
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { oeffneKiCoach } from '../stores/app/kiCoach.js'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
@@ -801,7 +802,8 @@ function kiBewertung(karte, index) {
         ausstieg: tr.exitPrice ?? tr.closePrice ?? '',
         pnl: `$${pnl.toFixed(2)}`,
     })
-    router.push({ path: '/ki-coach', query: { agentPrompt } })
+    // Der Coach klappt als Leiste über der Tagesansicht auf — der Trade bleibt sichtbar.
+    oeffneKiCoach({ frage: agentPrompt, neu: true })
 }
 
 const shareOffen = ref(false)

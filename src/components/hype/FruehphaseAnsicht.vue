@@ -349,6 +349,7 @@ import Symbol from '@/components/basis/Symbol.vue'
  * Durchgangs alle drei Sekunden — danach alle zwei Minuten, solange offen.
  */
 import { ref, computed, watch, nextTick, onBeforeUnmount, h, defineComponent } from 'vue'
+import { useKiSeitenStand } from '../../composables/useKiSeitenStand.js'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import ProjektPruefung from './ProjektPruefung.vue'
@@ -587,6 +588,17 @@ function umschalten(id) {
  * oder vergessen sein — dann steht das da, mit dem Weg zu DexScreener.
  */
 const fokusId = ref(null)
+
+// Der KI-Coach erfährt, welcher Token aufgeklappt ist und ob die Rohliste offen ist.
+useKiSeitenStand(() => {
+    const d = daten.value || {}
+    const alle = [...(d.kandidaten || []), ...(d.zeilen || []), ...(d.beobachtung || []).map((b) => b.zeile).filter(Boolean)]
+    const z = alle.find((x) => x.id === offen.value)
+    return {
+        ansicht: rohOffen.value ? 'rohliste' : 'kandidaten',
+        ...(z ? { token: { kuerzel: z.symbol, name: z.name, kette: z.chain, vertrag: z.contract } } : {}),
+    }
+})
 const fokusFehlt = ref(null)
 async function fokussiere(contract) {
     const c = String(contract || '')

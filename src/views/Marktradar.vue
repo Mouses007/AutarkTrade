@@ -34,6 +34,7 @@ import KachelLage from '../components/radar/KachelLage.vue'
 import KachelEtf from '../components/radar/KachelEtf.vue'
 import KachelWal from '../components/radar/KachelWal.vue'
 import { liveSymbol } from '../stores/live.js'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 // Für die Alarm-Einstellungen: appEinstellungen hält den Einstellungssatz
 import { appEinstellungen } from '../stores/app/rahmen.js'
 import { useIstTelefon } from '../utils/geraet.js'
@@ -143,6 +144,13 @@ const {
     symbolRef: liveSymbol,
     immerLaden,
 })
+
+// Der KI-Coach erfährt Symbol, Ansicht und die gross geöffnete Kachel.
+useKiSeitenStand(() => ({
+    symbol: liveSymbol.value,
+    ansicht: ansicht.value,
+    ...(typeof offeneKachel.value === 'string' ? { kachel: offeneKachel.value } : {}),
+}))
 
 /**
  * Pi-Cycle-Alarm. Die Kreuzung der 111-Tage- über die doppelte 350-Tage-Linie

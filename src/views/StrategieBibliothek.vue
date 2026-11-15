@@ -13,6 +13,7 @@
  * Bis 01.11.2026 zwei Seiten („Strategie-Editor", „Neue Strategie") mit je
  * einem eigenen Chat; die eingebauten Strategien kamen nirgends vor.
  */
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { ref, computed, watch, onBeforeMount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
@@ -98,6 +99,7 @@ const instanzenVon = (sid) => instanzen.value.filter((i) => i.strategyId === sid
 
 // ── Was ist offen? ──────────────────────────────────────────────────────
 const id = computed(() => String(route.params.id || ''))
+useKiSeitenStand(() => (id.value ? { strategieId: id.value } : null))
 const ansicht = computed(() => {
     if (!id.value) return 'liste'
     if (id.value === 'neu') return Object.keys(route.query).length ? 'editor' : 'start'

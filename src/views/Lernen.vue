@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { dbFind, dbCreate, dbUpdate, dbDelete } from '../utils/db.js'
@@ -18,6 +19,7 @@ const route = useRoute()
 const router = useRouter()
 
 const reiter = computed(() => route.params.reiter || null) // null = Sitzung, 'karten' = Verwaltung, 'statistik' = Auswertung
+useKiSeitenStand(() => ({ reiter: reiter.value || 'sitzung' }))
 
 const karten = ref([])       // quiz_karten
 const fortschritt = ref([])  // quiz_fortschritt

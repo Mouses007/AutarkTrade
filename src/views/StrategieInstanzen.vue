@@ -13,6 +13,7 @@
  */
 import { ref, computed, watch, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import { seiteLaedt } from '../stores/ui.js'
@@ -44,6 +45,8 @@ const ansicht = computed(() => {
     if (!id) return 'liste'
     return id === 'neu' ? 'neu' : 'instanz'
 })
+// Der KI-Coach erfährt, welche Instanz offen ist (für get_strategy_config und Co.).
+useKiSeitenStand(() => (ansicht.value === 'instanz' ? { instanzId: Number(route.params.id) } : { ansicht: ansicht.value }))
 
 async function laden() {
     try {

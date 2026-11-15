@@ -1071,6 +1071,7 @@ import Symbol from '@/components/basis/Symbol.vue'
  * Kandidat nicht allein wegen seiner Lage interessant aussieht.
  */
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { sichereUrl } from '../utils/sanitize.js'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -1691,6 +1692,19 @@ const heissestesNarrativ = computed(() => {
 const trittbrett = (k) => k.sozialDaten?.trittbrett?.ja === true
 const trittbrettAnzahl = computed(() => kandidaten.value.filter(trittbrett).length)
 const ohneTrittbrett = ref(false)
+
+// Der KI-Coach erfährt Reiter, aufgeklappten Fund und Filter dieser Seite.
+useKiSeitenStand(() => {
+    const k = kandidaten.value.find((x) => x.id === offen.value)
+    return {
+        reiter: reiter.value,
+        ...(reiter.value === 'dashboard' ? {
+            anzahl: kandidaten.value.length,
+            filter: { status: filterStatus.value, narrativ: filterNarrativ.value || 'alle', sortFeld: sortFeld.value, ohneTrittbrett: ohneTrittbrett.value },
+            ...(k ? { token: { kuerzel: k.symbol, name: k.name, kette: k.chain, vertrag: k.contractAddress } } : {}),
+        } : {}),
+    }
+})
 
 const gefiltert = computed(() => {
     let liste = kandidaten.value

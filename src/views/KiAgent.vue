@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onBeforeMount, onBeforeUnmount, computed, watch, nextTick } from 'vue'
+import { ref, reactive, onBeforeMount, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import { seiteLaedt } from '../stores/ui.js'
@@ -7,7 +7,8 @@ import { aiReportGenerating, aiReportError, aiReportLastSavedId, aiReportLabel, 
 import { gewaehlteBoerse } from '../stores/filters.js'
 import axios from 'axios'
 import { useExportReportPdf } from '../utils/pdfExport'
-import { sanitizeKiHtml } from '../utils/sanitize'
+import { kiMarkdown } from '../utils/kiMarkdown.js'
+import { oeffneKiCoach } from '../stores/app/kiCoach.js'
 import { logError, logWarn } from '../utils/logger.js'
 import dayjs, { anzeige } from '../utils/journal/zeit.js'
 import { sendNotification } from '../utils/notify'
@@ -17,7 +18,6 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
-import Reiter from '@/components/basis/Reiter.vue'
 
 const { t } = useI18n()
 
@@ -41,9 +41,6 @@ const savedReports = reactive([])
 const expandedReports = reactive(new Set())
 const deleteConfirmId = ref(null)
 
-// Tabs
-const currentTab = ref('reports') // 'reports' | 'agent'
-
 // Report-Stil Quick-Selection (alle außer 'custom')
 const reportStylePresets = [
     { value: 'kurz', icon: 'blitz', prompt: 'Halte den Bericht kurz und prägnant. Maximal 3-4 Sätze pro Abschnitt. Fokussiere dich auf die wichtigsten Erkenntnisse.' },
@@ -59,101 +56,6 @@ const chatMessages = reactive({}) // { reportId: [{ id, role, content, createdAt
 const chatInput = reactive({}) // { reportId: 'text' }
 const chatLoading = reactive({}) // { reportId: true/false }
 const chatError = reactive({}) // { reportId: 'error msg' }
-
-// ==================== AGENT STATE ====================
-const agentSessions = reactive([])
-const agentCurrentSessionId = ref(null)
-// Seite, von der aus der Agent geöffnet wurde (Roboter-Button in Nav.vue,
-// ?sourcePage=…) — bleibt für den ganzen Seitenbesuch gültig, auch über
-// „+ Neuer Chat" hinweg, und geht mit jeder Nachricht an den Server.
-const agentPageContext = ref(null)
-const agentMessages = reactive([]) // Current session messages
-const agentInput = ref('')
-const agentLoading = ref(false)
-const agentError = ref('')
-const agentSteps = reactive([]) // Live SSE steps during agent run
-const agentExpandedTools = reactive(new Set())
-const agentDeleteConfirmId = ref(null)
-
-// Mehrfachauswahl + Archiv der Session-Liste. Archivierte Chats verschwinden
-// aus der Standardansicht, bleiben aber erhalten — Löschen ist endgültig.
-const auswahlModus = ref(false)
-const zeigeArchiv = ref(false)
-const ausgewaehlteSessions = reactive(new Set())
-const bulkLoeschBestaetigung = ref(false)
-
-const sichtbareSessions = computed(() => agentSessions.filter(s => !!s.archiviert === zeigeArchiv.value))
-
-function toggleAuswahlModus() {
-    auswahlModus.value = !auswahlModus.value
-    ausgewaehlteSessions.clear()
-    bulkLoeschBestaetigung.value = false
-}
-
-function toggleAuswahl(id) {
-    if (ausgewaehlteSessions.has(id)) ausgewaehlteSessions.delete(id)
-    else ausgewaehlteSessions.add(id)
-    bulkLoeschBestaetigung.value = false
-}
-
-// Zwei Klicks wie beim Einzel-Löschen: der erste macht aus dem Knopf die
-// Rückfrage, erst der zweite löscht wirklich.
-async function loescheAusgewaehlte() {
-    if (!bulkLoeschBestaetigung.value) {
-        bulkLoeschBestaetigung.value = true
-        return
-    }
-    for (const id of [...ausgewaehlteSessions]) {
-        try {
-            await axios.delete(`/api/ai/agent/sessions/${id}`)
-            const idx = agentSessions.findIndex(s => s.id === id)
-            if (idx >= 0) agentSessions.splice(idx, 1)
-            if (agentCurrentSessionId.value === id) startNewAgentSession()
-        } catch (err) {
-            agentError.value = 'Löschen fehlgeschlagen: ' + err.message
-        }
-    }
-    ausgewaehlteSessions.clear()
-    bulkLoeschBestaetigung.value = false
-}
-
-// Ansicht wechseln heisst neu laden: die Liste kommt gefiltert vom Server.
-async function wechsleArchivAnsicht() {
-    zeigeArchiv.value = !zeigeArchiv.value
-    ausgewaehlteSessions.clear()
-    bulkLoeschBestaetigung.value = false
-    await loadAgentSessions()
-}
-
-async function archiviereAusgewaehlte() {
-    // In der Archiv-Ansicht kehrt derselbe Knopf die Richtung um (wiederherstellen).
-    const ziel = zeigeArchiv.value ? 0 : 1
-    for (const id of [...ausgewaehlteSessions]) {
-        try {
-            await axios.post(`/api/ai/agent/sessions/${id}/archiv`, { archiviert: ziel })
-            const s = agentSessions.find(x => x.id === id)
-            if (s) s.archiviert = ziel
-        } catch (err) {
-            agentError.value = 'Archivieren fehlgeschlagen: ' + err.message
-        }
-    }
-    ausgewaehlteSessions.clear()
-    // Die verschobenen Chats gehören jetzt in die andere Ansicht
-    await loadAgentSessions()
-}
-
-// Chat-Verlauf ans Ende scrollen, sobald etwas dazukommt (eigene Eingabe,
-// Werkzeugschritte während des Laufs, Antwort, Sessionwechsel). Ohne das
-// verschwindet die Antwort unterhalb des sichtbaren Bereichs und man scrollt
-// nach jeder Frage von Hand hinterher.
-const agentChatEl = ref(null)
-watch(
-    [() => agentMessages.length, () => agentSteps.length, agentCurrentSessionId, agentLoading],
-    async () => {
-        await nextTick()
-        if (agentChatEl.value) agentChatEl.value.scrollTop = agentChatEl.value.scrollHeight
-    }
-)
 
 // Token-Verbrauch pro Provider (nur Reports auf dieser Seite)
 const tokensByProvider = computed(() => {
@@ -456,206 +358,22 @@ async function loadChatSetting() {
     }
 }
 
-// Markdown → HTML (verbesserter Parser)
-function markdownToHtml(md) {
-    if (!md) return ''
-    let html = md
-        .replace(/^### (.+)$/gm, '<h5 class="at-mo-2 at-mu-1">$1</h5>')
-        .replace(/^## (.+)$/gm, '<h4 class="report-section-title at-mo-3 at-mu-1">$1</h4>')
-        .replace(/^# (.+)$/gm, '<h3 class="at-mo-3 at-mu-2">$1</h3>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-        .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul class="at-mu-1">${match}</ul>`)
-
-    // Absätze (leere Blöcke filtern)
-    html = html.split('\n\n').map(p => {
-        const trimmed = p.trim()
-        if (!trimmed) return ''
-        if (trimmed.startsWith('<h') || trimmed.startsWith('<ul')) return trimmed
-        return `<p>${trimmed}</p>`
-    }).filter(Boolean).join('\n')
-
-    return sanitizeKiHtml(html)
-}
-
-// ==================== AGENT FUNCTIONS ====================
-
-async function loadAgentSessions() {
-    try {
-        // Der Server filtert nach Archiv-Zustand, sonst teilen sich beide
-        // Ansichten dasselbe 50er-Limit.
-        const { data } = await axios.get('/api/ai/agent/sessions', { params: { archiviert: zeigeArchiv.value ? 1 : 0 } })
-        agentSessions.splice(0, agentSessions.length, ...data)
-    } catch (err) {
-        logWarn('KiAgent', 'Failed to load agent sessions: ' + err.message)
-    }
-}
-
-async function loadAgentSession(sessionId) {
-    try {
-        const { data } = await axios.get(`/api/ai/agent/sessions/${sessionId}`)
-        agentCurrentSessionId.value = sessionId
-        agentMessages.splice(0, agentMessages.length, ...(data.messages || []))
-        agentSteps.splice(0)
-        agentError.value = ''
-    } catch (err) {
-        agentError.value = 'Session konnte nicht geladen werden: ' + err.message
-    }
-}
-
-function startNewAgentSession() {
-    agentCurrentSessionId.value = null
-    agentMessages.splice(0)
-    agentSteps.splice(0)
-    agentError.value = ''
-    agentInput.value = ''
-}
-
-async function deleteAgentSession(sessionId) {
-    try {
-        await axios.delete(`/api/ai/agent/sessions/${sessionId}`)
-        const idx = agentSessions.findIndex(s => s.id === sessionId)
-        if (idx >= 0) agentSessions.splice(idx, 1)
-        if (agentCurrentSessionId.value === sessionId) {
-            startNewAgentSession()
-        }
-        agentDeleteConfirmId.value = null
-    } catch (err) {
-        agentError.value = 'Löschen fehlgeschlagen: ' + err.message
-    }
-}
-
-// Läuft gerade ein Agentenlauf, hängt daran ein offener Datenstrom. Verlässt
-// man die Seite, muss er abgebrochen werden — sonst liest der Reader in eine
-// Ansicht, die es nicht mehr gibt, und der Server schreibt in eine tote
-// Verbindung, während der Lauf (und die Modellkosten) weiterlaufen.
-let agentAbbruch = null
-
-onBeforeUnmount(() => {
-    if (agentAbbruch) agentAbbruch.abort()
-})
-
-async function sendAgentMessage() {
-    const msg = agentInput.value.trim()
-    if (!msg || agentLoading.value) return
-
-    agentInput.value = ''
-    agentLoading.value = true
-    agentError.value = ''
-    agentSteps.splice(0)
-
-    // Add user message to UI immediately
-    agentMessages.push({ role: 'user', content: msg, createdAt: new Date().toISOString() })
-
-    agentAbbruch = new AbortController()
-    try {
-        const response = await fetch('/api/ai/agent/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: agentAbbruch.signal,
-            body: JSON.stringify({
-                sessionId: agentCurrentSessionId.value,
-                message: msg,
-                ...(agentPageContext.value ? { seitenId: agentPageContext.value } : {})
-            })
-        })
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() // Keep incomplete line
-
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue
-                try {
-                    const event = JSON.parse(line.slice(6))
-                    handleAgentSSE(event)
-                } catch { /* ignore parse errors */ }
-            }
-        }
-    } catch (err) {
-        // Ein Abbruch beim Seitenwechsel ist kein Fehler, den man melden müsste.
-        if (err.name !== 'AbortError') agentError.value = 'Agent-Fehler: ' + err.message
-    } finally {
-        agentLoading.value = false
-        agentAbbruch = null
-    }
-}
-
-function handleAgentSSE(event) {
-    switch (event.type) {
-        case 'session':
-            agentCurrentSessionId.value = event.sessionId
-            break
-        case 'thinking':
-            agentSteps.push({ type: 'thinking', iteration: event.iteration })
-            break
-        case 'tool_call':
-            agentSteps.push({ type: 'tool_call', name: event.name, params: event.params })
-            break
-        case 'tool_result':
-            agentSteps.push({ type: 'tool_result', name: event.name, resultPreview: event.resultPreview })
-            break
-        case 'answer':
-            agentMessages.push({ role: 'assistant', content: event.content, createdAt: new Date().toISOString() })
-            break
-        case 'warning':
-            agentSteps.push({ type: 'warning', content: event.content })
-            break
-        case 'error':
-            agentError.value = event.content
-            break
-        case 'done':
-            // Refresh sessions list
-            loadAgentSessions()
-            break
-    }
-}
-
-function toggleAgentTool(index) {
-    if (agentExpandedTools.has(index)) {
-        agentExpandedTools.delete(index)
-    } else {
-        agentExpandedTools.add(index)
-    }
-}
-
-function formatToolParams(params) {
-    if (!params) return ''
-    return Object.entries(params)
-        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-        .join(', ')
-}
+const markdownToHtml = kiMarkdown
 
 const route = useRoute()
 const vueRouter = useRouter()
 
-// Capture agent prompt from query param BEFORE any async work
-const pendingAgentPrompt = route.query.agentPrompt || null
-// ?tab=agent: Schnellzugriff aus der Navigationsleiste landet direkt im Chat.
-const pendingTab = route.query.tab || null
-// ?sourcePage=…: von welcher Seite aus der Roboter-Button gedrückt wurde.
-const pendingSourcePage = route.query.sourcePage || null
+// Alte Aufrufe der Seite (`?agentPrompt=`, `?tab=agent`, `?sourcePage=`) meinten
+// den Chat, der bis 15.11.2026 hier als Reiter „Agent" stand. Er ist jetzt die
+// KI-Coach-Leiste — solche Aufrufe öffnen sie.
+const alteFrage = route.query.agentPrompt || null
+const alterChatAufruf = route.query.tab === 'agent' || Boolean(route.query.sourcePage)
 
 onBeforeMount(async () => {
     seiteLaedt.value = false
 
-    // Switch tab immediately if agent prompt is pending
-    if (pendingAgentPrompt || pendingTab === 'agent') {
-        currentTab.value = 'agent'
-    }
-    if (pendingSourcePage) agentPageContext.value = pendingSourcePage
-
-    // Clean URL immediately (remove query param so it doesn't retrigger)
+    if (alteFrage) oeffneKiCoach({ frage: String(alteFrage), neu: true })
+    else if (alterChatAufruf) oeffneKiCoach()
     if (route.query.agentPrompt || route.query.tab || route.query.sourcePage) {
         vueRouter.replace({ path: route.path })
     }
@@ -665,14 +383,8 @@ onBeforeMount(async () => {
     document.body.style.removeProperty('padding-right')
 
     await Promise.all([checkStatus(), loadChatSetting()])
-    await Promise.all([loadReports(), loadGlobalTokenStats(), loadAgentSessions(), ladePreise()])
+    await Promise.all([loadReports(), loadGlobalTokenStats(), ladePreise()])
 
-    // Auto-start agent after data is loaded (use setTimeout for DOM readiness)
-    if (pendingAgentPrompt) {
-        startNewAgentSession()
-        agentInput.value = pendingAgentPrompt
-        setTimeout(() => sendAgentMessage(), 150)
-    }
 })
 </script>
 
@@ -681,14 +393,7 @@ onBeforeMount(async () => {
     <div class="at-mo-2">
         <div v-show="!seiteLaedt">
 
-            <!-- Tab-Switcher -->
-            <Reiter v-model="currentTab" class="at-mu-3" :reiter="[
-                { id: 'reports', titel: t('kiAgent.tabReports'), symbol: 'dokument' },
-                { id: 'agent', titel: t('kiAgent.tabAgent'), symbol: 'gehirn' },
-            ]" />
-
-            <!-- ==================== REPORTS TAB ==================== -->
-            <div v-show="currentTab === 'reports'">
+            <div>
 
             <!-- Header -->
             <div class="at-flex at-verteilt at-mitte at-mu-3">
@@ -919,184 +624,7 @@ onBeforeMount(async () => {
                 </div>
             </div>
 
-        </div> <!-- end reports tab -->
-
-            <!-- ==================== AGENT TAB ==================== -->
-            <div v-show="currentTab === 'agent'">
-
-                <!-- Header -->
-                <div class="at-flex at-verteilt at-mitte at-mu-3">
-                    <h5 class="at-mu-0">
-                        <Symbol name="gehirn" class="at-mr-2" />{{ t('kiAgent.agentTitle') }}
-                    </h5>
-                    <div class="at-flex at-mitte at-luecke-2">
-                        <Pille :ton="aiOnline ? 'gut' : 'schlecht'">
-                            {{ aiOnline ? modelLabel + ' ' + t('kiAgent.online') : providerLabel + ' ' + t('kiAgent.offline') }}
-                        </Pille>
-                        <Knopf klein @click="startNewAgentSession" :title="t('kiAgent.newSession')">
-                            <Symbol name="plus" class="at-mr-1" />{{ t('kiAgent.newSession') }}
-                        </Knopf>
-                    </div>
-                </div>
-
-                <!-- Offline -->
-                <div v-if="!aiOnline" class="journalKarte at-mittig at-py-4 at-mu-3">
-                    <Symbol style="font-size: 2rem;" name="warnung" class="at-warn" />
-                    <p class="at-mo-2 at-mu-1">{{ t('kiAgent.providerNotReachable') }}</p>
-                </div>
-
-                <div v-if="aiOnline" class="kiAgentRaster">
-                    <!-- Session-Liste (links) -->
-                    <div>
-                        <div class="journalKarte" style="height: auto; max-height: 70vh; overflow-y: auto; padding: 0.5em;">
-                            <div class="at-flex at-mitte at-verteilt at-mu-2">
-                                <div class="at-klein at-fett"><Symbol name="verlauf" class="at-mr-1" />{{ t('kiAgent.sessions') }}</div>
-                                <div class="at-flex at-luecke-1">
-                                    <span class="agent-list-btn" :class="{ active: auswahlModus }"
-                                        :title="t('kiAgent.auswahl')" @click="toggleAuswahlModus">
-                                        <Symbol name="hakenKasten" />
-                                    </span>
-                                    <span class="agent-list-btn" :class="{ active: zeigeArchiv }"
-                                        :title="t('kiAgent.archivAnzeigen')" @click="wechsleArchivAnsicht">
-                                        <Symbol name="archiv" />
-                                    </span>
-                                </div>
-                            </div>
-                            <div v-if="sichtbareSessions.length === 0" class="at-gedaempft at-klein at-mittig at-py-2">
-                                {{ zeigeArchiv ? t('kiAgent.archivLeer') : t('kiAgent.noSessions') }}
-                            </div>
-                            <div v-for="s in sichtbareSessions" :key="s.id"
-                                class="agent-session-item at-p-2 at-mu-1 klickZiel"
-                                :class="{ 'agent-session-active': agentCurrentSessionId === s.id }"
-                                @click="auswahlModus ? toggleAuswahl(s.id) : loadAgentSession(s.id)">
-                                <div class="at-flex at-mitte at-luecke-2">
-                                    <input v-if="auswahlModus" type="checkbox" class="at-mo-0 at-fest"
-                                        :checked="ausgewaehlteSessions.has(s.id)" @click.stop="toggleAuswahl(s.id)" />
-                                    <div class="at-klein at-fett at-kuerzen" style="min-width: 0;">{{ s.title || 'Session ' + s.id }}</div>
-                                </div>
-                                <div class="at-flex at-verteilt at-mitte">
-                                    <span class="at-gedaempft" style="font-size: 0.65rem;">{{ formatDate(s.updatedAt || s.createdAt) }}</span>
-                                    <template v-if="!auswahlModus">
-                                        <span v-if="agentDeleteConfirmId !== s.id"
-                                            class="at-schlecht" style="font-size: 0.7rem; cursor: pointer;"
-                                            @click.stop="agentDeleteConfirmId = s.id">
-                                            <Symbol name="muell" />
-                                        </span>
-                                        <span v-else class="at-flex at-luecke-1" @click.stop>
-                                            <Knopf art="gefahr" style="font-size: 0.6rem; padding: 0 0.3rem;" @click="deleteAgentSession(s.id)">{{ t('common.yes') }}</Knopf>
-                                            <Knopf style="font-size: 0.6rem; padding: 0 0.3rem;" @click="agentDeleteConfirmId = null">{{ t('common.no') }}</Knopf>
-                                        </span>
-                                    </template>
-                                </div>
-                            </div>
-                            <!-- Aktionen auf die Auswahl -->
-                            <div v-if="auswahlModus" class="at-flex at-spalte at-luecke-1 at-mo-2">
-                                <Knopf klein :disabled="ausgewaehlteSessions.size === 0"
-                                    @click="archiviereAusgewaehlte">
-                                    <Symbol name="archiv" class="at-mr-1" />{{ zeigeArchiv ? t('kiAgent.wiederherstellen') : t('kiAgent.archivieren') }} ({{ ausgewaehlteSessions.size }})
-                                </Knopf>
-                                <Knopf klein art="gefahr"
-                                    :disabled="ausgewaehlteSessions.size === 0" @click="loescheAusgewaehlte">
-                                    <Symbol name="muell" class="at-mr-1" />{{ bulkLoeschBestaetigung ? t('kiAgent.wirklichLoeschen') : t('kiAgent.loeschen') }} ({{ ausgewaehlteSessions.size }})
-                                </Knopf>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Chat-Bereich (rechts) -->
-                    <div class="kiAgentChat">
-                        <div class="journalKarte" style="height: auto; min-height: 50vh; display: flex; flex-direction: column; padding: 0.8em;">
-
-                            <!-- Chat-Verlauf -->
-                            <div ref="agentChatEl" class="agent-chat-messages at-wachsen at-mu-3" style="overflow-y: auto; max-height: 60vh;">
-                                <div v-if="agentMessages.length === 0 && !agentLoading" class="at-mittig at-gedaempft at-py-5">
-                                    <Symbol style="font-size: 3rem; opacity: 0.3;" name="gehirn" />
-                                    <p class="at-mo-2 at-mu-0">{{ t('kiAgent.agentWelcome') }}</p>
-                                    <small>{{ t('kiAgent.agentHint') }}</small>
-                                </div>
-
-                                <template v-for="(msg, idx) in agentMessages" :key="idx">
-                                    <!-- User Message -->
-                                    <div v-if="msg.role === 'user'" class="chat-msg at-mu-2">
-                                        <div class="at-flex at-mitte at-luecke-1 at-mu-1">
-                                            <Symbol name="person" />
-                                            <span class="at-klein at-fett">{{ t('kiAgent.you') }}</span>
-                                        </div>
-                                        <div class="chat-bubble chat-bubble-user">{{ msg.content }}</div>
-                                    </div>
-
-                                    <!-- Tool Messages -->
-                                    <div v-if="msg.role === 'tool'" class="agent-tool-step at-mu-1 at-ml-3">
-                                        <div class="at-flex at-mitte at-luecke-1 klickZiel" @click="toggleAgentTool(idx)">
-                                            <Symbol class="agentWerkzeug" name="einstellungen" />
-                                            <span class="at-klein agentWerkzeug">{{ msg.toolName }}</span>
-                                            <Symbol :name="agentExpandedTools.has(idx) ? 'runter' : 'ausklappen'" style="font-size: 0.7rem;" />
-                                        </div>
-                                        <div v-if="agentExpandedTools.has(idx)" class="agent-tool-detail at-mo-1 at-p-2" style="background: var(--panel-soft); font-size: 0.75rem; max-height: 200px; overflow-y: auto;">
-                                            <pre style="white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--muted);">{{ msg.content?.substring(0, 2000) }}</pre>
-                                        </div>
-                                    </div>
-
-                                    <!-- Assistant Message -->
-                                    <div v-if="msg.role === 'assistant'" class="chat-msg at-mu-2">
-                                        <div class="at-flex at-mitte at-luecke-1 at-mu-1">
-                                            <Symbol name="ki" />
-                                            <span class="at-klein at-fett">{{ t('kiAgent.agent') }}</span>
-                                        </div>
-                                        <div class="chat-bubble chat-bubble-ai report-content" data-ki-generiert="true" v-html="markdownToHtml(msg.content)"></div>
-                                    </div>
-                                </template>
-
-                                <!-- Live Steps (during agent run) -->
-                                <div v-if="agentLoading" class="at-ml-3 at-mu-2">
-                                    <div v-for="(step, si) in agentSteps" :key="si" class="agent-live-step at-mu-1">
-                                        <template v-if="step.type === 'thinking'">
-                                            <Kreisel still class="at-mr-1" groesse="0.7rem" />
-                                            <span class="at-gedaempft at-klein">{{ t('kiAgent.agentThinking') }} ({{ step.iteration }})</span>
-                                        </template>
-                                        <template v-if="step.type === 'tool_call'">
-                                            <Symbol name="einstellungen" class="at-mr-1 agentWerkzeug" />
-                                            <span class="at-klein agentWerkzeug">{{ step.name }}</span>
-                                            <span class="at-gedaempft at-klein at-ml-1">({{ formatToolParams(step.params) }})</span>
-                                        </template>
-                                        <template v-if="step.type === 'tool_result'">
-                                            <Symbol name="hakenKreis" class="at-mr-1 at-gut" />
-                                            <span class="at-klein at-gut">{{ step.name }}: {{ step.resultPreview }}</span>
-                                        </template>
-                                        <template v-if="step.type === 'warning'">
-                                            <Symbol name="warnung" class="at-mr-1 at-warn" />
-                                            <span class="at-klein at-warn">{{ step.content }}</span>
-                                        </template>
-                                    </div>
-                                    <div class="at-mittig at-py-2">
-                                        <Kreisel still class="at-mr-1" />
-                                        <span class="at-gedaempft at-klein">{{ t('kiAgent.agentWorking') }}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Error -->
-                            <Hinweis v-if="agentError" class="at-mu-2" art="fehler">
-                                {{ agentError }}
-                            </Hinweis>
-
-                            <!-- Input -->
-                            <div class="at-flex at-luecke-2 at-unten at-mo-auto">
-                                <textarea class="at-feld klein chat-input" rows="2"
-                                    :placeholder="t('kiAgent.agentPlaceholder')"
-                                    v-model="agentInput"
-                                    @keydown.enter.exact.prevent="sendAgentMessage"
-                                    :disabled="agentLoading || !aiOnline"></textarea>
-                                <Knopf art="haupt" klein style="height: 2.4rem;"
-                                    @click="sendAgentMessage"
-                                    :disabled="agentLoading || !agentInput.trim() || !aiOnline">
-                                    <Symbol name="nachricht" />
-                                </Knopf>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div> <!-- end agent tab -->
+            </div>
 
         </div>
     </div>
@@ -1121,21 +649,6 @@ onBeforeMount(async () => {
 
 @media (min-width: 768px) {
     .kiNurBreit { display: inline; }
-}
-
-/* Agent: Sitzungsliste links (ein Viertel), Chat rechts; am Telefon untereinander. */
-.kiAgentRaster {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
-}
-
-@media (min-width: 768px) {
-    .kiAgentRaster { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); }
-}
-
-.agent-session-item {
-    border-radius: var(--radius-klein);
 }
 
 /* Report-Style Quick-Selection */
@@ -1231,48 +744,4 @@ onBeforeMount(async () => {
 }
 /* Chat-Blasen (.chat-bubble …) stehen global in design/journal.css */
 
-/* Agent Session List */
-.agent-session-item {
-    border: 1px solid transparent;
-    transition: all 0.15s;
-}
-.agent-session-item:hover {
-    background: var(--panel-soft);
-    border-color: var(--line);
-}
-.agent-session-active {
-    background: var(--accent-flaeche) !important;
-    border-color: var(--accent) !important;
-}
-
-/* Kopfzeilen-Knöpfe der Session-Liste (Auswahlmodus, Archiv) */
-.agent-list-btn {
-    cursor: pointer;
-    color: var(--leise);
-    font-size: 0.9rem;
-    padding: 0 0.2rem;
-    transition: color 0.15s;
-}
-.agent-list-btn:hover {
-    color: var(--text);
-}
-.agent-list-btn.active {
-    color: var(--accent);
-}
-
-/* Agent Tool Steps */
-.agent-live-step {
-    display: flex;
-    align-items: center;
-    padding: 0.15rem 0;
-}
-.agent-tool-step {
-    border-left: 2px solid var(--line-stark);
-    padding-left: 0.5rem;
-}
-
-/* Werkzeugschritte des Agenten: zurückgenommen, sie sind Begleittext. */
-.agentWerkzeug {
-    color: var(--muted);
-}
 </style>

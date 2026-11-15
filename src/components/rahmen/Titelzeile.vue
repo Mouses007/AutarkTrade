@@ -10,7 +10,7 @@
  * (kompakt, ohne eigenen Abstand); dort gibt es kein Menü-Ausklappen.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Symbol from '../basis/Symbol.vue'
 import { appMode, seitenId, bildschirmTyp, privacyMode } from '../../stores/ui.js'
@@ -21,6 +21,8 @@ import { pageById } from '../../config/menu.js'
 import { schalteMobilMenue, exportiereDaten } from '../../utils/journal/app.js'
 import { formDatum } from '../../utils/journal/format.js'
 import dayjs, { anzeige } from '../../utils/journal/zeit.js'
+import { kiCoachOffen, schalteKiCoach } from '../../stores/app/kiCoach.js'
+import { useKiSeitenStand } from '../../composables/useKiSeitenStand.js'
 
 const props = defineProps({
     inKopf: { type: Boolean, default: false },
@@ -28,7 +30,6 @@ const props = defineProps({
 
 const { t, te } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const mobil = computed(() => !props.inKopf && bildschirmTyp.value === 'mobile')
 
@@ -62,6 +63,9 @@ const filterText = computed(() => {
     return teile.filter(Boolean).join(' · ')
 })
 
+// Der KI-Coach erfährt den Zeitraum und die Filter der Journal-Seiten.
+useKiSeitenStand(() => (filterText.value ? { zeitraum: filterText.value } : null))
+
 /* ── Zensur (nur Journal) ── */
 function schalteZensur() {
     privacyMode.value = !privacyMode.value
@@ -70,12 +74,9 @@ function schalteZensur() {
 
 /* ── KI-Schnellzugriff ── */
 const kiAn = computed(() => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0)
-// `route.name` statt `seitenId`: so stimmt es auch unmittelbar nach einer SPA-Navigation.
-const zeigeKi = computed(() => kiAn.value && route.name !== 'kiAgent')
-function oeffneKi() {
-    // Der KI-Coach öffnet den Chat-Reiter und gibt die Herkunftsseite an den Server weiter.
-    router.push({ path: '/ki-coach', query: { tab: 'agent', sourcePage: seitenId.value } })
-}
+// Der Knopf klappt die Coach-Leiste über der aktuellen Seite auf und zu (bis
+// 15.11.2026 sprang er zur Seite /ki-coach). Er steht auf jeder Seite.
+const zeigeKi = kiAn
 
 /* ── Export (nur Dashboard) ── */
 const exportOffen = ref(false)
@@ -125,8 +126,9 @@ onBeforeUnmount(() => {
                 <Symbol :name="privacyMode ? 'augeAus' : 'auge'" :groesse="18" />
             </button>
 
-            <button v-if="zeigeKi" type="button" class="symbolknopf" :title="t('nav.kiAgent')" :aria-label="t('nav.kiAgent')"
-                @click="oeffneKi">
+            <button v-if="zeigeKi" type="button" class="symbolknopf" :class="{ aktiv: kiCoachOffen }" :aria-pressed="kiCoachOffen"
+                :title="kiCoachOffen ? t('kiCoach.schliessen') : t('kiCoach.oeffnen')"
+                :aria-label="kiCoachOffen ? t('kiCoach.schliessen') : t('kiCoach.oeffnen')" @click="schalteKiCoach">
                 <Symbol name="ki" :groesse="18" />
             </button>
 

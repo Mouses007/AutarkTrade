@@ -7,6 +7,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { ladeUebersicht, uebersicht, laedt, ladeFehler } from '../stores/portfolio.js'
 import PortfolioUebersicht from '../components/portfolio/PortfolioUebersicht.vue'
 import PortfolioBewegungen from '../components/portfolio/PortfolioBewegungen.vue'
@@ -20,6 +21,7 @@ import { Hinweis, Kreisel } from '../components/basis/index.js'
 const { t } = useI18n()
 const route = useRoute()
 const reiter = computed(() => (['dca', 'bewegungen', 'staking', 'quellen', 'steuer', 'totalverluste'].includes(route.params.reiter) ? route.params.reiter : 'uebersicht'))
+useKiSeitenStand(() => ({ reiter: reiter.value }))
 
 onMounted(ladeUebersicht)
 </script>

@@ -5,6 +5,7 @@
  * genau dieser Instanz, bis 01.11.2026 standen sie im Labor) und die Aktionen.
  */
 import { ref, computed, onMounted } from 'vue'
+import { oeffneKiCoach } from '@/stores/app/kiCoach.js'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
@@ -97,7 +98,7 @@ onMounted(() => { versionenLaden(); vorschlaegeLaden() })
 // ── Aktionen ─────────────────────────────────────────────────────────────
 function imLabor() { router.push({ path: '/strategien/labor/test', query: { instanz: props.instanz.id } }) }
 function kiCoach() {
-    router.push({ path: '/ki-coach', query: { agentPrompt: t('strategies.optimizePrompt', { name: props.instanz.name, id: props.instanz.id }) } })
+    oeffneKiCoach({ frage: t('strategies.optimizePrompt', { name: props.instanz.name, id: props.instanz.id }), neu: true })
 }
 const frage = ref('')     // '' | 'neustart' | 'loeschen'
 async function neuStarten() {

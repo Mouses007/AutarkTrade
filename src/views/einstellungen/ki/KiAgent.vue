@@ -7,6 +7,7 @@
 import { useI18n } from 'vue-i18n'
 import AnbieterWahl from '@/components/AnbieterWahl.vue'
 import Knopf from '@/components/basis/Knopf.vue'
+import { oeffneKiCoach } from '@/stores/app/kiCoach.js'
 import Feld from '../gemeinsam/Feld.vue'
 import { kiSpeichern } from '../gemeinsam/speichern.js'
 import { useKiAnbieter } from '../gemeinsam/useKiAnbieter.js'
@@ -31,7 +32,7 @@ const {
                     @update:provider="w => { aiAgentProvider = w; aiAgentModell = ''; kiSpeichern('aiAgentProvider', w); kiSpeichern('aiAgentModell', '') }"
                     @update:modell="w => { aiAgentModell = w; kiSpeichern('aiAgentModell', w) }" />
                 <div>
-                    <Knopf to="/ki-coach" symbol="agent" klein>{{ t('settings.ki.openAgent') }}</Knopf>
+                    <Knopf symbol="agent" klein @click="oeffneKiCoach()">{{ t('settings.ki.openAgent') }}</Knopf>
                 </div>
             </div>
         </Feld>
