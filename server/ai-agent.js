@@ -21,6 +21,9 @@ import { aufgabenWahl } from './ai-task-config.js'
 import { beobachteAbbruch, sseSender } from './sse.js'
 import { merkeVerbrauch } from './ai-usage.js'
 import { isValidTimeframe } from './market-data.js'
+import { pruefeSeitenStand } from './ki-seitenstand.js'
+import { ZITAT_REGEL } from './fremdtext.js'
+import { agentMaxTokens, AGENT_WIEDERHOLUNG_TOKENS, kuerzeErgebnis, leseErgebnis } from './ai-agent-kern.js'
 
 const MAX_ITERATIONS = 10
 // Voreinstellung des Token-Budgets je Lauf — überschreibbar in den
@@ -78,7 +81,7 @@ async function loadAiSettings() {
         model,
         apiKey,
         temperature: settings.aiTemperature ?? 0.7,
-        maxTokens: settings.aiMaxTokens || 4000,
+        maxTokens: agentMaxTokens(settings.aiMaxTokens),
         tokenBudget: Math.max(MIN_TOKEN_BUDGET, Number(settings.aiAgentTokenBudget) || DEFAULT_TOKEN_BUDGET),
         ollamaUrl: settings.aiOllamaUrl || DEFAULT_OLLAMA_URL,
         endpunkt: chatEndpunkt(provider, settings)
@@ -87,7 +90,18 @@ async function loadAiSettings() {
 
 // ==================== SYSTEM PROMPT ====================
 
-function buildSystemPrompt(seitenKontext, chartKontext = null) {
+/**
+ * Systemprompt des KI-Coachs.
+ *
+ * Bis zum Umbau zur Seitenleiste (15.11.2026) begann er mit „Trading-Analyse-
+ * Agent mit Zugriff auf das Trading-Journal" — der Coach steht aber auf jeder
+ * Seite. Jetzt nennt er je Bereich der App die zuständigen Werkzeuge und
+ * bekommt, was der Nutzer gerade vor sich hat (`config.seitenStand`).
+ *
+ * @param {{seitenKontext?: object|null, chartKontext?: object|null, seitenStand?: {zeilen: string[]}|null}} config
+ */
+export function buildSystemPrompt(config = {}) {
+    const { seitenKontext = null, chartKontext = null, seitenStand = null } = config
     const now = new Date()
     const dateStr = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     const year = now.getFullYear()
@@ -97,8 +111,9 @@ function buildSystemPrompt(seitenKontext, chartKontext = null) {
     const todayStart = Math.floor(new Date(year, month - 1, day, 0, 0, 0).getTime() / 1000)
     const monthStart = Math.floor(new Date(year, month - 1, 1, 0, 0, 0).getTime() / 1000)
     const yearStart = Math.floor(new Date(year, 0, 1, 0, 0, 0).getTime() / 1000)
+    const standZeilen = seitenStand?.zeilen?.length ? seitenStand.zeilen : null
 
-    return `Du bist ein autonomer Trading-Analyse-Agent. Du hast Zugriff auf Tools, die das Trading-Journal des Users abfragen können.
+    return `Du bist der KI-Coach von AutarkTrade, einer lokalen Trading-Software. Du sitzt als Seitenleiste neben der Seite, die der Nutzer gerade offen hat, und beantwortest Fragen zu dieser Seite, zu seinen Daten und zur Bedienung. Dafür hast du Werkzeuge, die die Daten der App lesen.
 
 AKTUELLES DATUM: ${dateStr}
 Jahr: ${year}, Monat: ${month}, Tag: ${day}
@@ -107,50 +122,40 @@ Referenz-Timestamps (Unix, Sekunden):
 - Erster des aktuellen Monats: ${monthStart}
 - Jahresanfang ${year}: ${yearStart}
 
-Deine Aufgabe:
-- Beantworte Trading-Fragen durch eigenständige Datenabfrage
-- Analysiere Muster, Risiken und Performance
-- Gib konkrete, datenbasierte Empfehlungen
-- Zeige Stärken und Schwächen auf
-- Beantworte auch Fragen zur Bedienung dieser Software (Seiten, Einstellungen,
-  Import, Live-Analyse, Live-Trading, Strategien-Modus) — dafür gibt es
-  query_app_help mit der eingebauten Doku. Antworte zur Software NUR aus
-  dieser Doku, nie aus Allgemeinwissen; steht etwas nicht darin, sage das.
-- Fragen zur aktuellen Marktlage (Fear & Greed, Dominanz, Funding, Long/Short,
-  Liquidationen, Makro …) beantwortest du mit query_marktradar — nur die
-  gelieferten Zahlen nennen, keine Handelsempfehlung daraus machen.
-- Fragen zum Coin-Radar ("welcher Coin lässt sich gerade gut handeln")
-  beantwortest du mit query_coin_radar, NICHT mit query_marktradar — das sind
-  zwei verschiedene Features. Eine hohe Note heisst "lässt sich jetzt gut
-  handeln", nicht "steigt"; keine Kursprognose daraus machen.
-
-${seitenKontext ? `AKTUELLER KONTEXT:
-Der Nutzer hat dich gerade von der Seite „${seitenKontext.themaTitel}" aus geöffnet. Bezieht sich seine Frage erkennbar darauf, was dort zu sehen ist, zieh bevorzugt query_app_help(topic="${seitenKontext.thema}") heran.${seitenKontext.hinweis ? ' ' + seitenKontext.hinweis : ''}
+${seitenKontext || standZeilen ? `WAS DER NUTZER GERADE SIEHT:
+${seitenKontext ? `Seite: „${seitenKontext.themaTitel}" (seitenId ${seitenKontext.seitenId}). Die Bedienung dieser Seite steht in query_app_help(topic="${seitenKontext.thema}").${seitenKontext.hinweis ? ' ' + seitenKontext.hinweis : ''}
+` : ''}${standZeilen ? standZeilen.map((z) => '- ' + z).join('\n') + '\n' : ''}Wörter wie „hier", „diese Seite", „der", „dieser Coin" meinen das. Hole die Daten dazu mit dem passenden Werkzeug, statt nachzufragen, was gemeint ist.
 
 ` : ''}${chartKontext ? `OFFENER CHART:
-Der Nutzer chattet aus dem Chart-Arbeitsplatz. Offen ist ${chartKontext.symbol} auf ${chartKontext.interval} (${chartKontext.markt === 'spot' ? 'Spot' : 'Perpetual'})${chartKontext.bis ? `, rechter Rand des sichtbaren Bereichs ${new Date(chartKontext.bis).toISOString().slice(0, 16)}Z` : ''}.
-Fragen zu „diesem Chart", einer Linie, Zone, Marke oder der Struktur beantwortest du mit query_chart(symbol="${chartKontext.symbol}", interval="${chartKontext.interval}", markt="${chartKontext.markt}"${chartKontext.bis ? `, bis=${chartKontext.bis}` : ''}) — rufe es auf, bevor du über den Chart sprichst. Nenne nur Preise, die in den Daten stehen (Hochs, Tiefs, POC, Value Area, eigene Linien), mit Datum. Keine Kursziele, keine Prognose, keine Handelsempfehlung — beschreibe Marken und was ihr Bruch bedeuten würde. Antworte knapp: der Chat steht in einer schmalen Seitenleiste.
+Offen ist ${chartKontext.symbol} auf ${chartKontext.interval} (${chartKontext.markt === 'spot' ? 'Spot' : 'Perpetual'})${chartKontext.bis ? `, rechter Rand des sichtbaren Bereichs ${new Date(chartKontext.bis).toISOString().slice(0, 16)}Z` : ''}.
+Fragen zu „diesem Chart", einer Linie, Zone, Marke oder der Struktur beantwortest du mit query_chart(symbol="${chartKontext.symbol}", interval="${chartKontext.interval}", markt="${chartKontext.markt}"${chartKontext.bis ? `, bis=${chartKontext.bis}` : ''}) — rufe es auf, bevor du über den Chart sprichst. Nenne nur Preise, die in den Daten stehen (Hochs, Tiefs, POC, Value Area, eigene Linien), mit Datum. Beschreibe Marken und was ihr Bruch bedeuten würde.
 
-` : ''}Regeln:
-- Nutze immer zuerst die passenden Tools, bevor du antwortest
-- Beziehe dich NUR auf tatsächliche Daten aus den Tool-Ergebnissen
-- Erfinde keine Zahlen oder Trades
-- Schreibe auf Deutsch, verwende Markdown-Formatierung
-- Sei direkt und konstruktiv — wie ein guter Trading-Coach
-- Wenn Daten fehlen oder der Zeitraum keine Trades enthält, sage das klar
-- Wenn der User "diesen Monat" oder "März" sagt, nutze das aktuelle Jahr ${year}!
+` : ''}WELCHES WERKZEUG WOFÜR:
+${WERKZEUG_WEGWEISER}
 
-Tipps für Tool-Nutzung:
-- Für Gesamtübersicht: compute_statistics (enthält Win-Rate, PnL, Profit Factor etc.)
-- Für einzelne Trades: query_trades + query_notes
-- Für SL/TP-Analyse: analyze_sl_tp_patterns
-- Für Strategie-Analyse: query_tags + query_playbooks + compute_statistics
-- Für Risiko-Analyse: query_excursions + compute_statistics
+Regeln:
+- Nutze zuerst das passende Werkzeug, bevor du antwortest. Beziehe dich NUR auf Daten aus den Werkzeug-Ergebnissen; erfinde keine Zahlen, Trades, Token oder Kurse.
+- Zur Software antwortest du NUR aus query_app_help, nie aus Allgemeinwissen. Steht etwas nicht darin, sag das.
+- Gibt es für eine Frage kein Werkzeug oder liefert es nichts, sag das in einem Satz und nenne, wo der Nutzer es in der App selbst sieht.
+- Keine Anlageberatung: keine Kauf- oder Verkaufsempfehlung, keine Kursziele, keine Prognosen. Eine hohe Note im Coin-Radar heisst „lässt sich jetzt gut handeln", nicht „steigt"; eine hohe Note im Hype-Radar heisst „fällt gerade auf", nicht „wird steigen".
+- Antworte in der Sprache der Frage, mit Schweizer Rechtschreibung im Deutschen (ss statt ß).
+- Antworte knapp: du stehst in einer schmalen Seitenleiste. Zuerst die Antwort, dann höchstens die zwei, drei Zahlen, die sie tragen. Kurze Listen statt Tabellen, sparsam mit Überschriften.
+- Sei direkt und konstruktiv. Fehlen Daten oder enthält der Zeitraum keine Trades, sag das klar.
+- Sagt der Nutzer „diesen Monat" oder „März", gilt das aktuelle Jahr ${year}.
+- ${ZITAT_REGEL}
 
-AUTOMATISCH GEHANDELTE STRATEGIEN (Agent-Modus):
-Neben dem manuellen Journal gibt es Strategie-Instanzen, die eigenständig
-handeln (Papier, Schatten oder Live). Ihre Trades stehen NICHT in query_trades,
-sondern in eigenen Tabellen — dafür gibt es eigene Tools.
+JOURNAL — Tipps für die Werkzeuge:
+- Gesamtübersicht: compute_statistics (Win-Rate, PnL, Profit Factor …)
+- Einzelne Trades: query_trades + query_notes
+- SL/TP-Verhalten: analyze_sl_tp_patterns
+- Setups und Regeln: query_tags + query_playbooks + compute_statistics
+- Risiko: query_excursions + compute_statistics
+
+SIMULIERTE STRATEGIEN (Strategien-Modus):
+Neben dem manuellen Journal gibt es Strategie-Instanzen, die simuliert
+handeln (Papier oder Schatten; die App sendet keine Orders). Ihre Trades
+stehen NICHT in query_trades, sondern in eigenen Tabellen — dafür gibt es
+eigene Werkzeuge.
 
 Wenn du eine solche Strategie verbessern sollst, halte diese Reihenfolge ein:
 1. get_strategy_config — aktuelle Parameter UND die erlaubten Wertebereiche.
@@ -173,6 +178,19 @@ Harte Regeln dabei:
   kein Erfolg — prüfe dann die Einzeltrades auf Ausreisser.
 - Dein Vorschlag ändert nichts. Der User übernimmt ihn im Labor oder nicht.`
 }
+
+/**
+ * Je Bereich der App eine Zeile: welches Werkzeug die Daten der Seite liest.
+ * Eine Konstante, damit der Selbsttest prüfen kann, dass jedes genannte
+ * Werkzeug existiert.
+ */
+export const WERKZEUG_WEGWEISER = `- Bedienung der Software, jede Seite: query_app_help.
+- Journal (Dashboard, Tagesansicht, Kalender, Playbook, Auswertung, Screenshots, Pendente Trades): query_trades, compute_statistics, query_notes, query_tags, query_playbooks, query_satisfactions, query_excursions, analyze_sl_tp_patterns, query_screenshots, analyze_screenshot, query_incoming_positions.
+- Marktradar (Fear & Greed, Dominanz, Funding, Long/Short, Liquidationen, Makro): query_marktradar. Nur die gelieferten Zahlen nennen.
+- Coin-Radar („welcher Coin lässt sich gerade gut handeln"): query_coin_radar, NICHT query_marktradar — das sind zwei verschiedene Funktionen.
+- Chart: query_chart.
+- Strategien: get_strategy_config, get_strategy_performance, get_strategy_setups, run_backtest, propose_param_change.
+- KI-Einstellungen und Modellwahl: query_settings, analyze_model_performance, get_openrouter_models, recommend_model_allocation.`
 
 // ==================== TOOL FORMAT CONVERTERS ====================
 
@@ -239,7 +257,7 @@ async function callAnthropicWithTools(messages, config) {
         body: JSON.stringify({
             model: config.model,
             max_tokens: config.maxTokens,
-            system: buildSystemPrompt(config.seitenKontext, config.chartKontext),
+            system: buildSystemPrompt(config),
             messages,
             tools: toolsToAnthropic(),
             // Werkzeuge bleiben im Request (die Historie enthält tool_use-Blöcke,
@@ -282,7 +300,7 @@ async function callAnthropicWithTools(messages, config) {
 
 async function callOpenAIWithTools(messages, config, endpoint = 'https://api.openai.com/v1/chat/completions') {
     const apiMessages = [
-        { role: 'system', content: buildSystemPrompt(config.seitenKontext, config.chartKontext) },
+        { role: 'system', content: buildSystemPrompt(config) },
         ...messages
     ]
 
@@ -356,7 +374,7 @@ async function callGeminiWithTools(messages, config) {
         } else if (msg.role === 'tool') {
             const parts = [{ functionResponse: {
                 name: msg.toolName,
-                response: { result: JSON.parse(msg.content || '{}') }
+                response: { result: leseErgebnis(msg.content) }
             } }]
             // Add image if present
             if (msg.imageContent) {
@@ -378,7 +396,7 @@ async function callGeminiWithTools(messages, config) {
             'x-goog-api-key': config.apiKey
         },
         body: JSON.stringify({
-            systemInstruction: { parts: [{ text: buildSystemPrompt(config.seitenKontext, config.chartKontext) }] },
+            systemInstruction: { parts: [{ text: buildSystemPrompt(config) }] },
             contents,
             tools: toolsToGemini(),
             ...(config.ohneTools ? { toolConfig: { functionCallingConfig: { mode: 'NONE' } } } : {}),
@@ -426,7 +444,7 @@ async function callOllamaWithTools(messages, config) {
     assertAllowedOllamaUrl(url)
 
     // Ollama: inject tools into system prompt
-    const enrichedSystem = config.ohneTools ? buildSystemPrompt(config.seitenKontext, config.chartKontext) : buildSystemPrompt(config.seitenKontext, config.chartKontext) + '\n\n' + toolsToPromptText()
+    const enrichedSystem = config.ohneTools ? buildSystemPrompt(config) : buildSystemPrompt(config) + '\n\n' + toolsToPromptText()
     const ollamaMessages = [
         { role: 'system', content: enrichedSystem },
         ...messages.map(m => {
@@ -636,8 +654,12 @@ function buildGeminiMessages(history) {
  * @param {Function} sendSSE - Function to send SSE events
  * @returns {Promise<object>} { answer, totalTokens, promptTokens, completionTokens, totalToolCalls, messages }
  */
-async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, istAbgebrochen = () => false) {
+export async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, istAbgebrochen = () => false) {
     const knex = getKnex()
+    // Für den Selbsttest lässt sich der Modellaufruf ersetzen.
+    const rufeModell = config.rufeModell || callLLMWithTools
+    // Zustand EINES Laufs für die Werkzeuge (Fremdtext-Sperre, siehe ai-agent-tools.js).
+    const lauf = { fremdtextGesehen: false }
     const history = [...conversationHistory]
     history.push({ role: 'user', content: userMessage })
 
@@ -649,6 +671,7 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
     // Antwort kam leer zurück, weil das Antwortbudget schon im Denkschritt
     // aufgebraucht war — das ist etwas anderes als „Rechenbudget erschöpft".
     let budgetZuKlein = false
+    let wiederholt = false
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         // Hat der Browser die Verbindung gekappt (Seitenwechsel, Reload), hört
@@ -661,7 +684,7 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
         const providerMessages = buildProviderMessages(history, config.provider)
 
         // Call LLM with tools
-        const response = await callLLMWithTools(providerMessages, config)
+        const response = await rufeModell(providerMessages, config)
         totalTokens += response.usage.totalTokens
         promptTokens += response.usage.promptTokens || 0
         completionTokens += response.usage.completionTokens || 0
@@ -676,6 +699,14 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
             // Nutzer bekam anschliessend die irreführende Meldung, sein
             // Rechenbudget sei aufgebraucht.
             if (!response.text) {
+                // Einmal von selbst mit mehr Antwortlänge wiederholen, statt den
+                // Nutzer in die Einstellungen zu schicken (sein Wunsch vom
+                // 15.11.2026). Die höhere Grenze gilt für den Rest des Laufs.
+                if (!wiederholt && !istAbgebrochen()) {
+                    wiederholt = true
+                    config = { ...config, maxTokens: Math.max(config.maxTokens || 0, AGENT_WIEDERHOLUNG_TOKENS) }
+                    continue
+                }
                 budgetZuKlein = true
                 break
             }
@@ -703,7 +734,7 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
             totalToolCalls++
             sendSSE({ type: 'tool_call', name: call.name, params: call.params })
 
-            const result = await executeTool(call.name, call.params, knex)
+            const result = await executeTool(call.name, call.params, knex, lauf)
 
             // Special handling for image tool results
             if (result.__imageContent) {
@@ -720,11 +751,8 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
                     }
                 })
             } else {
-                const resultStr = JSON.stringify(result)
-                // Truncate very large results to save tokens
-                const truncated = resultStr.length > 15000
-                    ? resultStr.substring(0, 15000) + '... [truncated]'
-                    : resultStr
+                // Gedeckelt, bleibt aber gültiges JSON (siehe ai-agent-kern.js)
+                const truncated = kuerzeErgebnis(result)
 
                 sendSSE({ type: 'tool_result', name: call.name, resultPreview: summarizeResult(result) })
 
@@ -752,8 +780,8 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
     // Aufruf aus dem, was bereits vorliegt, eine echte Antwort. Die Bitte
     // wandert NICHT in die gespeicherte Historie, nur die Antwort.
     if (budgetZuKlein && !istAbgebrochen()) {
-        finalAnswer = `Das Modell hat sein Antwortbudget (Max Tokens: ${config.maxTokens}) bereits im Denkschritt aufgebraucht — es kam kein Text zurück. `
-            + 'Erhöhe „Max Tokens" in den KI-Einstellungen (für die denkenden Modelle mindestens 8000).'
+        finalAnswer = `Das Modell hat auch mit erhöhter Antwortlänge (${config.maxTokens} Tokens) keinen Text geliefert. `
+            + 'Stell die Frage bitte noch einmal oder etwas enger.'
         history.push({ role: 'assistant', content: finalAnswer })
         sendSSE({ type: 'answer', content: finalAnswer, kiGeneriert: true })
     } else if (!finalAnswer && !istAbgebrochen()) {
@@ -767,7 +795,7 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
         try {
             // `ohneTools`: die Bitte allein hält das Modell nicht davon ab, noch
             // eine Runde Werkzeuge zu rufen — dann käme wieder keine Antwort.
-            const abschluss = await callLLMWithTools(buildProviderMessages([...history, bitte], config.provider), { ...config, ohneTools: true })
+            const abschluss = await rufeModell(buildProviderMessages([...history, bitte], config.provider), { ...config, ohneTools: true })
             totalTokens += abschluss.usage.totalTokens
             promptTokens += abschluss.usage.promptTokens || 0
             completionTokens += abschluss.usage.completionTokens || 0
@@ -820,7 +848,9 @@ export function setupAgentRoutes(app) {
             return res.status(429).json({ error: 'Ein Agent-Lauf läuft bereits. Bitte warten.' })
         }
 
-        const { sessionId, message, seitenId, chart } = req.body
+        const { sessionId, message, chart, seite } = req.body
+        // `seite: { id, stand }` schickt die Seitenleiste; `seitenId` allein ist der ältere Weg.
+        const seitenId = (seite && typeof seite === 'object' ? seite.id : null) || req.body.seitenId
         if (!message || !message.trim()) {
             return res.status(400).json({ error: 'Nachricht darf nicht leer sein.' })
         }
@@ -852,6 +882,8 @@ export function setupAgentRoutes(app) {
             // Load AI config
             const config = await loadAiSettings()
             config.seitenKontext = seitenId ? seitenKontext(seitenId) : null
+            // Reiter, aufgeklappte Zeile, Filter — geprüft, bevor es in den Systemprompt geht.
+            config.seitenStand = seite && typeof seite === 'object' ? pruefeSeitenStand(seite.stand) : null
             // Chart-Kontext aus dem KI-Chat-Reiter: geprüft, bevor er in den Systemprompt geht.
             if (chart && /^[A-Z0-9]{2,20}$/.test(String(chart.symbol || '')) && isValidTimeframe(String(chart.interval || ''))) {
                 config.chartKontext = {
@@ -1059,6 +1091,19 @@ export function setupAgentRoutes(app) {
             res.json({ success: true })
         } catch (err) {
             res.status(500).json({ error: err.message })
+        }
+    })
+
+    // GET /api/ai/agent/status — Anbieter und Modell, mit denen der Coach WIRKLICH läuft.
+    // `/api/ai/status` meldet den globalen Anbieter; ist für den Agenten ein
+    // eigener gewählt, stand in der Pille bisher das falsche Modell. Kein
+    // Probeaufruf beim Anbieter: die Leiste fragt das bei jedem Öffnen.
+    app.get('/api/ai/agent/status', async (req, res) => {
+        try {
+            const c = await loadAiSettings()
+            res.json({ provider: c.provider, model: c.model, bereit: c.provider === 'ollama' || Boolean(c.apiKey) })
+        } catch (e) {
+            res.json({ provider: '', model: '', bereit: false })
         }
     })
 

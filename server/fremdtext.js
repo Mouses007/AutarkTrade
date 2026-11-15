@@ -75,6 +75,20 @@ export function einzeilig(text, max = 200) {
 }
 
 /**
+ * Fremdtext als Zitat INNERHALB einer Zeile: gekürzt, einzeilig, markiert.
+ *
+ * Für Werkzeug-Ergebnisse und den Seitenstand des KI-Coachs, wo ein Token-Name
+ * neben eigenen Zahlen in einer Datenzeile steht.
+ *
+ * @param {string} text
+ * @param {number} [max]
+ * @returns {string}
+ */
+export function zitatZeile(text, max = 40) {
+    return `${START}${entschaerfe(einzeilig(text, max))}${ENDE}`
+}
+
+/**
  * Umschliesst Fremdtext als Zitat.
  *
  * @param {string} text

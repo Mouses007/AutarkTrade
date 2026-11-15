@@ -286,7 +286,7 @@ export function hilfeThema(thema) {
 // ==================== SEITENKONTEXT (für den Chat-Agenten) ====================
 //
 // Wird der Agent von einer bestimmten Seite aus geöffnet (Roboter-Button in
-// Nav.vue), bekommt er deren `seitenId` mitgeschickt. `seitenKontext()` bildet
+// Titelzeile.vue → KI-Coach-Leiste), bekommt er deren `seitenId` mitgeschickt. `seitenKontext()` bildet
 // sie auf ein Thema aus HILFE_THEMEN ab, damit der System-Prompt gezielt
 // darauf hinweisen kann, statt dass das Modell aus dem Fragetext raten muss.
 // Absichtlich als reine Server-Konstante nachgebildet statt aus
@@ -307,11 +307,12 @@ const MODE_ZU_THEMA = {
 const SEITEN_ZU_MODUS = {
     chart: 'start',
     journalUebersicht: 'journal', tagesansicht: 'journal', kalender: 'journal', bewertungen: 'journal',
-    auswertung: 'journal', kiAgent: 'journal', bilder: 'journal', incoming: 'journal',
+    auswertung: 'journal', kiAgent: 'journal', bilder: 'journal', incoming: 'journal', bots: 'journal',
     tradeImport: 'journal', accounts: 'journal', exkursionen: 'journal', setup: 'journal',
     marktradar: 'live', nachrichten: 'live', openinterest: 'live', liquidity: 'live',
     liquidations: 'live', livetrading: 'live', liveSessions: 'live', liveAuswertung: 'live',
-    hypeRadar: 'research', hypeFrueh: 'research', hypeBoersen: 'research', hypeBerichte: 'research', coinRadar: 'research', coinVerlauf: 'research',
+    hypeRadar: 'research', hypeFrueh: 'research', hypeBoersen: 'research', hypeBerichte: 'research', coinRadar: 'research', coinVerlauf: 'research', coinAbverkauf: 'research',
+    newcomerRadar: 'research', aktienRadar: 'research', aktienStamm: 'research',
     strategieBibliothek: 'agent', strategieLabor: 'agent', strategieInstanzen: 'agent',
     lernen: 'lernen', lernenKarten: 'lernen', lernenStatistik: 'lernen',
     portfolio: 'portfolio', portfolioDca: 'portfolio', portfolioBewegungen: 'portfolio', portfolioStaking: 'portfolio', portfolioSteuer: 'portfolio', portfolioQuellen: 'portfolio', portfolioTotalverluste: 'portfolio',
@@ -340,6 +341,7 @@ const RADAR_HINWEIS_HYPE = 'query_marktradar liefert NICHT die Hype-Radar-Funde 
 const SEITEN_HINWEIS = {
     coinRadar: RADAR_HINWEIS_COIN,
     coinVerlauf: RADAR_HINWEIS_COIN,
+    coinAbverkauf: RADAR_HINWEIS_COIN,
     hypeRadar: RADAR_HINWEIS_HYPE,
     hypeFrueh: RADAR_HINWEIS_HYPE,
     hypeBoersen: RADAR_HINWEIS_HYPE,
