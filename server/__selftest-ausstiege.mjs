@@ -15,7 +15,7 @@ import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { kostenAus } from './fill-simulator.js'
 import {
     ausstiegsRaster, spieleEinzeln, fundingRechner, waehleZone, kennzahlen, kerzeBei,
-    einstiegsKante, ueberanpassung, varianteAus,
+    einstiegsKante, ueberanpassung, varianteAus, urteilAusVergleich,
     STOP_FAKTOREN, ZIELE_R, HALTEN,
 } from './ausstiege.js'
 import { zufall } from '../shared/statistik.js'
@@ -342,9 +342,54 @@ console.log('\nDieselben Zahlen wie der Backtest')
         JSON.stringify({ einstieg: e.einstieg.urteil, pbo: e.ueberanpassung }))
     check('Zweifelsfälle je Zelle gezählt', e.zellen.every((c) => Number.isInteger(c.zweifel) && c.zweifel <= c.alle.n)
         && e.zellen.some((c) => c.zweifel > 0))
-    check('Urteil ist einer der bekannten Werte', ['zuWenig', 'besser', 'nichtGesichert', 'keinVorteil'].includes(e.urteil), e.urteil)
+    check('Urteil ist einer der bekannten Werte', ['zuWenig', 'besser', 'nichtGesichert', 'widerspruechlich', 'keinVorteil'].includes(e.urteil), e.urteil)
     // Ein Zufallsweg hat keine Kante — kein Ausstieg darf ihm eine gesichert andichten.
     check('auf einem Zufallsweg kein gesicherter Vorteil', e.urteil !== 'besser', `${e.urteil} p=${e.gewaehlt?.vergleich.p}`)
+
+    // Audit FUN-R-301: Der Vorzeichentest ist zweiseitig. Ein kleines p bei positivem
+    // Mittel heisst nur dann «besser», wenn auch die Mehrheit der Trades besser ist.
+    check('Urteil: Mittel positiv, Mehrheit besser, p klein → besser',
+        urteilAusVergleich({ mittelDiff: 0.2, besser: 26, schlechter: 4, p: 0.0001 }) === 'besser')
+    check('Urteil: Mittel positiv, aber 4 besser gegen 26 schlechter (p = 0,0001) → widersprüchlich, nicht besser',
+        urteilAusVergleich({ mittelDiff: 0.36, besser: 4, schlechter: 26, p: 0.0001 }) === 'widerspruechlich')
+    check('Urteil: Gleichstand bei kleinem p gibt es nicht, zählt aber nie als besser',
+        urteilAusVergleich({ mittelDiff: 0.1, besser: 5, schlechter: 5, p: 0.01 }) !== 'besser')
+    check('Urteil: Mittel positiv, p gross → nicht gesichert (egal welche Mehrheit)',
+        urteilAusVergleich({ mittelDiff: 0.1, besser: 12, schlechter: 18, p: 0.36 }) === 'nichtGesichert'
+        && urteilAusVergleich({ mittelDiff: 0.1, besser: 18, schlechter: 12, p: 0.36 }) === 'nichtGesichert'
+        && urteilAusVergleich({ mittelDiff: 0.1, besser: 0, schlechter: 0, p: null }) === 'nichtGesichert')
+    check('Urteil: Mittel ≤ 0 → kein Vorteil, auch wenn die Mehrheit gesichert besser ist (Gegenfall)',
+        urteilAusVergleich({ mittelDiff: -0.3, besser: 26, schlechter: 4, p: 0.0001 }) === 'keinVorteil'
+        && urteilAusVergleich({ mittelDiff: 0, besser: 15, schlechter: 15, p: 1 }) === 'keinVorteil'
+        && urteilAusVergleich({ mittelDiff: null, besser: 0, schlechter: 0, p: null }) === 'keinVorteil')
+    {
+        // Dasselbe durch das ganze Raster: Die eigenen Ausstiege sind im Prüfteil bei den
+        // vier besten Zonen-Trades 3 R schlechter, bei allen anderen 0,05 R besser.
+        const H = 3600000; const T0 = Date.UTC(2026, 0, 1)
+        const rnd = zufall(7); const ks = []; let pr = 100
+        for (let i = 0; i < 6000; i++) {
+            const o = pr; const c = pr * (1 + (rnd() - 0.5) * 0.008)
+            ks.push({ t: T0 + i * H, o, h: Math.max(o, c) * (1 + rnd() * 0.0024), l: Math.min(o, c) * (1 - rnd() * 0.0024), c, v: 1 }); pr = c
+        }
+        const oo = { kerzeMs: H, costs: { feeMakerBps: 0, feeTakerBps: 0, slippageBps: 0 }, wartungsmargePct: 0.5 }
+        const rnd2 = zufall(3); const ts = []
+        for (let i = 20; i < 5600; i += 56) {
+            const dir = rnd2() < 0.5 ? 'long' : 'short'; const ep = ks[i].o
+            ts.push({ symbol: 'X', direction: dir, entryPrice: ep, stopLoss: dir === 'long' ? ep * 0.99 : ep * 1.01, entryTime: ks[i].t, leverage: 1, einstiegsArt: 'eroeffnung', einstiegsGebuehrBps: 0, exitReason: 'tp', rMultiple: 0 })
+        }
+        const erst = await ausstiegsRaster(ts, ks, oo)
+        const gz = erst.gewaehlt
+        const zelle = { faktor: STOP_FAKTOREN[gz.s], zielR: ZIELE_R[gz.z], halten: HALTEN[gz.h] }
+        const rz = ts.map((t) => spieleEinzeln(t, ks, zelle, oo).r)
+        const nA = erst.trades.auswahl
+        const top = new Set(rz.map((r, k) => [r, k]).slice(nA).sort((a, b) => b[0] - a[0]).slice(0, 4).map((x) => x[1]))
+        ts.forEach((t, k) => { t.rMultiple = k < nA ? rz[k] : (top.has(k) ? rz[k] - 3 : rz[k] + 0.05) })
+        const w = await ausstiegsRaster(ts, ks, oo)
+        const v = w.gewaehlt.vergleich
+        check('Raster: wenige Ausreisser tragen das Mittel, die Mehrheit ist gesichert schlechter',
+            v.mittelDiff > 0 && v.besser < v.schlechter && v.p < 0.05, JSON.stringify(v))
+        check('Raster: daraus wird «widersprüchlich», nicht «besser»', w.urteil === 'widerspruechlich', w.urteil)
+    }
 
     // Break-even: dieselbe Rechnung wie eine Strategie mit Break-even ab 1 R
     const mitBe = await lauf(0, { regeln: { maxHoldCandles: 16, breakEvenAtR: 1 }, breakEvenCoversCosts: true })

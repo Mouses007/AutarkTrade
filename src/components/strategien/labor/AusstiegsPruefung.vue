@@ -203,6 +203,8 @@ const zeilen = computed(() => {
                         n: a.trades.gespielt,
                         p: pWert(a.gewaehlt?.vergleich?.p),
                         diff: zahl(a.gewaehlt?.vergleich?.mittelDiff),
+                        besser: a.gewaehlt?.vergleich?.besser ?? 0,
+                        schlechter: a.gewaehlt?.vergleich?.schlechter ?? 0,
                     }) }}
                 </span>
             </div>

@@ -598,6 +598,29 @@ const runde = (v, stellen = 4) => (v === null || v === undefined || !Number.isFi
 const kurz = (k) => ({ n: k.n, mittel: runde(k.mittel), treffer: runde(k.treffer, 1), summe: runde(k.summe, 2), dd: runde(k.dd, 2) })
 
 /**
+ * Urteil über die gewählte Zone auf dem Prüfteil (rein).
+ *
+ * Der Vorzeichentest ist zweiseitig: ein kleines p sagt nur «einseitig», nicht
+ * in welche Richtung. «Besser, gesichert» gilt deshalb erst, wenn Mittel UND
+ * Mehrheit dasselbe sagen. Ist das Mittel positiv, die Zone aber bei den
+ * meisten Trades gesichert schlechter (4 besser, 26 schlechter, p = 0,0001 —
+ * das Plus stammt aus wenigen Ausreissern), belegt das p das Gegenteil des
+ * Mittels: «widerspruechlich» (Audit FUN-R-301).
+ *
+ * Der umgekehrte Fall (Mittel ≤ 0, Mehrheit besser) bleibt «keinVorteil»:
+ * dort wird nichts als gesichert behauptet.
+ *
+ * @param {{mittelDiff: number|null, besser: number, schlechter: number, p: number|null}} v
+ * @returns {'besser'|'nichtGesichert'|'widerspruechlich'|'keinVorteil'}
+ */
+export function urteilAusVergleich(v) {
+    if (!(v?.mittelDiff > 0)) return 'keinVorteil'
+    const einseitig = v.p !== null && v.p !== undefined && v.p < P_GRENZE
+    if (!einseitig) return 'nichtGesichert'
+    return v.besser > v.schlechter ? 'besser' : 'widerspruechlich'
+}
+
+/**
  * @param {Array} trades   Backtest-Trades (`einstiegsArt`, `einstiegsGebuehrBps`, …)
  * @param {Array|object} kerzen  dieselben Kerzen, auf denen der Backtest lief —
  *                       oder Symbol → Kerzen, wenn die Trades mehrere Symbole haben
@@ -724,10 +747,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
 
     const g = ergebnis.gewaehlt
     const nPruef = n - nAuswahl
-    if (n < MIN_TRADES || nPruef < MIN_PRUEF_TRADES || !g) ergebnis.urteil = 'zuWenig'
-    else if (g.vergleich.mittelDiff > 0 && g.vergleich.p !== null && g.vergleich.p < P_GRENZE) ergebnis.urteil = 'besser'
-    else if (g.vergleich.mittelDiff > 0) ergebnis.urteil = 'nichtGesichert'
-    else ergebnis.urteil = 'keinVorteil'
+    ergebnis.urteil = n < MIN_TRADES || nPruef < MIN_PRUEF_TRADES || !g ? 'zuWenig' : urteilAusVergleich(g.vergleich)
 
     // Unter der Mindestzahl sind Rand und Spitze Rauschen — dann steht nur
     // das Urteil „zu wenig" da, keine Deutung daneben.
