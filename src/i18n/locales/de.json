@@ -3736,7 +3736,14 @@
       "wartet": "Bestände werden beim nächsten Takt geholt.",
       "eigeneTage": "Kurve aus {n} eigenen Tagen — der Gratis-Tarif gibt nur 30 Tage her, alles Ältere wird hier gesammelt.",
       "nachtrag": "Die Quelle korrigiert Werte im Nachhinein; die letzten Tage werden deshalb erneut geholt.",
-      "info": "Wie viel Bitcoin institutionell über Spot-ETFs gehalten wird, und ob täglich mehr hinein- oder herausfliesst.\nZeigt, ob grosses Geld gerade Position aufbaut oder abbaut — ein anhaltender Abfluss über mehrere Tage wiegt schwerer als ein einzelner roter Tag."
+      "markt": "Markt wählen",
+      "ethKurz": "ETH-ETF",
+      "premium": "Coinbase-Premium",
+      "premiumTitel": "Abstand des BTC-Kurses bei Coinbase (USD) zu Binance (USDT) in Prozent",
+      "premiumLang": "Coinbase-Premium (BTC)",
+      "premiumStand": "Stand {tag}: {wert} · Mittel 7 Tage {w7} · 30 Tage {w30}.",
+      "premiumInfo": "Über null zahlen Käufer bei Coinbase mehr als bei Binance — Nachfrage aus den USA. Ein einzelner Tag sagt wenig; das Vorzeichen über mehrere Tage zählt.",
+      "info": "Wie viel Bitcoin institutionell über Spot-ETFs gehalten wird, und ob täglich mehr hinein- oder herausfliesst.\nZeigt, ob grosses Geld gerade Position aufbaut oder abbaut — ein anhaltender Abfluss über mehrere Tage wiegt schwerer als ein einzelner roter Tag.\nDazu der Tagesfluss der Ethereum-ETFs und das Coinbase-Premium: ob BTC bei Coinbase teurer ist als bei Binance."
     },
     "wal": {
       "title": "Wal-Bewegungen",
@@ -3841,7 +3848,7 @@
         },
         {
           "h": "ETF-FLUSS (BTC)",
-          "p": "Wie viele Bitcoin die Spot-ETFs zusammen halten und wie sich das täglich ändert. Der Zufluss IST die Bestandsänderung — eine zweite Zahl dafür gibt es nicht. Angezeigt wird in BTC, nicht in Dollar: mal Tageskurs gerechnet bewegte sich der „Zufluss\" auch an Tagen, an denen kein einziger Anteil geschaffen wurde. Gross zeigt die Kachel die einzelnen Fonds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) und weist als „Übrige Fonds\" aus, was auf die nicht einzeln abgefragten entfällt — die Gesamtsumme kommt von der Quelle und wird nie aus den Einzelnen addiert. Braucht einen CryptoQuant-Schlüssel (Gratis-Tarif genügt), einzutragen unter Einstellungen › Datenquellen › CryptoQuant. Die Quelle gibt nur 30 Tage Rückblick her; alles Ältere sammelt das Journal selbst, die Kurve wächst also mit der Zeit. Ein Warndreieck an der 7- oder 30-Tage-Summe heisst: für einzelne Tage im Fenster fehlt ein Wert, die Summe beruht auf weniger Tagen."
+          "p": "Wie viele Bitcoin die Spot-ETFs zusammen halten und wie sich das täglich ändert. Der Zufluss IST die Bestandsänderung — eine zweite Zahl dafür gibt es nicht. Angezeigt wird in BTC, nicht in Dollar: mal Tageskurs gerechnet bewegte sich der „Zufluss\" auch an Tagen, an denen kein einziger Anteil geschaffen wurde. Gross zeigt die Kachel die einzelnen Fonds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) und weist als „Übrige Fonds\" aus, was auf die nicht einzeln abgefragten entfällt — die Gesamtsumme kommt von der Quelle und wird nie aus den Einzelnen addiert. Braucht einen CryptoQuant-Schlüssel (Gratis-Tarif genügt), einzutragen unter Einstellungen › Datenquellen › CryptoQuant. Die Quelle gibt nur 30 Tage Rückblick her; alles Ältere sammelt das Journal selbst, die Kurve wächst also mit der Zeit. Ein Warndreieck an der 7- oder 30-Tage-Summe heisst: für einzelne Tage im Fenster fehlt ein Wert, die Summe beruht auf weniger Tagen. Aus derselben Quelle kommen zwei Beigaben: der Tagesfluss der Ethereum-Spot-ETFs (gross per Umschalter BTC/ETH mit eigener Kurve und Fondstabelle) und das Coinbase-Premium — der prozentuale Abstand des BTC-Kurses bei Coinbase zu Binance. Über null drängen US-Käufer; aussagekräftig ist das Vorzeichen über mehrere Tage, nicht der einzelne Wert."
         },
         {
           "h": "GESAMTLAGE (KI)",
@@ -7567,16 +7574,16 @@
       "ausText": "Aus: Diese Quellen und die Funktionen, die nur sie haben, sind aus und sagen warum. Alles andere läuft."
     },
     "cq": {
-      "titel": "CryptoQuant (ETF-Fluss)",
-      "unter": "Für die Kachel „ETF-Fluss\": wie viele Bitcoin die Spot-ETFs halten und wie sich das täglich ändert. Nur mit deinem eigenen API-Schlüssel.",
+      "titel": "CryptoQuant (ETF-Fluss, Coinbase-Premium)",
+      "unter": "Für die Kachel „ETF-Fluss\": wie viele Bitcoin die Spot-ETFs halten und wie sich das täglich ändert — dazu die Ethereum-ETFs und das Coinbase-Premium. Nur mit deinem eigenen API-Schlüssel.",
       "hinterlegt": "Schlüssel hinterlegt",
       "keiner": "Kein Schlüssel — die ETF-Kachel bleibt leer",
-      "tarif": "Der Gratis-Tarif („Basic\") reicht: die Fondsdaten zählen bei CryptoQuant als Marktdaten. Er gibt nur 30 Tage Rückblick her und erlaubt 10 Anfragen je Minute — geholt wird deshalb im Hintergrund, höchstens alle sechs Stunden, und alles Geholte bleibt gespeichert. Die Kachel selbst fragt nie bei CryptoQuant nach.",
+      "tarif": "Der Gratis-Tarif („Basic\") reicht: Fondsdaten und Coinbase-Premium zählen bei CryptoQuant als Marktdaten. Er gibt nur 30 Tage Rückblick her und erlaubt 10 Anfragen je Minute — geholt wird deshalb im Hintergrund, höchstens alle sechs Stunden, und alles Geholte bleibt gespeichert. Die Kachel selbst fragt nie bei CryptoQuant nach.",
       "schluessel": "API-Schlüssel",
       "speichern": "Speichern",
       "pruefen": "Schlüssel prüfen",
       "nachfuehren": "Jetzt nachführen",
-      "fortschritt": "{fertig} von {gesamt} Fonds",
+      "fortschritt": "{fertig} von {gesamt} Reihen",
       "holen": "Schlüssel bei CryptoQuant holen",
       "gueltig": "Schlüssel gültig — {btc} BTC in allen Fonds ({tag}).",
       "uebersprungen": "Übersprungen: {grund}",

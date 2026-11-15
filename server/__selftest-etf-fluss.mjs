@@ -16,7 +16,7 @@
 
 import {
     reiheAusAntwort, flussAusBestand, summeUeber, verdichteFonds,
-    baueNutzlast, frischeHinweis, tagesBeginn,
+    baueNutzlast, frischeHinweis, tagesBeginn, abrufLimit, verdichtePremium,
 } from './etf-fluss.js'
 
 let bestanden = 0
@@ -143,6 +143,44 @@ console.log('\n\x1b[1mETF-Fluss\x1b[0m')
     check('vorgestern ist noch frisch (Wochenende)', frischeHinweis(tag('2026-08-19'), jetzt) === null)
     check('drei Tage sind ein Hinweis', /3 Tage/.test(frischeHinweis(tag('2026-08-18'), jetzt) || ''))
     check('ohne Stand kein Hinweis', frischeHinweis(null, jetzt) === null)
+}
+
+// ── Coinbase-Premium: anderes Wertfeld, negative Werte ──────────────────
+{
+    const roh = [
+        { date: '2026-08-20', coinbase_premium_index: -0.0606, coinbase_premium_gap: -39.8 },
+        { date: '2026-08-19', coinbase_premium_index: 0.02 },
+        { date: '2026-08-18', coinbase_premium_index: null },
+        { date: '2026-08-17', coinbase_premium_index: 0 },
+    ]
+    const reihe = reiheAusAntwort(roh, 'coinbase_premium_index')
+    check('Premium: Wertfeld wird gelesen', reihe.length === 3 && reihe[2][1] === -0.0606)
+    check('Premium: echte Null bleibt, null fällt weg', reihe[0][1] === 0 && reihe[0][0] === tag('2026-08-17'))
+    check('Premium: Fondsfeld greift hier nicht', reiheAusAntwort(roh).length === 0)
+
+    const p = verdichtePremium(reihe)
+    check('Premium: letzter Tag und Wert', p.tag === tag('2026-08-20') && p.wert === -0.0606)
+    check('Premium: 7-Tage-Mittel über die vorhandenen Tage',
+        Math.abs(p.mittel7 - (0 + 0.02 - 0.0606) / 3) < 1e-4, String(p.mittel7))
+    check('Premium: leere Reihe ist null', verdichtePremium([]) === null)
+
+    // Das Fenster zählt Kalendertage, nicht Einträge
+    const lang = [[tag('2026-08-01'), 1], [tag('2026-08-19'), 0.1], [tag('2026-08-20'), 0.3]]
+    check('Premium: alter Wert fällt aus dem 7-Tage-Mittel', Math.abs(verdichtePremium(lang).mittel7 - 0.2) < 1e-9)
+}
+
+// ── abrufLimit ──────────────────────────────────────────────────────────
+{
+    const jetzt = tag('2026-08-21') + 13 * 60 * 60 * 1000
+    check('ohne Bestand der volle Monat', abrufLimit([], jetzt) === 35)
+    check('Stand von gestern: vier Zeilen', abrufLimit([[tag('2026-08-20'), 1]], jetzt) === 4)
+    check('Stand von heute: drei Zeilen', abrufLimit([[tag('2026-08-21'), 1]], jetzt) === 3)
+    check('eine Woche Pause schliesst die Lücke', abrufLimit([[tag('2026-08-14'), 1]], jetzt) === 10)
+    check('nie mehr als der Tarif hergibt', abrufLimit([[tag('2026-01-01'), 1]], jetzt) === 35)
+
+    // Budget: zwölf Reihen, vier Läufe am Tag, 31 Tage — muss unter 10'000 bleiben
+    const proMonat = 12 * abrufLimit([[tag('2026-08-20'), 1]], jetzt) * 4 * 31
+    check(`Monatsverbrauch im Normalbetrieb unter 10'000 Zeilen (${proMonat})`, proMonat < 10000)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

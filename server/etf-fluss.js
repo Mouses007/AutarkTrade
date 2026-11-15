@@ -32,9 +32,11 @@ export const tagesBeginn = (ms) => Math.floor(ms / TAG_MS) * TAG_MS
  * selbst, statt sich auf die Reihenfolge zu verlassen.
  *
  * @param {Array} zeilen  `result.data` der Antwort
- * @returns {Array<[number, number]>}  [Tag in ms, Bestand], aufsteigend
+ * @param {string} [feld]  Name des Wertfelds — die Fonds-Endpunkte liefern
+ *   `digital_asset_holdings`, das Coinbase-Premium `coinbase_premium_index`
+ * @returns {Array<[number, number]>}  [Tag in ms, Wert], aufsteigend
  */
-export function reiheAusAntwort(zeilen) {
+export function reiheAusAntwort(zeilen, feld = 'digital_asset_holdings') {
     if (!Array.isArray(zeilen)) return []
     const proTag = new Map()
     for (const z of zeilen) {
@@ -46,7 +48,7 @@ export function reiheAusAntwort(zeilen) {
         // `Number(null)` ist 0 und `Number('')` auch — ein Fonds, für den die
         // Quelle nichts liefert, wäre damit ein Fonds mit null Bitcoin. Der
         // Fluss zum Vortag betrüge dann den gesamten Bestand als Abfluss.
-        const rohWert = z?.digital_asset_holdings
+        const rohWert = z?.[feld]
         if (rohWert === null || rohWert === undefined || rohWert === '') continue
         const wert = Number(rohWert)
         if (!Number.isFinite(t) || !Number.isFinite(wert)) continue
@@ -177,4 +179,57 @@ export function frischeHinweis(tagMs, jetzt = Date.now()) {
     if (!tagMs) return null
     const tage = Math.floor((tagesBeginn(jetzt) - tagesBeginn(tagMs)) / TAG_MS)
     return tage >= ALT_AB_TAGEN ? `Letzter Stand ist ${tage} Tage alt` : null
+}
+
+/**
+ * Wie viele Tageszeilen der nächste Abruf holen soll.
+ *
+ * Jede Zeile kostet Credits, und der Gratis-Tarif hat 10'000 im Monat. Fest
+ * acht Zeilen je Reihe gingen auf, solange es sieben Reihen waren; mit den
+ * ETH-Fonds und dem Coinbase-Premium wären es über 11'000. Geholt wird darum,
+ * was fehlt, plus drei Tage für Nachkorrekturen der Quelle:
+ *
+ *   - kein Bestand        → 35 (der Gratis-Tarif gibt ohnehin nur 30 Tage her)
+ *   - Bestand von gestern → 4
+ *   - eine Woche Pause    → 10, damit die Lücke sich schliesst
+ *
+ * @param {Array<[number, number]>} reihe  eingelagerte Reihe, aufsteigend
+ */
+export function abrufLimit(reihe, jetzt = Date.now()) {
+    if (!reihe?.length) return 35
+    const letzter = reihe[reihe.length - 1][0]
+    const fehlend = Math.max(0, Math.floor((tagesBeginn(jetzt) - tagesBeginn(letzter)) / TAG_MS))
+    return Math.min(35, fehlend + 3)
+}
+
+/** Mittel der letzten `tage` Werte einer Reihe, oder null wenn sie leer ist. */
+function mittelUeber(reihe, tage) {
+    if (!reihe.length) return null
+    const ab = reihe[reihe.length - 1][0] - (tage - 1) * TAG_MS
+    const werte = reihe.filter(([t]) => t >= ab).map(([, w]) => w)
+    return werte.length ? werte.reduce((s, w) => s + w, 0) / werte.length : null
+}
+
+/**
+ * Coinbase-Premium verdichten.
+ *
+ * Der Index ist der prozentuale Abstand des BTC-Kurses bei Coinbase (USD) zu
+ * Binance (USDT). Ein einzelner Tag schwankt um die Null; aussagekräftig ist
+ * das Vorzeichen über mehrere Tage — deshalb das 7-Tage-Mittel daneben.
+ *
+ * @param {Array<[number, number]>} reihe  [Tag, Index in Prozent], aufsteigend
+ * @returns {null | {tag: number, wert: number, mittel7: number, mittel30: number, tage: number, reihe: Array<[number, number]>}}
+ */
+export function verdichtePremium(reihe) {
+    if (!reihe?.length) return null
+    const runde = (v) => (v === null ? null : Math.round(v * 10000) / 10000)
+    const [tag, wert] = reihe[reihe.length - 1]
+    return {
+        tag,
+        wert: runde(wert),
+        mittel7: runde(mittelUeber(reihe, 7)),
+        mittel30: runde(mittelUeber(reihe, 30)),
+        tage: reihe.length,
+        reihe: reihe.map(([t, w]) => [t, runde(w)]),
+    }
 }

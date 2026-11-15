@@ -1,6 +1,7 @@
 <script setup>
 /**
- * Datenquellen › CryptoQuant: Schlüssel der ETF-Kachel (vorher unter
+ * Datenquellen › CryptoQuant: Schlüssel der ETF-Kachel samt ETH-Fonds und
+ * Coinbase-Premium (vorher unter
  * Analyse › Marktradar).
  *
  * Eigener Endpunkt statt der allgemeinen Einstellungs-Route: Zugangsdaten
@@ -71,7 +72,7 @@ async function cqPruefen() {
  * Von Hand nachführen.
  *
  * Der Knopf STARTET nur; gearbeitet wird auf dem Server weiter, auch wenn man
- * die Seite verlässt. Sieben Fonds mit sieben Sekunden Abstand dauern knapp
+ * die Seite verlässt. Zwölf Reihen mit sieben Sekunden Abstand dauern gut
  * eine Minute, und was in dieser Minute zwischen Browser und Server passiert,
  * landete als „Network Error" beim Nutzer, obwohl der Lauf sauber durchlief.
  * Also wird der Fortschritt abgefragt, statt die Verbindung offen zu halten.

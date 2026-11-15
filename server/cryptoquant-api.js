@@ -1,5 +1,6 @@
 /**
- * CryptoQuant — Zugang, Abruf und Einlagerung der ETF-Bestände.
+ * CryptoQuant — Zugang, Abruf und Einlagerung der ETF-Bestände (BTC und ETH)
+ * und des Coinbase-Premium-Index.
  *
  * Warum überhaupt eine Fremdquelle mit Schlüssel, wo sonst alles ohne
  * auskommt: den Netto-Zufluss der Bitcoin-Spot-ETFs gibt es frei nirgends,
@@ -26,6 +27,12 @@
  * Die Zahlen sind Bestände in BTC, keine Dollar-Flüsse: der Zufluss ist die
  * Bestandsänderung zum Vortag. Umrechnen in Dollar wäre eine zweite Annahme
  * (welcher Kurs?) und bleibt der Kachel überlassen.
+ *
+ * Dazugekommen sind die Ethereum-Spot-ETFs (derselbe Endpunkt unter `/eth/`)
+ * und der Coinbase-Premium-Index: beides Marktdaten und damit ebenfalls im
+ * Gratis-Tarif. Alle Reihen laufen durch denselben Hintergrundlauf — siehe
+ * `ABRUFE`. Mehr Reihen heisst mehr Credits; `abrufLimit` holt deshalb nur
+ * noch, was fehlt, statt fest acht Tage je Reihe.
  */
 
 import { getKnex } from './database.js'
@@ -33,7 +40,7 @@ import { decrypt, encrypt } from './crypto.js'
 import { logWarn } from './logger.js'
 import { beansprucheAufgabe, meldeFehler } from './db-claim.js'
 import { ausCache, sendeRadar, sendRadarError, verwerfeCache } from './marktradar-api.js'
-import { baueNutzlast, reiheAusAntwort, frischeHinweis } from './etf-fluss.js'
+import { baueNutzlast, reiheAusAntwort, frischeHinweis, abrufLimit, verdichtePremium } from './etf-fluss.js'
 import { istTestbetrieb } from './umgebung.js'
 
 const CQ_BASE = 'https://api.cryptoquant.com/v1'
@@ -62,7 +69,43 @@ export const FONDS = [
     { id: 'arkb', name: 'ARK 21Shares (ARKB)' },
 ]
 
+/**
+ * Ethereum-Spot-ETFs. Kürzer als die BTC-Liste, weil der Markt kleiner ist und
+ * jede Reihe Credits kostet; `all_symbol` deckt auch hier alle übrigen ab.
+ */
+export const FONDS_ETH = [
+    { id: 'all_symbol', name: 'Alle Fonds' },
+    { id: 'etha', name: 'iShares (ETHA)' },
+    { id: 'ethe', name: 'Grayscale (ETHE)' },
+    { id: 'feth', name: 'Fidelity (FETH)' },
+]
+
 const KIND = (id) => `etfBtc_${id}`
+const KIND_ETH = (id) => `etfEth_${id}`
+const KIND_PREMIUM = 'cbPremium'
+
+/**
+ * Alles, was ein Lauf holt — in dieser Reihenfolge.
+ *
+ * BTC zuerst: geht mitten im Lauf etwas schief (Credits leer), ist das
+ * Wichtigste schon da. `feld` ist das Wertfeld der Antwort, `name` steht in
+ * Fehlermeldungen und im Fortschritt.
+ */
+export const ABRUFE = [
+    ...FONDS.map(f => ({
+        name: `ETF BTC ${f.id}`, kind: KIND(f.id),
+        pfad: '/btc/fund-data/digital-asset-holdings', params: { symbol: f.id },
+    })),
+    ...FONDS_ETH.map(f => ({
+        name: `ETF ETH ${f.id}`, kind: KIND_ETH(f.id),
+        pfad: '/eth/fund-data/digital-asset-holdings', params: { symbol: f.id },
+    })),
+    {
+        name: 'Coinbase-Premium', kind: KIND_PREMIUM,
+        pfad: '/btc/market-data/coinbase-premium-index', params: {},
+        feld: 'coinbase_premium_index',
+    },
+]
 
 /** Letzter Fehler des Abrufs — die Kachel soll sagen können, WARUM nichts kommt. */
 let letzterFehler = null
@@ -145,19 +188,19 @@ const warte = (ms) => new Promise(r => setTimeout(r, ms))
 
 // ── Einlagerung ─────────────────────────────────────────────────────────
 
-/** Eingelagerte Reihe eines Fonds lesen. */
-async function leseReihe(id) {
+/** Eingelagerte Reihe lesen (`kind` wie in `ABRUFE`). */
+async function leseReihe(kind) {
     const zeilen = await getKnex()('market_snapshots')
-        .where('kind', KIND(id)).orderBy('dayUnix', 'asc').select('dayUnix', 'value')
+        .where('kind', kind).orderBy('dayUnix', 'asc').select('dayUnix', 'value')
     return zeilen.map(z => [Number(z.dayUnix), Number(z.value)])
 }
 
-/** Reihe eines Fonds einlagern. Der spätere Wert gewinnt — die Quelle korrigiert nach. */
-async function schreibeReihe(id, reihe) {
+/** Reihe einlagern. Der spätere Wert gewinnt — die Quelle korrigiert nach. */
+async function schreibeReihe(kind, reihe) {
     if (!reihe.length) return 0
     const knex = getKnex()
     const zeilen = reihe.map(([tag, wert]) => ({
-        kind: KIND(id), dayUnix: tag, value: wert, createdAt: Date.now(),
+        kind, dayUnix: tag, value: wert, createdAt: Date.now(),
     }))
     for (let i = 0; i < zeilen.length; i += 200) {
         await knex('market_snapshots').insert(zeilen.slice(i, i + 200))
@@ -174,9 +217,10 @@ async function schreibeReihe(id, reihe) {
  * Stunden sind reichlich: die Quelle aktualisiert einmal täglich gegen 12:00
  * UTC und korrigiert danach gelegentlich nach.
  *
- * Wie weit zurück geholt wird, entscheidet der eigene Bestand: beim ersten Mal
- * die vollen 30 Tage, die der Gratis-Tarif hergibt, danach nur noch acht — das
- * fängt Nachkorrekturen ein, ohne jedes Mal denselben Monat zu bezahlen.
+ * Wie weit zurück geholt wird, entscheidet der eigene Bestand (`abrufLimit`):
+ * beim ersten Mal die vollen 30 Tage, die der Gratis-Tarif hergibt, danach die
+ * fehlenden Tage plus drei — das fängt Nachkorrekturen ein, ohne jedes Mal
+ * denselben Monat zu bezahlen.
  */
 export async function aktualisiereEtf({ erzwingen = false } = {}) {
     if (lauf) return { uebersprungen: 'läuft bereits', lauf: { ...lauf } }
@@ -186,7 +230,7 @@ export async function aktualisiereEtf({ erzwingen = false } = {}) {
         return { uebersprungen: 'zu früh' }
     }
 
-    lauf = { start: Date.now(), fertig: 0, gesamt: FONDS.length, fonds: '' }
+    lauf = { start: Date.now(), fertig: 0, gesamt: ABRUFE.length, fonds: '' }
     try {
         return await laufeDurch(schluessel)
     } finally {
@@ -198,32 +242,38 @@ export async function aktualisiereEtf({ erzwingen = false } = {}) {
 async function laufeDurch(schluessel) {
     let geholt = 0
     let zeilen = 0
-    for (const fonds of FONDS) {
-        lauf.fonds = fonds.id
+    let fehler = null
+    // Endpunkte, die der Tarif nicht kennt (403): gilt für jede weitere Reihe
+    // desselben Pfads genauso — die anderen Endpunkte laufen trotzdem.
+    const gesperrt = new Set()
+    for (const abruf of ABRUFE) {
+        lauf.fonds = abruf.name
+        if (gesperrt.has(abruf.pfad)) { lauf.fertig++; continue }
         try {
-            const vorhanden = await leseReihe(fonds.id)
-            const limit = vorhanden.length ? 8 : 35
-            const daten = await cqHole('/btc/fund-data/digital-asset-holdings',
-                { symbol: fonds.id, window: 'day', limit }, schluessel)
-            const reihe = reiheAusAntwort(daten)
-            zeilen += await schreibeReihe(fonds.id, reihe)
+            const vorhanden = await leseReihe(abruf.kind)
+            const daten = await cqHole(abruf.pfad,
+                { ...abruf.params, window: 'day', limit: abrufLimit(vorhanden) }, schluessel)
+            zeilen += await schreibeReihe(abruf.kind, reiheAusAntwort(daten, abruf.feld))
             geholt++
-            letzterFehler = null
         } catch (e) {
-            letzterFehler = { fonds: fonds.id, text: e.message, ts: Date.now(), status: e.status || 0 }
-            logWarn('cryptoquant', `ETF ${fonds.id}: ${e.message}`)
-            await meldeFehler('snap_etf', e.message)
-            // 401/402/403 gelten für jeden weiteren Fonds genauso — weiterlaufen
-            // hiesse nur, dieselbe Absage sechsmal einzusammeln.
-            if ([401, 402, 403].includes(e.status)) break
+            fehler = { fonds: abruf.name, text: e.message, ts: Date.now(), status: e.status || 0 }
+            logWarn('cryptoquant', `${abruf.name}: ${e.message}`)
+            await meldeFehler('snap_etf', `${abruf.name}: ${e.message}`)
+            // 401/402 gelten für jeden weiteren Abruf genauso — weiterlaufen
+            // hiesse nur, dieselbe Absage elfmal einzusammeln.
+            if ([401, 402].includes(e.status)) break
+            if (e.status === 403) gesperrt.add(abruf.pfad)
         }
         lauf.fertig++
         await warte(ABSTAND_MS)
     }
+    // Der Fehler eines Laufs bleibt stehen, bis ein Lauf ohne durchgeht — auch
+    // wenn nach der gescheiterten Reihe noch andere gelangen.
+    letzterFehler = fehler
 
     if (geholt) {
         verwerfeCache('etf|')
-        console.log(` -> CryptoQuant: ETF-Bestände nachgeführt (${geholt} Fonds, ${zeilen} Tageswerte)`)
+        console.log(` -> CryptoQuant: nachgeführt (${geholt} von ${ABRUFE.length} Reihen, ${zeilen} Tageswerte)`)
     }
     return { geholt, zeilen, fehler: letzterFehler }
 }
@@ -239,7 +289,7 @@ async function laufeDurch(schluessel) {
 export async function holeEtf() {
     return ausCache('etf|btc', 10 * 60 * 1000, async () => {
         const reihen = new Map()
-        for (const f of FONDS) reihen.set(f.id, await leseReihe(f.id))
+        for (const f of FONDS) reihen.set(f.id, await leseReihe(KIND(f.id)))
 
         const hatDaten = [...reihen.values()].some(r => r.length)
         if (!hatDaten) {
@@ -256,11 +306,21 @@ export async function holeEtf() {
         const nutzlast = baueNutzlast(reihen, FONDS)
         const hinweise = [
             frischeHinweis(nutzlast.gesamt.tag),
-            letzterFehler?.text || null,
+            letzterFehler ? `${letzterFehler.fonds}: ${letzterFehler.text}` : null,
         ].filter(Boolean)
+
+        // Ethereum-Fonds und Coinbase-Premium sind Beigaben: fehlen sie (noch
+        // nicht geholt, Endpunkt gesperrt), bleibt das Feld `null` und die
+        // Kachel zeigt den BTC-Teil wie bisher.
+        const reihenEth = new Map()
+        for (const f of FONDS_ETH) reihenEth.set(f.id, await leseReihe(KIND_ETH(f.id)))
+        const eth = reihenEth.get('all_symbol').length ? baueNutzlast(reihenEth, FONDS_ETH) : null
+        const premium = verdichtePremium(await leseReihe(KIND_PREMIUM))
 
         return {
             ...nutzlast,
+            eth,
+            premium,
             // Wie viel eigene Geschichte schon zusammengekommen ist — nach der
             // Einrichtung sind es 30 Tage, danach wächst es täglich.
             tageEigen: nutzlast.reihe.length,
@@ -284,8 +344,8 @@ export function setupCryptoquantRoutes(app) {
     app.get('/api/marktradar/etf', async (req, res) => {
         try {
             if (req.query.force === '1') {
-                // NICHT abwarten: die Fonds werden mit sieben Sekunden Abstand
-                // geholt, ein voller Durchlauf dauert knapp eine Minute. Wer
+                // NICHT abwarten: die Reihen werden mit sieben Sekunden Abstand
+                // geholt, ein voller Durchlauf dauert gut eine Minute. Wer
                 // auf den Pfeil drückt, bekommt sofort den aktuellen Bestand;
                 // das Nachgeführte steht beim nächsten Takt drin.
                 aktualisiereEtf().catch(() => { })
@@ -300,8 +360,8 @@ export function setupCryptoquantRoutes(app) {
      * Von Hand nachführen — umgeht den Anspruch bewusst (Einstellungsseite).
      *
      * Antwortet SOFORT und lässt den Lauf im Hintergrund weiterarbeiten. Der
-     * Grund steht in einer verlorenen Anfrage: sieben Fonds mit sieben
-     * Sekunden Abstand sind knapp eine Minute, und eine Minute überlebt eine
+     * Grund steht in einer verlorenen Anfrage: zwölf Reihen mit sieben
+     * Sekunden Abstand sind gut eine Minute, und eine Minute überlebt eine
      * Browseranfrage nicht zuverlässig — es genügt ein Neustart des Servers
      * oder ein Gegenstück mit kurzem Zeitlimit dazwischen, und der Nutzer
      * sieht „Network Error", obwohl die Arbeit läuft. Den Fortschritt holt
@@ -319,7 +379,7 @@ export function setupCryptoquantRoutes(app) {
     app.get('/api/cryptoquant/status', async (req, res) => {
         try {
             const schluessel = await ladeSchluessel()
-            const reihe = await leseReihe('all_symbol')
+            const reihe = await leseReihe(KIND('all_symbol'))
             const letzter = reihe[reihe.length - 1] || null
             res.json({
                 schluesselGesetzt: !!schluessel,
@@ -327,6 +387,7 @@ export function setupCryptoquantRoutes(app) {
                 letzterTag: letzter ? letzter[0] : null,
                 fehler: letzterFehler,
                 fonds: FONDS.map(f => f.id),
+                reihen: ABRUFE.length,
                 // Läuft gerade ein Nachschlag? Die Oberfläche fragt hier nach,
                 // statt auf eine minutenlange Antwort zu warten.
                 laeuft: !!lauf,
@@ -392,7 +453,7 @@ export function setupCryptoquantRoutes(app) {
         takt = setInterval(() => { aktualisiereEtf().catch(() => { }) }, 30 * 60 * 1000)
     }
 
-    console.log(' -> CryptoQuant (ETF) routes initialized')
+    console.log(' -> CryptoQuant (ETF, Coinbase-Premium) routes initialized')
 }
 
 export function stopCryptoquant() {

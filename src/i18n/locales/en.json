@@ -3736,7 +3736,14 @@
       "wartet": "Holdings will be fetched on the next cycle.",
       "eigeneTage": "Curve built from {n} days of our own — the free tier only reaches back 30 days, everything older is collected here.",
       "nachtrag": "The source revises values afterwards, so the last few days are re-fetched.",
-      "info": "How much Bitcoin institutions hold through spot ETFs, and whether daily flows are adding to or draining that.\nShows whether big money is currently building or reducing its position — a sustained multi-day outflow carries more weight than a single red day."
+      "markt": "Choose market",
+      "ethKurz": "ETH ETF",
+      "premium": "Coinbase premium",
+      "premiumTitel": "Gap between the BTC price on Coinbase (USD) and Binance (USDT), in percent",
+      "premiumLang": "Coinbase premium (BTC)",
+      "premiumStand": "As of {tag}: {wert} · 7-day average {w7} · 30-day {w30}.",
+      "premiumInfo": "Above zero, buyers on Coinbase pay more than on Binance — demand from the US. A single day says little; the sign over several days is what counts.",
+      "info": "How much Bitcoin institutions hold through spot ETFs, and whether daily flows are adding to or draining that.\nShows whether big money is currently building or reducing its position — a sustained multi-day outflow carries more weight than a single red day.\nAlso shows the daily flow of the Ethereum ETFs and the Coinbase premium: whether BTC is pricier on Coinbase than on Binance."
     },
     "wal": {
       "title": "Whale Moves",
@@ -3841,7 +3848,7 @@
         },
         {
           "h": "ETF FLOW (BTC)",
-          "p": "How many bitcoin the spot ETFs hold in total and how that changes day by day. The inflow IS the change in holdings — there is no second number for it. Shown in BTC, not dollars: multiplied by the daily price, the \"inflow\" would move on days when not a single share was created. Enlarged, the tile lists the individual funds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) and reports the remainder as \"Other funds\" — the total comes from the source and is never summed up from the individual ones. Requires a CryptoQuant key (the free tier is enough), entered under Settings › Data sources › CryptoQuant. The source only reaches back 30 days; everything older the journal collects itself, so the curve grows over time. A warning triangle next to the 7- or 30-day sum means some days in the window have no value and the sum rests on fewer days."
+          "p": "How many bitcoin the spot ETFs hold in total and how that changes day by day. The inflow IS the change in holdings — there is no second number for it. Shown in BTC, not dollars: multiplied by the daily price, the \"inflow\" would move on days when not a single share was created. Enlarged, the tile lists the individual funds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) and reports the remainder as \"Other funds\" — the total comes from the source and is never summed up from the individual ones. Requires a CryptoQuant key (the free tier is enough), entered under Settings › Data sources › CryptoQuant. The source only reaches back 30 days; everything older the journal collects itself, so the curve grows over time. A warning triangle next to the 7- or 30-day sum means some days in the window have no value and the sum rests on fewer days. Two extras come from the same source: the daily flow of the Ethereum spot ETFs (in the large view via the BTC/ETH switch, with its own curve and fund table) and the Coinbase premium — the percentage gap between the BTC price on Coinbase and Binance. Above zero, US buyers are pushing; the sign over several days matters, not the single value."
         },
         {
           "h": "OVERALL PICTURE (AI)",
@@ -7567,16 +7574,16 @@
       "ausText": "Off: these sources and the functions only they provide are off and say why. Everything else keeps working."
     },
     "cq": {
-      "titel": "CryptoQuant (ETF flow)",
-      "unter": "For the \"ETF flow\" tile: how many bitcoin the spot ETFs hold and how that changes daily. Only with your own API key.",
+      "titel": "CryptoQuant (ETF flow, Coinbase premium)",
+      "unter": "For the \"ETF flow\" tile: how many bitcoin the spot ETFs hold and how that changes daily — plus the Ethereum ETFs and the Coinbase premium. Only with your own API key.",
       "hinterlegt": "Key stored",
       "keiner": "No key — the ETF tile stays empty",
-      "tarif": "The free plan (\"Basic\") is enough: CryptoQuant counts fund data as market data. It only reaches back 30 days and allows 10 requests per minute — so fetching happens in the background, at most every six hours, and everything fetched is kept. The tile itself never asks CryptoQuant.",
+      "tarif": "The free plan (\"Basic\") is enough: CryptoQuant counts fund data and the Coinbase premium as market data. It only reaches back 30 days and allows 10 requests per minute — so fetching happens in the background, at most every six hours, and everything fetched is kept. The tile itself never asks CryptoQuant.",
       "schluessel": "API key",
       "speichern": "Save",
       "pruefen": "Check key",
       "nachfuehren": "Update now",
-      "fortschritt": "{fertig} of {gesamt} funds",
+      "fortschritt": "{fertig} of {gesamt} series",
       "holen": "Get a key from CryptoQuant",
       "gueltig": "Key valid — {btc} BTC across all funds ({tag}).",
       "uebersprungen": "Skipped: {grund}",
