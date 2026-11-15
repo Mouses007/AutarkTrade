@@ -1307,7 +1307,7 @@
     "profilBildUnlesbar": "The picture cannot be read.",
     "esp32HauptLabel": "Main key (phone app, widget, desklet)",
     "modeAktien": "Stocks (work in progress)",
-    "modeAktienInfo": "Enables the Crypto ↔ Stocks switch in the header and checks twice a day which stocks are tradable on Bitget, Bitunix, Pionex and Bitpanda.\nOnly the public symbol lists are read. The stocks part is work in progress: so far there is the list of tradable titles.\nOff: the switch and the stock pages disappear, nothing is fetched."
+    "modeAktienInfo": "Enables the crypto ↔ stocks switch in the header and syncs twice a day which stocks are tradable at Binance, Bitget, Bitunix, Pionex and Bitpanda.\nThe «Stocks» market has so far: newcomer radar, stock radar, the instrument list with a page per instrument (price, key figures, analysts) and the chart with its own layouts and watchlists. The market radar still shows crypto data.\nOnly public lists and prices are read; key figures come from Yahoo Finance and need the switch «Sources with restricted terms of use».\nOff: the switch and the stock pages disappear, nothing is fetched."
   },
   "setup": {
     "welcome": "Welcome!",
