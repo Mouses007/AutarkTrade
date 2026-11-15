@@ -15,7 +15,8 @@
  *   Speicher  Ticker-Liste 24 h, Einreichungen 6 h, Fund im Prospekt 30 Tage
  *             (ein Prospekt ändert sich nicht). Nur im Arbeitsspeicher.
  *
- * Abgerufen wird nur von `www.sec.gov` und `data.sec.gov`. In der Anfrage
+ * Abgerufen wird nur von `www.sec.gov` und `data.sec.gov` — auch eine
+ * Weiterleitung führt nirgends sonst hin (`pruefeWeiterleitung`). In der Anfrage
  * stehen der Ticker bzw. die CIK und die Kontaktangabe, sonst nichts.
  */
 import axios from 'axios'
@@ -93,13 +94,26 @@ function gebremst(fn) {
     return dran.then(fn)
 }
 
+/**
+ * Weiterleitungen nur innerhalb von sec.gov. Die erste Adresse zu prüfen reicht
+ * nicht: der Abruf folgt bis zu zwei Weiterleitungen, und der User-Agent mit der
+ * Kontaktangabe des Nutzers ginge sonst an den fremden Host (Audit SEC-S-007).
+ * Wirft — der Abruf bricht dann ab, BEVOR die nächste Anfrage hinausgeht.
+ * @param {{protocol?: string, hostname?: string}} ziel  Ziel der Weiterleitung (axios `beforeRedirect`)
+ */
+export function pruefeWeiterleitung(ziel) {
+    if (ziel?.protocol !== 'https:' || !/^(www|data)\.sec\.gov$/.test(String(ziel?.hostname || ''))) {
+        throw new Error('EDGAR: Weiterleitung auf eine fremde Adresse')
+    }
+}
+
 async function hole(url, ua, { text = false, timeout = 20000 } = {}) {
     if (!/^https:\/\/(www|data)\.sec\.gov\//.test(url)) throw new Error('EDGAR: fremde Adresse')
     if (Date.now() < ruhtBis) throw new EdgarGebremst('EDGAR ruht nach einer Ablehnung der SEC')
     const r = await gebremst(() => axios.get(url, {
         headers: { 'User-Agent': ua, 'Accept-Encoding': 'gzip, deflate', Accept: text ? 'text/html' : 'application/json' },
         timeout, responseType: text ? 'text' : 'json', transformResponse: text ? [(d) => d] : undefined,
-        maxContentLength: text ? PROSPEKT_HOECHSTENS : 20 * 1024 * 1024, maxRedirects: 2,
+        maxContentLength: text ? PROSPEKT_HOECHSTENS : 20 * 1024 * 1024, maxRedirects: 2, beforeRedirect: pruefeWeiterleitung,
         validateStatus: () => true,
     }))
     if (r.status === 404) throw new NichtDa(url)

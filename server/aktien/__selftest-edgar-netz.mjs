@@ -34,12 +34,14 @@ console.log = log
 const edgar = await import('./edgar.js')
 const { BEHALTEN_BEIM_IMPORT, GEHEIME_SETTINGS } = await import('../geheimnisse.js')
 
+const echtesGet = axios.get.bind(axios)   // nur für die Weiterleitungs-Prüfung gegen 127.0.0.1 (ganz unten)
+
 // ── Attrappe ──
 const abrufe = []                     // { url, ua, zeit }
 let antwort = null                    // (url) => { status, data } — überschreibt die Fixtures
 const PROSPEKT = `<html><body><p>${'Filler text about the business of the company. '.repeat(8)}</p><p>Our officers, directors and holders of substantially all of our shares have entered into lock-up agreements and have agreed that they will not offer, sell or otherwise dispose of any shares for a period of 180 days after the date of this prospectus without the consent of the representatives.</p></body></html>`
 axios.get = async (url, cfg) => {
-    abrufe.push({ url, ua: cfg?.headers?.['User-Agent'], zeit: Date.now() })
+    abrufe.push({ url, ua: cfg?.headers?.['User-Agent'], zeit: Date.now(), cfg })
     if (antwort) return antwort(url)
     if (url === 'https://www.sec.gov/files/company_tickers.json') return { status: 200, data: lies('edgar-company-tickers.json') }
     if (url === 'https://data.sec.gov/submissions/CIK0001769628.json') return { status: 200, data: lies('edgar-submissions-crwv.json') }
@@ -110,6 +112,29 @@ await assert.rejects(() => edgar.holeEinreichungen('CRWV'), (e) => e.grund === '
 await edgar.setzeKontakt(KONTAKT)     // neuer Anlauf hebt die Ruhe auf
 antwort = (url) => (url.includes('company_tickers') ? { status: 200, data: lies('edgar-company-tickers.json') } : { status: 200, data: '<!DOCTYPE html><title>Request Rate Threshold Exceeded</title>' })
 await assert.rejects(() => edgar.holeEinreichungen('NVDA', { neu: true }), /kein JSON/); n++
+
+// ── SEC-S-007: eine Weiterleitung auf einen fremden Host bekommt die Kontaktangabe nie ──
+ok(abrufe.every((a) => a.cfg.beforeRedirect === edgar.pruefeWeiterleitung), 'jeder Abruf prüft das Ziel einer Weiterleitung')
+edgar.pruefeWeiterleitung({ protocol: 'https:', hostname: 'www.sec.gov' }); edgar.pruefeWeiterleitung({ protocol: 'https:', hostname: 'data.sec.gov' }); n++
+for (const ziel of [{ protocol: 'https:', hostname: 'beispiel.ch' }, { protocol: 'http:', hostname: 'www.sec.gov' }, { protocol: 'https:', hostname: 'www.sec.gov.beispiel.ch' }, { protocol: 'https:', hostname: 'evilsec.gov' }, {}]) {
+    assert.throws(() => edgar.pruefeWeiterleitung(ziel), /fremde Adresse/); n++
+}
+{
+    // Der Mechanismus selbst, mit echtem axios gegen zwei eigene Server auf 127.0.0.1:
+    // der erste leitet auf den zweiten («fremder Host») um — dort darf nichts ankommen.
+    const http = await import('node:http')
+    const starte = (fn) => new Promise((r) => { const s = http.createServer(fn); s.listen(0, '127.0.0.1', () => r(s)) })
+    const fremd = []
+    const ziel = await starte((req, res) => { fremd.push(req.headers['user-agent']); res.end('{}') })
+    const erster = await starte((req, res) => { res.writeHead(302, { Location: `http://127.0.0.1:${ziel.address().port}/x` }); res.end() })
+    const adresse = `http://127.0.0.1:${erster.address().port}/`
+    const kopf = { headers: { 'User-Agent': 'Erika Muester erika@beispiel.ch' }, maxRedirects: 2, validateStatus: () => true, proxy: false }
+    await assert.rejects(() => echtesGet(adresse, { ...kopf, beforeRedirect: edgar.pruefeWeiterleitung }), /fremde Adresse/); n++
+    ok(fremd.length === 0, 'mit der Prüfung: der fremde Host bekommt keine Anfrage')
+    await echtesGet(adresse, kopf)
+    ok(fremd.length === 1 && fremd[0].includes('erika@beispiel.ch'), 'Gegenprobe ohne die Prüfung: die Kontaktangabe wäre dort angekommen')
+    await Promise.all([ziel, erster].map((s) => new Promise((r) => s.close(r))))
+}
 
 await knex.destroy()
 rmSync(ordner, { recursive: true, force: true })
