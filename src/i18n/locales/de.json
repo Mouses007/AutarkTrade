@@ -9114,6 +9114,7 @@
     "grund_nichtGefunden": "Die Kursquelle kennt diesen Titel nicht.",
     "grund_gebremst": "Die Kursquelle bremst gerade. Bitte in einigen Minuten erneut versuchen.",
     "datenFehler": "Kennzahlen nicht abrufbar ({fehler}). Der Kursverlauf ist da.",
+    "nameAbweichung": "Die Kursquelle führt unter {symbol} «{quelle}», im Stamm heisst der Titel «{stamm}». Kurs, Kennzahlen und Analysten auf dieser Seite gehören möglicherweise zu einer anderen Firma.",
     "oeffnen": "Titel-Seite öffnen"
   },
   "aktien": {

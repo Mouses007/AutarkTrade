@@ -15,7 +15,7 @@
  * unbekannt und fällt aus der Note (`bewerteAktie`), der Grund steht im Lauf.
  */
 import { holeChart, NichtGefunden, Gebremst } from '../newcomer-radar/kursquelle.js'
-import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
+import { kursSymbolFuer } from '../newcomer-radar/kursquelle-kern.js'
 import { kennzahlen } from '../newcomer-radar/kennzahlen.js'
 import { istAus } from '../quellen/aus.js'
 import { logWarn } from '../logger.js'
@@ -32,30 +32,40 @@ const auszug = (k, quelle) => ({
     quelle,
 })
 
-/** Gemerkte Kennzahlen des Newcomer-Radars je Instrument-ID (nur frische, mit 12-Monats-Feld). */
+/**
+ * Stand des Newcomer-Radars je Instrument-ID: seine Zeile (für das Kurssymbol)
+ * und seine Kennzahlen (nur frische, mit 12-Monats-Feld).
+ */
 async function gemerkte(knex, ids, jetzt) {
-    const je = new Map()
-    if (!ids.length || !(await knex.schema.hasTable('newcomer_titel'))) return { je, kursSymbole: new Map() }
-    const kursSymbole = new Map()
+    const je = new Map(), zeilen = new Map()
+    if (!ids.length || !(await knex.schema.hasTable('newcomer_titel'))) return { je, zeilen }
     for (const z of await knex('newcomer_titel').whereIn('instrumentId', ids).select('instrumentId', 'kursSymbol', 'kennzahlen', 'stand')) {
-        if (z.kursSymbol) kursSymbole.set(z.instrumentId, z.kursSymbol)
+        zeilen.set(z.instrumentId, z)
         let k = null
         try { k = JSON.parse(z.kennzahlen || 'null') } catch { k = null }
         // Stände von vor der Einführung von `perf12m` zählen als veraltet.
         if (k && 'perf12m' in k && k.perf3m !== undefined && jetzt - Number(z.stand) < FRISCH_MS) je.set(z.instrumentId, k)
     }
-    return { je, kursSymbole }
+    return { je, zeilen }
 }
 
 /**
  * @param {object} knex
- * @param {{symbol: string, id: number|null, ticker: string}[]} titel
+ * @param {{symbol: string, id: number|null, ticker: string, region?: string|null}[]} titel
  * @param {(f: {fertig: number, gesamt: number}) => void} [melde]
- * @returns {Promise<{je: Map<string, object>, index: object|null, grund: string|null, gemerkt: number, abgerufen: number}>}
+ * @param {number} [jetzt]
+ * @param {Function} [abruf]  nur der Selbsttest reicht eine Attrappe für `holeChart` herein
+ * @returns {Promise<{je: Map<string, object>, index: object|null, grund: string|null, gemerkt: number, abgerufen: number,
+ *           kursSymbole: Map<string, string|null>}>}  `kursSymbole`: je Future-Symbol das Symbol der Kursquelle,
+ *           `null` = keines (Newcomer-Lauf fand nichts, fremde Region) — der Titel bleibt dann ohne Stärke
  */
-export async function ladeTagesdaten(knex, titel, melde = () => { }, jetzt = Date.now()) {
-    const aus = { je: new Map(), index: null, grund: null, gemerkt: 0, abgerufen: 0 }
+export async function ladeTagesdaten(knex, titel, melde = () => { }, jetzt = Date.now(), abruf = holeChart) {
+    const holeChart = abruf
+    const aus = { je: new Map(), index: null, grund: null, gemerkt: 0, abgerufen: 0, kursSymbole: new Map() }
     if (!titel.length) return aus
+    // Vor jedem Abruf: steht das Kurssymbol fest, kann es der Lauf auch dann nutzen, wenn der Index ausfällt.
+    const { je: gemerkt, zeilen } = await gemerkte(knex, titel.map((t) => t.id).filter(Boolean), jetzt)
+    for (const t of titel) aus.kursSymbole.set(t.symbol, kursSymbolFuer(t, (t.id && zeilen.get(t.id)) || null))
     try {
         const [haupt, zweit] = await Promise.all([holeChart(INDEX.haupt, jetzt), holeChart(INDEX.zweit, jetzt).catch(() => null)])
         aus.index = {
@@ -68,13 +78,13 @@ export async function ladeTagesdaten(knex, titel, melde = () => { }, jetzt = Dat
         return aus
     }
 
-    const { je: gemerkt, kursSymbole } = await gemerkte(knex, titel.map((t) => t.id).filter(Boolean), jetzt)
     let fertig = 0
     for (const t of titel) {
         fertig++
-        const k = t.id ? gemerkt.get(t.id) : null
+        const kursSymbol = aus.kursSymbole.get(t.symbol)
+        // Gemerkte Kennzahlen gelten nur, wenn auch ihr Kurssymbol noch gilt (sonst sind es die einer fremden Firma).
+        const k = t.id && kursSymbol && kursSymbol === zeilen.get(t.id)?.kursSymbol ? gemerkt.get(t.id) : null
         if (k) { aus.je.set(t.symbol, auszug(k, 'gemerkt')); aus.gemerkt++; continue }
-        const kursSymbol = (t.id && kursSymbole.get(t.id)) || kursSymbolKandidaten(t.ticker)[0]
         if (!kursSymbol) continue
         try {
             const chart = await holeChart(kursSymbol, jetzt)

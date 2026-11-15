@@ -24,7 +24,7 @@ export const REFERENZ_TICKER = ['SPY', 'QQQ', 'IVV', 'VOO']
  *
  * @param {object[]} titel   Ergebnis von `leseStamm` (Anlageklasse aktien)
  * @param {string} quelle    'binance' | 'bitget'
- * @returns {Map<string, {ticker: string, name: string|null, unterart: string, listungen: object[]}>}
+ * @returns {Map<string, {ticker: string, region: string|null, name: string|null, unterart: string, listungen: object[]}>}
  *          Schlüssel ist das Future-Symbol AN DER QUELLE (z. B. `ACNSTOCKUSDT` bei Bitget).
  */
 export function universumAus(titel = [], quelle) {
@@ -34,7 +34,7 @@ export function universumAus(titel = [], quelle) {
         for (const l of eigene) {
             // Nur USDT-Kontrakte: der marktweite Ticker und die Hürden rechnen in USDT.
             if (l.quote && l.quote !== 'USDT') continue
-            map.set(l.symbol, { id: t.id ?? null, ticker: t.ticker, name: t.name || null, unterart: t.unterart, listungen: t.listungen })
+            map.set(l.symbol, { id: t.id ?? null, ticker: t.ticker, region: t.region || null, name: t.name || null, unterart: t.unterart, listungen: t.listungen })
         }
     }
     return map

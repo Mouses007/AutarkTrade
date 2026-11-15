@@ -14,7 +14,9 @@ import { fileURLToPath } from 'node:url'
 import { kennzahlen, rendite, MIN_TAGE_HOCH } from './kennzahlen.js'
 import { bewerte, noteNeuheit, noteMomentum, momentumTeile, noteBeteiligung, kategorie, huerden, juengsteListung, fruehesteListung, DECKEL_DUENN, MIN_MOMENTUM_TEILE } from './bewertung.js'
 import { waehrungsEinheit, wechselkursSymbol, usdFaktor, ausWechselkurs, renditeInUsd } from './waehrung.js'
-import { kursSymbolKandidaten, nameGleich, nameAehnlich, tickerStamm, namensWoerter, ausChart, ausSuche } from './kursquelle-kern.js'
+import { kursSymbolKandidaten, kursSymbolFuer, passtZurRegion, nameGleich, nameAehnlich, tickerStamm, namensWoerter, ausChart, ausSuche } from './kursquelle-kern.js'
+import { findeKurse } from './lauf.js'
+import { NichtGefunden } from './kursquelle.js'
 
 const hier = path.dirname(fileURLToPath(import.meta.url))
 const fx = JSON.parse(fs.readFileSync(path.join(hier, '../fixtures/newcomer-kursquelle.json'), 'utf8'))
@@ -202,6 +204,64 @@ gleich(kursSymbolKandidaten('ABC-ZZ'), [], 'unbekannte Nachsilbe: nicht raten')
 gleich(kursSymbolKandidaten('3382'), [], 'reine Zahl: nicht ableitbar')
 gleich(kursSymbolKandidaten(''), [], 'leer')
 gleich(kursSymbolKandidaten('HK0700'), ['HK0700'], 'Börsen-Schreibweise bleibt (scheitert dann am Abruf, nicht hier)')
+
+// ── Region: der blosse Ticker eines asiatischen Titels ist eine fremde Firma (Audit FUN-F-002) ──
+gleich(kursSymbolKandidaten('BYD', 'HK'), [], 'BYD mit Region HK: nicht «BYD» (das wäre Boyd Gaming)')
+gleich(kursSymbolKandidaten('SAMSUNG', 'KR'), [], 'Korea: kein Ticker-Kandidat')
+gleich(kursSymbolKandidaten('700', 'HK'), ['0700.HK'], 'Hongkong-Nummer: vierstellig mit .HK')
+gleich(kursSymbolKandidaten('7203', 'JP'), ['7203.T'], 'Tokio-Nummer mit .T')
+gleich(kursSymbolKandidaten('005930', 'KR'), [], 'Korea hat zwei Börsen (.KS/.KQ): nicht raten')
+gleich(kursSymbolKandidaten('600519', 'CN'), [], 'China hat zwei Börsen: nicht raten')
+gleich(kursSymbolKandidaten('BRKB', 'HK'), [], 'Aktiengattung gilt nur ohne fremde Region')
+gleich(kursSymbolKandidaten('NVDA', 'US'), ['NVDA'], 'Region US ist keine fremde')
+gleich(kursSymbolKandidaten('1211-HK', 'HK'), ['1211.HK'], 'ausdrückliche Nachsilbe gilt auch mit Region')
+gleich([passtZurRegion('BYD', 'HK'), passtZurRegion('1211.HK', 'HK'), passtZurRegion('1211.HK', 'KR'), passtZurRegion('BYD', null), passtZurRegion('X.SI', 'SG')],
+    [false, true, false, true, true], 'Symbol gegen Region')
+
+// Ohne Netz: gespeicherter Stand → Kurssymbol
+gleich(kursSymbolFuer({ ticker: 'NVDA' }), 'NVDA', 'noch nie gelaufen: Kandidat aus dem Ticker')
+gleich(kursSymbolFuer({ ticker: 'SAN' }, { kursSymbol: 'SAN.PA', zuordnung: 'suche' }), 'SAN.PA', 'gespeichertes Symbol gilt')
+gleich(kursSymbolFuer({ ticker: 'SAN' }, { kursSymbol: null, grund: 'keinTreffer' }), null, 'SAN mit gespeichertem keinTreffer: kein Rückfall auf den Ticker')
+gleich(kursSymbolFuer({ ticker: 'BYD', region: 'HK' }), null, 'BYD (HK) ohne Stand: kein Kurssymbol')
+gleich(kursSymbolFuer({ ticker: 'BYD', region: 'HK' }, { kursSymbol: 'BYD', zuordnung: 'ticker' }), null, 'BYD (HK): alter Stand «BYD» gilt nicht mehr')
+gleich(kursSymbolFuer({ ticker: 'BYD', region: 'HK' }, { kursSymbol: '1211.HK', zuordnung: 'suche' }), '1211.HK', 'BYD (HK): gefundene Hongkong-Listung gilt')
+
+// Der Lauf selbst, mit einer Kursquelle als Attrappe: was sie unter welchem Symbol führt.
+const attrappe = (charts, suche = null) => {
+    const gefragt = []
+    return {
+        gefragt,
+        holeChart: async (symbol) => {
+            gefragt.push(symbol)
+            if (!charts[symbol]) throw new NichtGefunden(symbol)
+            return { meta: { symbol, name: charts[symbol], typ: 'EQUITY' }, kerzen: [] }
+        },
+        sucheSymbol: async () => suche,
+    }
+}
+const BOYD = { BYD: 'Boyd Gaming Corporation', '1211.HK': 'BYD Company Limited' }
+const anBinance = [{ handelsplatz: 'binance', symbol: 'BYDUSDT', art: 'perp' }]
+let q = attrappe(BOYD)
+gleich(await findeKurse({ ticker: 'BYD', region: 'HK', name: null, listungen: anBinance }, undefined, 0, q), null, 'BYD (HK) → kein Treffer statt Boyd Gaming')
+gleich(q.gefragt, [], 'BYD (HK): «BYD» wird gar nicht erst abgerufen')
+q = attrappe(BOYD)
+gleich(await findeKurse({ ticker: 'BYD', region: 'HK', name: null, listungen: anBinance }, { kursSymbol: 'BYD', zuordnung: 'ticker' }, 0, q), null, 'BYD (HK): auch der gespeicherte Falschtreffer fällt weg')
+// Der Stamm hat den Namen von der falschen Firma gelernt — die Namenssuche findet sie wieder, darf aber nicht gelten.
+q = attrappe(BOYD, { symbol: 'BYD', heimat: true })
+gleich(await findeKurse({ ticker: 'BYD', region: 'HK', name: 'Boyd Gaming Corporation', listungen: anBinance }, undefined, 0, q), null, 'BYD (HK): US-Listung aus der Namenssuche gilt nicht')
+q = attrappe(BOYD, { symbol: '1211.HK', heimat: false })
+let fund = await findeKurse({ ticker: 'BYD', region: 'HK', name: 'BYD Company', listungen: anBinance }, undefined, 0, q)
+gleich([fund?.chart.meta.symbol, fund?.zuordnung], ['1211.HK', 'sucheFremd'], 'BYD (HK): Hongkong-Listung aus der Namenssuche gilt')
+// Krypto-Börse mit bekanntem Namen: der Name wird geprüft (früher galt der Ticker ungeprüft).
+q = attrappe({ SAN: 'Banco Santander, S.A.' })
+gleich(await findeKurse({ ticker: 'SAN', name: 'Sanofi', listungen: [{ handelsplatz: 'bitget', symbol: 'SANUSDT', art: 'perp' }] }, undefined, 0, q), null, 'Krypto-Börse, Name bekannt und widerspricht: kein Treffer')
+q = attrappe({ SAN: 'Banco Santander, S.A.' })
+gleich(await findeKurse({ ticker: 'SAN', name: 'Sanofi', listungen: anBinance }, { kursSymbol: 'SAN', zuordnung: 'ticker' }, 0, q), null, 'gespeicherter ungeprüfter Treffer wird am Namen nachgeprüft')
+q = attrappe({ NVDA: 'NVIDIA Corporation' })
+fund = await findeKurse({ ticker: 'NVDA', name: 'NVIDIA', listungen: anBinance }, undefined, 0, q)
+gleich(fund?.zuordnung, 'name', 'Krypto-Börse, Name passt: Zuordnung «name»')
+fund = await findeKurse({ ticker: 'NVDA', name: null, listungen: anBinance }, undefined, 0, q)
+gleich(fund?.zuordnung, 'ticker', 'kein Name im Stamm: Ticker gilt ungeprüft')
 
 gleich(namensWoerter('The Goldman Sachs Group, Inc.'), ['goldman', 'sachs'], 'Rechtsform und Füllwörter weg')
 gleich(namensWoerter('Wärtsilä Oyj Abp'), ['wartsila', 'abp'], 'Akzente weg')

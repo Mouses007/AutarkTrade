@@ -9,6 +9,10 @@
  * Santander. Deshalb gilt ein Treffer nur, wenn der NAME passt — kennt der
  * Stamm keinen Namen (Titel nur an Krypto-Börsen), gilt der Ticker und die
  * Zuordnung heisst `ticker` statt `name`.
+ *
+ * Trägt der Titel eine Region ausserhalb der USA (Binance `HK_EQUITY`: BYD
+ * Company), ist der blosse Ticker ein fremdes Papier (`BYD` = Boyd Gaming an
+ * der NYSE). Dann gilt nur ein Symbol mit Börsen-Nachsilbe — oder keines.
  */
 
 /** Schreibweisen mit Aktiengattung: Börsen kleben den Buchstaben an, die Kursquelle trennt ihn. */
@@ -17,19 +21,78 @@ const GATTUNG = { BRKB: 'BRK-B', BRKA: 'BRK-A', BFB: 'BF-B', BFA: 'BF-A' }
 const NACHSILBE = { US: '', LN: '.L', GY: '.DE', FP: '.PA', NA: '.AS', SM: '.MC', IM: '.MI', SW: '.SW', SS: '.ST', DC: '.CO', FH: '.HE', NO: '.OL', BB: '.BR', AV: '.VI', CN: '.TO', AU: '.AX', HK: '.HK', JP: '.T' }
 
 /**
+ * Regionen, deren Börsenkürzel eine Zahl mit EINER möglichen Nachsilbe ist.
+ * Korea (.KS/.KQ), China (.SS/.SZ) und Taiwan (.TW/.TWO) haben zwei Börsen — dort wird nicht geraten.
+ */
+const REGION_ZAHL = { HK: (z) => z.padStart(4, '0') + '.HK', JP: (z) => (z.length === 4 ? z + '.T' : null) }
+
+/** Liegt der Titel laut Stamm ausserhalb der USA? Ohne Angabe gilt: USA (so schreiben es die Krypto-Börsen). */
+export function fremdeRegion(region) {
+    const r = String(region || '').toUpperCase().trim()
+    return r !== '' && r !== 'US'
+}
+
+/** Nachsilben der Kursquelle je Region. Eine Region, die hier fehlt, verlangt nur IRGENDEINE Nachsilbe. */
+const REGION_NACHSILBEN = { HK: ['.HK'], JP: ['.T'], KR: ['.KS', '.KQ'], CN: ['.SS', '.SZ'], TW: ['.TW', '.TWO'] }
+
+/**
+ * Kann dieses Symbol der Kursquelle ein Titel dieser Region sein? Ohne fremde
+ * Region immer; mit ihr nur ein Symbol mit passender Börsen-Nachsilbe — ein
+ * Symbol ohne Nachsilbe ist eine US-Listung und damit ein anderes Papier.
+ */
+export function passtZurRegion(symbol, region) {
+    if (!fremdeRegion(region)) return true
+    const s = String(symbol || '').toUpperCase()
+    const punkt = s.lastIndexOf('.')
+    if (punkt < 1) return false
+    const erlaubt = REGION_NACHSILBEN[String(region).toUpperCase().trim()]
+    return erlaubt ? erlaubt.includes(s.slice(punkt)) : true
+}
+
+/**
  * Welche Symbole der Kursquelle kommen für diesen Ticker in Frage, in dieser Reihenfolge?
  * Leere Liste = aus dem Ticker lässt sich keines ableiten (dann hilft nur die Namenssuche).
+ *
+ * @param {string} ticker
+ * @param {string|null} [region]  Region des Titels im Stamm (`HK`, `KR`, `CN` …); mit einer
+ *        fremden Region kommt der blosse Ticker NIE in Frage
  */
-export function kursSymbolKandidaten(ticker) {
+export function kursSymbolKandidaten(ticker, region = null) {
     const t = String(ticker || '').toUpperCase().trim()
     if (!t) return []
-    if (GATTUNG[t]) return [GATTUNG[t]]
     const m = t.match(/^([A-Z0-9.]+)-([A-Z]{2})$/)
     if (m) return m[2] in NACHSILBE ? [m[1] + NACHSILBE[m[2]]] : []
+    if (fremdeRegion(region)) {
+        const baue = REGION_ZAHL[String(region).toUpperCase().trim()]
+        const symbol = baue && /^\d{1,5}$/.test(t) ? baue(t) : null
+        return symbol ? [symbol] : []
+    }
+    if (GATTUNG[t]) return [GATTUNG[t]]
     // Reine Zahlen sind asiatische Börsenkürzel ohne Börsenangabe — nicht ableitbar.
     if (/^\d+$/.test(t)) return []
     if (!/^[A-Z][A-Z0-9.]{0,9}$/.test(t)) return []
     return [t]
+}
+
+/**
+ * Das Symbol der Kursquelle für einen Titel, OHNE Netz — für alles, was nicht
+ * selbst sucht (Titel-Seite, Chart-Kontext, Aktien-Radar, Meldungen).
+ *
+ *   - gespeichertes Symbol des Newcomer-Laufs gilt; ausser es passt nicht zur
+ *     Region des Titels (Stand von vor dem 15.11.2026: `BYD` für BYD Company)
+ *   - hat der Lauf gesucht und nichts gefunden (`kursSymbol: null`, Grund
+ *     `keinTreffer`), bleibt es dabei — kein Rückfall auf den Ticker
+ *     (Bitpanda `SAN` ist Sanofi, `SAN` an der NYSE Banco Santander)
+ *   - noch nie gelaufen: der Kandidat aus Ticker und Region, sonst `null`
+ *
+ * @param {{ticker: string, region?: string|null}} titel
+ * @param {{kursSymbol?: string|null}|null} [zeile]  Zeile aus `newcomer_titel`, falls es eine gibt
+ * @returns {string|null}  `null` = kein Kurssymbol; der Aufrufer zeigt dann «unbekannt»
+ */
+export function kursSymbolFuer(titel, zeile = null) {
+    if (zeile?.kursSymbol) return passtZurRegion(zeile.kursSymbol, titel?.region) ? zeile.kursSymbol : null
+    if (zeile) return null
+    return kursSymbolKandidaten(titel?.ticker, titel?.region)[0] || null
 }
 
 const FUELLWOERTER = new Set([

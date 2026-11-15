@@ -249,20 +249,21 @@ export async function pruefeZahlentermine() {
     // Symbol der Watchlist → Titel des Stamms → Symbol der Kursquelle.
     const zeilen = await knex('instrument_listungen as l').join('instrumente as i', 'i.id', 'l.instrumentId')
         .whereIn('l.symbol', symbole.slice(0, 400)).where({ 'l.aktiv': 1, 'i.anlageklasse': 'aktien' })
-        .select('i.id', 'i.ticker', 'i.name')
+        .select('i.id', 'i.ticker', 'i.name', 'i.region')
     const titel = [...new Map(zeilen.map((z) => [z.id, z])).values()].slice(0, ZAHLEN_MAX_TITEL)
     if (!titel.length) return false
     const kursSymbole = new Map()
     if (await knex.schema.hasTable('newcomer_titel')) {
         for (const z of await knex('newcomer_titel').whereIn('instrumentId', titel.map((t) => t.id)).select('instrumentId', 'kursSymbol')) {
-            if (z.kursSymbol) kursSymbole.set(z.instrumentId, z.kursSymbol)
+            kursSymbole.set(z.instrumentId, z)
         }
     }
     const { ladeTermine } = await import('./termine.js')
-    const { kursSymbolKandidaten } = await import('../newcomer-radar/kursquelle-kern.js')
+    const { kursSymbolFuer } = await import('../newcomer-radar/kursquelle-kern.js')
     const mitTermin = []
     for (const t of titel) {
-        const kursSymbol = kursSymbole.get(t.id) || kursSymbolKandidaten(t.ticker)[0] || null
+        const kursSymbol = kursSymbolFuer(t, kursSymbole.get(t.id) || null)
+        if (!kursSymbol) continue
         const { termine, grund } = await ladeTermine(kursSymbol)
         // Bremst die Quelle oder ist sie aus, hört die Runde auf statt weiterzufragen.
         if (grund === 'gebremst' || grund === 'quelleAus') break

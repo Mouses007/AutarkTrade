@@ -278,6 +278,10 @@ const grundText = computed(() => {
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
         <Kreisel v-if="laedt && !seite" />
         <Hinweis v-if="seite && grundText" art="warn">{{ grundText }}</Hinweis>
+        <!-- Die Kursquelle nennt eine andere Firma als der Stamm: Kurs und Kennzahlen können die falschen sein. -->
+        <Hinweis v-if="seite?.nameQuelle" art="warn">
+            {{ t('titel.nameAbweichung', { quelle: seite.nameQuelle, stamm: seite.titel?.name || ticker, symbol: seite.kursSymbol }) }}
+        </Hinweis>
 
         <template v-if="seite && seite.ok">
             <!-- Kursband -->

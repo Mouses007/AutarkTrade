@@ -15,7 +15,7 @@
 import { getKnex } from '../database.js'
 import * as marktdaten from '../marktdaten/index.js'
 import { holeSplits } from '../newcomer-radar/kursquelle.js'
-import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
+import { kursSymbolFuer } from '../newcomer-radar/kursquelle-kern.js'
 import { istAus } from '../quellen/aus.js'
 import { CHART_BOERSEN } from './chart-symbole.js'
 import { ladeTermine } from './termine.js'
@@ -48,7 +48,7 @@ async function stammZeile(symbol) {
     const zeilen = await knex('instrument_listungen as l').join('instrumente as i', 'i.id', 'l.instrumentId')
         .where({ 'l.symbol': symbol, 'l.art': 'perp', 'l.aktiv': 1, 'i.anlageklasse': 'aktien' })
         .whereIn('l.handelsplatz', CHART_BOERSEN)
-        .select('i.id', 'i.ticker', 'i.name', 'i.unterart', 'l.handelsplatz')
+        .select('i.id', 'i.ticker', 'i.name', 'i.unterart', 'i.region', 'l.handelsplatz')
     const zeile = zeilen.find((z) => z.handelsplatz === boerse) || zeilen[0]
     return zeile ? { ...zeile, boerse: boerse || zeile.handelsplatz } : null
 }
@@ -76,11 +76,10 @@ async function baue(symbol) {
     const knex = getKnex()
     const zeile = await stammZeile(symbol)
     if (!zeile) return null
-    let kursSymbol = null
-    if (await knex.schema.hasTable('newcomer_titel')) {
-        kursSymbol = (await knex('newcomer_titel').where('instrumentId', zeile.id).first())?.kursSymbol || null
-    }
-    kursSymbol = kursSymbol || kursSymbolKandidaten(zeile.ticker)[0] || null
+    const gemerkt = (await knex.schema.hasTable('newcomer_titel'))
+        ? await knex('newcomer_titel').where('instrumentId', zeile.id).first('kursSymbol') : null
+    // `null` = kein Kurssymbol (Lauf fand nichts, fremde Region) — Splits und Termine bleiben dann unbekannt.
+    const kursSymbol = kursSymbolFuer(zeile, gemerkt || null)
     const [{ splits, grund }, zahlen] = await Promise.all([ladeSplits(kursSymbol), ladeTermine(kursSymbol)])
     return {
         ticker: zeile.ticker, name: zeile.name || null, unterart: zeile.unterart,

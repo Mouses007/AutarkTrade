@@ -9114,6 +9114,7 @@
     "grund_nichtGefunden": "The price source does not know this instrument.",
     "grund_gebremst": "The price source is throttling right now. Please try again in a few minutes.",
     "datenFehler": "Key figures unavailable ({fehler}). The price history is there.",
+    "nameAbweichung": "The price source lists “{quelle}” under {symbol}; in the list this instrument is called “{stamm}”. Price, key figures and analysts on this page may belong to a different company.",
     "oeffnen": "Open instrument page"
   },
   "aktien": {

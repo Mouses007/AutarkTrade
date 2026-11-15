@@ -20,7 +20,7 @@ import { leseStamm } from '../aktien/stamm-speicher.js'
 import { kennzahlen, rendite } from './kennzahlen.js'
 import { bewerte } from './bewertung.js'
 import { wechselkursSymbol, ausWechselkurs } from './waehrung.js'
-import { kursSymbolKandidaten, nameAehnlich } from './kursquelle-kern.js'
+import { kursSymbolKandidaten, kursSymbolFuer, passtZurRegion, nameAehnlich } from './kursquelle-kern.js'
 import { holeChart, sucheSymbol, NichtGefunden, Gebremst } from './kursquelle.js'
 
 const FRISCH_MS = 20 * 3600e3
@@ -38,35 +38,44 @@ export const laufStand = () => stand
 
 /**
  * Kurse eines Titels finden. Zuordnung, in dieser Reihenfolge:
- *   gespeichert  das Symbol des letzten Laufs
- *   ticker       Titel an einer Krypto-Börse — die schreiben US-Ticker, der Name wird nicht geprüft
- *   name         Ticker passt und der Name widerspricht nicht (`nameAehnlich`)
+ *   gespeichert  das Symbol des letzten Laufs — ein ungeprüftes (`ticker`) nur, solange der
+ *                inzwischen bekannte Name nicht widerspricht und die Region es zulässt
+ *   ticker       der Stamm kennt keinen Namen (Titel nur an Krypto-Börsen): der Ticker gilt ungeprüft
+ *   name         Ticker passt und der Name widerspricht nicht (`nameAehnlich`) — auch an Krypto-Börsen
+ *
+ * Titel mit fremder Region (Binance `HK_EQUITY`) haben keinen Ticker-Kandidaten:
+ * `BYD` wäre Boyd Gaming. Für sie bleibt die Namenssuche oder «kein Treffer».
  *   suche        über den Firmennamen gefunden, Listung mit demselben Ticker (Heimatbörse)
  *   sucheFremd   über den Namen gefunden, aber eine Zweitlistung: Kurse gelten,
  *                das Datum des ersten Handels ist nicht der Börsengang
+ *
+ * @param {{holeChart: Function, sucheSymbol: Function}} [quelle]  nur der Selbsttest reicht eine Attrappe herein
  */
-async function findeKurse(titel, gespeichert, jetzt) {
-    if (gespeichert?.kursSymbol) {
+export async function findeKurse(titel, gespeichert, jetzt, quelle = { holeChart, sucheSymbol }) {
+    const { holeChart, sucheSymbol } = quelle
+    if (gespeichert?.kursSymbol && kursSymbolFuer(titel, gespeichert)) {
         try {
-            return { chart: await holeChart(gespeichert.kursSymbol, jetzt), zuordnung: gespeichert.zuordnung || 'ticker' }
+            const chart = await holeChart(gespeichert.kursSymbol, jetzt)
+            const zuordnung = gespeichert.zuordnung || 'ticker'
+            if (zuordnung !== 'ticker' || !titel.name || nameAehnlich(titel.name, chart.meta.name, titel.ticker)) return { chart, zuordnung }
         } catch (e) {
             if (!(e instanceof NichtGefunden)) throw e
         }
     }
-    const anKryptoBoerse = titel.listungen.some((l) => l.handelsplatz !== 'bitpanda')
-    for (const symbol of kursSymbolKandidaten(titel.ticker)) {
+    for (const symbol of kursSymbolKandidaten(titel.ticker, titel.region)) {
         let chart
         try { chart = await holeChart(symbol, jetzt) } catch (e) {
             if (e instanceof NichtGefunden) continue
             throw e
         }
         if (!WERTPAPIER_TYPEN.has(chart.meta.typ)) continue
-        if (anKryptoBoerse || !titel.name) return { chart, zuordnung: 'ticker' }
+        if (!titel.name) return { chart, zuordnung: 'ticker' }
         if (nameAehnlich(titel.name, chart.meta.name, titel.ticker)) return { chart, zuordnung: 'name' }
     }
     if (titel.name) {
         const treffer = await sucheSymbol(titel.name, titel.ticker)
-        if (treffer) {
+        // Auch die Namenssuche darf einem Titel aus Hongkong keine US-Listung unterschieben.
+        if (treffer && passtZurRegion(treffer.symbol, titel.region)) {
             try {
                 const chart = await holeChart(treffer.symbol, jetzt)
                 if (WERTPAPIER_TYPEN.has(chart.meta.typ)) return { chart, zuordnung: treffer.heimat ? 'suche' : 'sucheFremd' }

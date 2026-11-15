@@ -133,8 +133,13 @@ export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(
 
 /**
  * Titel mit ihren aktiven Listungen.
- * @param {{anlageklasse?: string, suche?: string, handelsplatz?: string, art?: string,
- *          nurKryptoBoersen?: boolean, grenze?: number}} filter
+ *
+ * Mit `suche` kommt der exakte Ticker zuerst, dann «Ticker beginnt mit», dann
+ * «Name enthält» — und erst danach wird begrenzt. Sonst verdrängen bei «V»
+ * oder «GE» die Namens-Treffer den gesuchten Titel (Audit DB-D-001).
+ *
+ * @param {{anlageklasse?: string, ticker?: string, suche?: string, handelsplatz?: string, art?: string,
+ *          nurKryptoBoersen?: boolean, grenze?: number}} filter  `ticker` = genau dieser Ticker
  */
 export async function leseStamm(knex, filter = {}) {
     const grenze = Math.min(Math.max(Number(filter.grenze) || 200, 1), 5000)
@@ -144,8 +149,16 @@ export async function leseStamm(knex, filter = {}) {
     if (filter.art) q = q.where('l.art', filter.art)
     if (filter.nurKryptoBoersen) q = q.whereNot('l.handelsplatz', 'bitpanda')
     const suche = String(filter.suche || '').trim().toUpperCase().replace(/[%_\\]/g, '')
+    if (filter.ticker) q = q.where('i.ticker', String(filter.ticker).toUpperCase())
     if (suche) q = q.where((w) => w.where('i.ticker', 'like', `${suche}%`).orWhereRaw('upper(??) like ?', ['i.name', `%${suche}%`]))
-    const ids = (await q.clone().distinct('i.id').orderBy('i.id').limit(grenze)).map((z) => z.id)
+    // Gruppieren statt DISTINCT: PostgreSQL verlangt bei DISTINCT jede Sortierspalte in der Auswahl.
+    let idAbfrage = q.clone().select('i.id').groupBy('i.id', 'i.ticker')
+    if (suche) {
+        idAbfrage = idAbfrage
+            .orderByRaw('case when ?? = ? then 0 when ?? like ? then 1 else 2 end', ['i.ticker', suche, 'i.ticker', `${suche}%`])
+            .orderBy('i.ticker')
+    }
+    const ids = (await idAbfrage.orderBy('i.id').limit(grenze)).map((z) => z.id)
     if (!ids.length) return []
     const [titel, listungen] = await Promise.all([
         knex('instrumente').whereIn('id', ids).orderBy('ticker'),
@@ -159,6 +172,11 @@ export async function leseStamm(knex, filter = {}) {
             maxHebel: l.maxHebel, sicher: !!l.sicher, ersteSichtung: Number(l.ersteSichtung) || null,
             gelistetSeit: Number(l.gelistetSeit) || null,
         })
+    }
+    // Die Suche behält ihre Rangfolge, alles andere bleibt nach Ticker geordnet.
+    if (suche) {
+        const rang = new Map(ids.map((id, i) => [id, i]))
+        titel.sort((a, b) => rang.get(a.id) - rang.get(b.id))
     }
     return titel.map((t) => {
         const ls = je.get(t.id) || []

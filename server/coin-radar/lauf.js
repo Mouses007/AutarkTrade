@@ -39,7 +39,6 @@ import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, GEWICHTE
 import { ladeTagesdaten, INDEX } from './aktien-tagesdaten.js'
 import { sitzungVon } from '../../shared/aktien-sitzung.js'
 import { ladeTermine } from '../aktien/termine.js'
-import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
 import { terminListe, tageBisZahlen } from '../../shared/aktien-zahlen.js'
 import * as marktdaten from '../marktdaten/index.js'
 import { ladeAktienUniversum, waehleReferenz, boersenFelder } from './aktien-universum.js'
@@ -325,7 +324,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         try {
             tagesdaten = await ladeTagesdaten(
                 knex,
-                offen.map((a) => ({ symbol: a.symbol, id: aktienTitel.get(a.symbol)?.id ?? null, ticker: aktienTitel.get(a.symbol)?.ticker })),
+                offen.map((a) => ({ symbol: a.symbol, id: aktienTitel.get(a.symbol)?.id ?? null, ticker: aktienTitel.get(a.symbol)?.ticker, region: aktienTitel.get(a.symbol)?.region })),
                 (f) => melde({ schritt: 'staerke', ...f }),
             )
         } catch (e) {
@@ -356,7 +355,8 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
     if (aktien && !abbruch()) {
         melde({ schritt: 'zahlen', gesamt: offen.length })
         for (const [i, a] of offen.entries()) {
-            const kursSymbol = kursSymbolKandidaten(aktienTitel.get(a.symbol)?.ticker)[0]
+            // Dasselbe Kurssymbol wie die Stärke; ohne (kein Treffer, fremde Region) bleibt der Termin unbekannt.
+            const kursSymbol = tagesdaten.kursSymbole?.get(a.symbol)
             if (!kursSymbol) continue
             const { termine, grund } = await ladeTermine(kursSymbol)
             if (grund === 'gebremst' || grund === 'quelleAus') { zahlenGrund = grund; break }

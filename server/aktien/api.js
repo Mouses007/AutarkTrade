@@ -24,7 +24,7 @@ import { holeMarktlage } from './marktlage.js'
 import { aktienKontext } from './kontext.js'
 import { ausZusammenfassung, kursLinie, bewegungsFrage } from './titel-kern.js'
 import { holeZusammenfassung, holeChart, NichtGefunden, Gebremst } from '../newcomer-radar/kursquelle.js'
-import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
+import { ladeTitel, namensWarnung } from './titel-stamm.js'
 import { sendeWennAus, istAus } from '../quellen/aus.js'
 import { ladeLlmConfig, merkeKiGuthaben, istGuthabenFehler } from '../llm.js'
 import { rechercheThema } from '../news-recherche.js'
@@ -37,18 +37,6 @@ const TITEL_MS = 15 * 60_000
 const BEWEGUNG_MS = 6 * 60 * 60_000
 const titelCache = new Map()      // ticker → { zeit, wert } | { laeuft: Promise }
 const bewegungCache = new Map()   // ticker → { zeit, wert }
-
-/** Titel des Stamms samt Listungen und dem Symbol bei der Kursquelle. */
-async function ladeTitel(knex, ticker) {
-    const zeile = await knex('instrumente').where({ anlageklasse: 'aktien', ticker }).first()
-    if (!zeile) return null
-    const [titel] = (await leseStamm(knex, { anlageklasse: 'aktien', suche: ticker, grenze: 50 })).filter((t) => t.id === zeile.id)
-    let kursSymbol = null
-    if (await knex.schema.hasTable('newcomer_titel')) {
-        kursSymbol = (await knex('newcomer_titel').where('instrumentId', zeile.id).first())?.kursSymbol || null
-    }
-    return { titel: titel || { ticker, name: zeile.name, unterart: zeile.unterart, listungen: [] }, kursSymbol: kursSymbol || kursSymbolKandidaten(ticker)[0] || null }
-}
 
 async function baueTitelSeite(ticker) {
     const gefunden = await ladeTitel(getKnex(), ticker)
@@ -66,9 +54,12 @@ async function baueTitelSeite(ticker) {
         const [zus, chart] = await Promise.allSettled([holeZusammenfassung(kursSymbol), holeChart(kursSymbol)])
         for (const r of [zus, chart]) if (r.status === 'rejected' && istAus(r.reason)) throw r.reason
         if (zus.status === 'rejected' && chart.status === 'rejected') throw zus.reason
+        const daten = zus.status === 'fulfilled' ? ausZusammenfassung(zus.value) : null
+        const quellenName = (chart.status === 'fulfilled' ? chart.value.meta.name : null) || daten?.profil?.name || null
         return {
             ...kopf,
-            daten: zus.status === 'fulfilled' ? ausZusammenfassung(zus.value) : null,
+            daten,
+            nameQuelle: namensWarnung(titel.name, quellenName, ticker),
             datenFehler: zus.status === 'rejected' ? String(zus.reason?.message || zus.reason) : null,
             linie: chart.status === 'fulfilled' ? kursLinie(chart.value.kerzen) : [],
             ipoDatum: chart.status === 'fulfilled' ? chart.value.meta.ipoDatum : null,
@@ -176,7 +167,9 @@ export function setupAktienRoutes(app) {
             const gefunden = await ladeTitel(getKnex(), ticker)
             if (!gefunden) return res.json({ ok: false, grund: 'unbekannt' })
             // Das Kurssymbol trägt bei Nicht-US-Titeln den Börsen-Anhang (ASML.AS) — daran erkennt EDGAR sie.
-            res.json(await holeEinreichungen(gefunden.kursSymbol || ticker, { neu: req.query.neu === '1' }))
+            // Ohne Kurssymbol (Newcomer-Lauf fand nichts, fremde Region) wird nicht unter dem blossen Ticker gesucht.
+            if (!gefunden.kursSymbol) return res.json({ ok: true, gefuehrt: false, grund: 'keinUsTicker' })
+            res.json(await holeEinreichungen(gefunden.kursSymbol, { neu: req.query.neu === '1' }))
         } catch (e) {
             if (sendeWennAus(res, e)) return
             if (e instanceof EdgarGebremst) return res.json({ ok: false, grund: 'gebremst' })
