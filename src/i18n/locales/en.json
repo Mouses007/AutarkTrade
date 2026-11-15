@@ -9217,7 +9217,7 @@
       "naechster": "Next run: {zeit} ({platz}).",
       "keinNaechster": "No next run could be calculated.",
       "letzter": "Last run {platz}: {zeit}",
-      "zeitplanGrenze": "If the machine was off at the due time, the run is not made up. The schedule does not know shortened trading days (close at 13:00).",
+      "zeitplanGrenze": "If the machine was off at the due time, the run is not made up. On shortened trading days (close at 13:00) the run before the close moves forward accordingly.",
       "platz_eroeffnung": "after the open",
       "platz_schluss": "before the close",
       "vorgabe": "Restore default",

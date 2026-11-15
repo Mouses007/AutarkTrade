@@ -9217,7 +9217,7 @@
       "naechster": "Nächster Lauf: {zeit} ({platz}).",
       "keinNaechster": "Kein nächster Lauf berechenbar.",
       "letzter": "Letzter Lauf {platz}: {zeit}",
-      "zeitplanGrenze": "War der Rechner zur fälligen Zeit aus, wird der Lauf nicht nachgeholt. Verkürzte Handelstage (Schluss 13:00) kennt der Zeitplan nicht.",
+      "zeitplanGrenze": "War der Rechner zur fälligen Zeit aus, wird der Lauf nicht nachgeholt. An verkürzten Handelstagen (Schluss 13:00) rückt der Lauf vor dem Schluss entsprechend vor.",
       "platz_eroeffnung": "nach der Eröffnung",
       "platz_schluss": "vor dem Schluss",
       "vorgabe": "Vorgabe wiederherstellen",

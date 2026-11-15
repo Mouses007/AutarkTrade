@@ -83,6 +83,9 @@ gleich(naechsterPlatz(utc(2026, 11, 15, 12, 0), AN), { platz: 'eroeffnung', zeit
 gleich(naechsterPlatz(utc(2026, 11, 16, 15, 30), AN)?.zeit, utc(2026, 11, 16, 20, 30), 'nach der Eröffnung → Schluss desselben Tags')
 gleich(naechsterPlatz(utc(2026, 11, 20, 21, 30), AN)?.zeit, utc(2026, 11, 23, 15, 0), 'Freitag nach Schluss → Montag')
 gleich(naechsterPlatz(utc(2026, 11, 25, 21, 30), AN)?.handelstag, '2026-11-27', 'Mittwoch vor Thanksgiving → Freitag')
+// Verkürzter Handelstag (27.11.2026, Schluss 13:00): der Schluss-Platz rückt auf 12:30 vor.
+gleich(faelligerPlatz(utc(2026, 11, 27, 17, 35), AN)?.platz, 'schluss', 'verkürzter Tag: 12:35 New York ist der Schluss-Platz')
+gleich(faelligerPlatz(utc(2026, 11, 27, 20, 35), AN), null, 'verkürzter Tag: 15:35 New York ist nach dem Schluss')
 gleich(naechsterPlatz(utc(2026, 7, 5, 12, 0), AN)?.zeit, utc(2026, 7, 6, 14, 0), 'Sommerzeit: Montag 14:00 UTC')
 gleich(naechsterPlatz(utc(2026, 11, 15, 12, 0), { an: false }), null, 'aus: kein nächster Lauf')
 // Jeder gemeldete nächste Platz ist dann auch wirklich fällig

@@ -259,7 +259,7 @@ Stocks are not treated as relabelled coins (research notes: `docs/RECHERCHE-AKTI
 
 - **Newcomer radar** — young and newly listed companies among the tradable instruments, scored by novelty, price strength and volume; usual lock-up expiry (180 days, calculated) noted at the IPO
 - **Stock radar** — the stock futures of the market-data source, scored by strength against the S&P 500 over 3/6/12 months (rank in the field), nearness to the 52-week high, volume against the same time of day, movement and trend; funding is a cost column only; days to the next earnings release
-  - *Schedule* (off by default): on every US trading day a set time after the open and before the close (default 30 minutes each, New York time) — never at weekends or on US holidays, a missed slot is not made up, shortened trading days are not known
+  - *Schedule* (off by default): on every US trading day a set time after the open and before the close (default 30 minutes each, New York time) — never at weekends or on US holidays, a missed slot is not made up, on shortened trading days (close at 13:00) the run before the close moves forward
   - *Settings* on the page: gates (turnover, spread, size at the top, candles) and the five score weights, validated, with „restore default" per block
   - *Outcome tracking*: excess return of the top 20 against the run's reference (SPY) over 1 day, 1 week and 4 weeks, plus the comparison with a random sample from the bottom half; at most one run per day is tracked, a verdict needs five measured runs
 - **Market conditions** — S&P 500, Nasdaq 100 and small caps against their 200-day line, VIX and its term structure, the eleven sectors against the index, rates, dollar, breadth of your own field; a rule-based verdict with its reasons

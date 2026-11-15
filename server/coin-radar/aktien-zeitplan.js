@@ -18,15 +18,16 @@
  * Ein Platz gilt nur in seinem Fenster. War der Rechner in der Zeit aus, wird
  * NICHT nachgeholt: ein «Lauf nach der Eröffnung» um 14 Uhr wäre keiner.
  *
- * Nicht abgebildet (wie im Sitzungs-Modell): verkürzte Handelstage. Am Tag
- * nach Thanksgiving und an Heiligabend schliesst die Börse um 13:00 — der
- * Platz `schluss` liegt dann nach dem Schluss.
+ * Verkürzte Handelstage (`istVerkuerzt`: Schluss 13:00) verschieben den Platz
+ * `schluss` entsprechend nach vorn.
  */
-import { nyTeile, istHandelstag } from '../../shared/aktien-sitzung.js'
+import { nyTeile, istHandelstag, istVerkuerzt } from '../../shared/aktien-sitzung.js'
 
 const MIN = 60_000
 const EROEFFNUNG = 9 * 60 + 30
 const SCHLUSS = 16 * 60
+const SCHLUSS_VERKUERZT = 13 * 60
+const schlussAm = (datum) => (datum && istVerkuerzt(datum) ? SCHLUSS_VERKUERZT : SCHLUSS)
 
 /** Ab Werk aus — wie der Zeitplan des Coin-Radars. */
 export const ZEITPLAN_VORGABE = Object.freeze({ an: false, nachEroeffnungMin: 30, vorSchlussMin: 30 })
@@ -64,16 +65,16 @@ export function leseZeitplan(roh) {
 }
 
 /** Minute des Tages (New Yorker Wanduhr), zu der ein Platz beginnt. */
-export function platzMinute(platz, plan) {
-    return platz === 'eroeffnung' ? EROEFFNUNG + plan.nachEroeffnungMin : SCHLUSS - plan.vorSchlussMin
+export function platzMinute(platz, plan, datum = null) {
+    return platz === 'eroeffnung' ? EROEFFNUNG + plan.nachEroeffnungMin : schlussAm(datum) - plan.vorSchlussMin
 }
 
 /** Bis zu welcher Minute der Platz noch gilt (ausschliesslich). */
-function platzEnde(platz, plan) {
+function platzEnde(platz, plan, datum = null) {
     // Der Schluss-Platz endet mit der Glocke; der Eröffnungs-Platz nach seinem Fenster,
     // spätestens aber dort, wo der Schluss-Platz beginnt.
-    if (platz === 'schluss') return SCHLUSS
-    return Math.min(platzMinute('eroeffnung', plan) + FENSTER_MIN, platzMinute('schluss', plan))
+    if (platz === 'schluss') return schlussAm(datum)
+    return Math.min(platzMinute('eroeffnung', plan) + FENSTER_MIN, platzMinute('schluss', plan, datum))
 }
 
 /**
@@ -86,7 +87,7 @@ export function faelligerPlatz(ms, planRoh) {
     const t = nyTeile(ms)
     if (!istHandelstag(t.datum, t.wochentag)) return null
     for (const platz of PLAETZE) {
-        if (t.minuten >= platzMinute(platz, plan) && t.minuten < platzEnde(platz, plan)) return { platz, handelstag: t.datum }
+        if (t.minuten >= platzMinute(platz, plan, t.datum) && t.minuten < platzEnde(platz, plan, t.datum)) return { platz, handelstag: t.datum }
     }
     return null
 }
@@ -117,7 +118,7 @@ export function naechsterPlatz(ms, planRoh) {
         const t = nyTeile(mittag + tag * 86_400_000)
         if (!istHandelstag(t.datum, t.wochentag)) continue
         for (const platz of PLAETZE) {
-            const zeit = nyZeitpunkt(t.datum, platzMinute(platz, plan))
+            const zeit = nyZeitpunkt(t.datum, platzMinute(platz, plan, t.datum))
             if (zeit !== null && zeit > ms) return { platz, zeit, handelstag: t.datum }
         }
     }
