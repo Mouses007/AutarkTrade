@@ -98,6 +98,8 @@ p('Gleichlauf zählt Strukturen', zr.gleichlauf.auf + zr.gleichlauf.ab + zr.glei
 const ohne = hoheZeitrahmen({ '1w': null, '1d': serien['1d'], '4h': null }, 83)
 p('fehlender Zeitrahmen bleibt „unbekannt", nie erfunden', ohne.zeilen.find((z) => z.tf === '1w').unbekannt && !ohne.zeilen.find((z) => z.tf === '1d').unbekannt)
 p('gar keine Kerzen → null', hoheZeitrahmen({}, 83) === null)
+p('Marken und Abstand gegen den Kurs des Bots, nicht gegen den Schluss je Zeitrahmen (FUN-R-202)', zr.zeilen.every((z) => z.kurs === 83) && zr.marken.every((m) => (m.abstandAtr > 0) === (m.preis > 83)))
+p('Gegenprobe: ohne Kurs gilt der letzte Schluss je Zeitrahmen', hoheZeitrahmen(serien).zeilen.every((z) => z.kurs === z.schluss))
 const nv = niveausAusZeitrahmen(zr, 83)
 p('Niveaus unter und über dem Kurs getrennt', nv.unten.every((n) => n.preis < 83) && nv.oben.every((n) => n.preis > 83))
 const mitZr = kandidaten(bot, bot.kurs, 4.3, zr)

@@ -34,6 +34,42 @@ console.log('\nZeitrahmen\n')
     check('höchstens zwei Marken je Seite', a.marken.filter((m) => m.preis > a.kurs).length <= 2 && a.marken.filter((m) => m.preis <= a.kurs).length <= 2)
 }
 
+console.log('\nKurs des Charts statt Schluss des Zeitrahmens (FUN-R-202)\n')
+{
+    // Wochenreihe pendelt zwischen 90 und 100, letzter Wochenschluss 98 — der Kurs ist seither auf 104 gelaufen
+    const W = 7 * 24 * H
+    const woche = []
+    for (let i = 0; i < 80; i++) {
+        const auf = i % 8 < 4
+        const o = auf ? 90 + (i % 4) * 2.5 : 100 - (i % 4) * 2.5
+        const c = auf ? o + 2.5 : o - 2.5
+        woche.push({ t: Date.UTC(2025, 0, 6) + i * W, o, h: Math.max(o, c) + 0.3, l: Math.min(o, c) - 0.3, c, v: 1000 })
+    }
+    woche[woche.length - 1].c = 98
+    const nah = (a, b) => Math.abs(a - b) < 1e-6
+    const alt = messeZeitrahmen(woche, '1w')
+    const mAlt = alt.marken.find((m) => nah(m.preis, 100.3))
+    check('ohne Kurs: letzter Schluss, Marke 100,3 liegt darüber', alt.kurs === 98 && alt.kursQuelle === 'schluss' && mAlt?.abstandAtr > 0, JSON.stringify(alt.marken))
+    const neu = messeZeitrahmen(woche, '1w', { kurs: 104 })
+    const mNeu = neu.marken.find((m) => nah(m.preis, 100.3))
+    check('Marke 100,3 bei Kurs 104: unter dem Kurs', neu.kurs === 104 && neu.kursQuelle === 'chart' && mNeu?.abstandAtr < 0, JSON.stringify(neu.marken))
+    check('Abstand = (Marke − Kurs) / ATR des Zeitrahmens', nah(mNeu.abstandAtr, (100.3 - 104) / neu.atr) && neu.atr === alt.atr)
+    check('keine Marke gilt als «über dem Kurs», die darunter liegt', neu.marken.every((m) => (m.abstandAtr > 0) === (m.preis > 104)))
+    check('Lage in der Spanne gegen den Kurs: über der Spanne', neu.lagePct > 100 && alt.lagePct <= 100, `${neu.lagePct} / ${alt.lagePct}`)
+    check('Struktur, Momentum und ATR bleiben die der geschlossenen Kerzen', neu.zustand === alt.zustand && neu.welle === alt.welle && neu.atrPct === alt.atrPct && neu.schluss === 98)
+    check('Gegenprobe: ungültiger Kurs fällt auf den Schluss zurück', [0, -1, NaN, null, '104'].every((k) => messeZeitrahmen(woche, '1w', { kurs: k }).kurs === 98))
+    const bild = baueZeitrahmen({ serien: { '1w': woche }, interval: '15m', kurs: 104, atrChart: 0.5 })
+    const text = zeitrahmenText(bild, (ms) => new Date(ms).toISOString().slice(0, 10))
+    const zeile = text.split('\n').find((l) => /^Z\d+ \| 1w \| 100\.3/.test(l))
+    check('das ganze Bild reicht den Kurs durch: Marke mit negativem Abstand', !!zeile && / \| -\d/.test(zeile), zeile)
+    check('Text nennt «über der Spanne» statt einer Prozentzahl über 100', /1w: .*Kurs über der Spanne/.test(text), text.split('\n')[1])
+    // Ohne Kurs vom Aufrufer: jüngster Schluss des feinsten Zeitrahmens mit Kerzen
+    const fein = steigend(300).map((k) => ({ ...k }))
+    fein[fein.length - 1].c = 104
+    const ohne = baueZeitrahmen({ serien: { '1w': woche, '1h': fein }, interval: '1h', atrChart: 0.5 })
+    check('ohne Kurs: der jüngste Schluss des feinsten Zeitrahmens gilt für alle Zeilen', ohne.kurs === 104 && ohne.zeilen.find((z) => z.tf === '1w').kurs === 104, String(ohne.kurs))
+}
+
 console.log('\nZusammentreffen\n')
 {
     const m = (id, preis, quelle) => ({ id, preis, quelle })

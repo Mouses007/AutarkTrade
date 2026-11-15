@@ -36,13 +36,26 @@ export function zeitrahmenFuer(interval) {
     return liste.sort((a, b) => minuten(b) - minuten(a))
 }
 
-/** Ein Zeitrahmen: nur geschlossene Kerzen; zu wenige → `null`, nie ein erfundener Stand. */
-export function messeZeitrahmen(kerzen, tf, { grenze = OB_LVL } = {}) {
+/**
+ * Ein Zeitrahmen: nur geschlossene Kerzen; zu wenige → `null`, nie ein erfundener Stand.
+ *
+ * `kurs` = der Kurs des Charts (Audit 15.11.2026, FUN-R-202). Struktur, Momentum, ATR
+ * und Marken kommen aus den geschlossenen Kerzen DIESES Zeitrahmens; «über/unter dem
+ * Kurs», der Abstand und die Lage in der Spanne aber werden gegen den Kurs gemessen,
+ * den der Nutzer sieht. Der letzte Wochenschluss ist bis zu sieben Tage alt — eine
+ * Marke bei 100,3 stand sonst als «über dem Kurs» da, während der Kurs bei 104 lag.
+ * Ohne `kurs` gilt der letzte Schluss der Reihe (`kursQuelle: 'schluss'`).
+ * Die Lage kann darum unter 0 % oder über 100 % liegen: der Kurs hat die Spanne der
+ * geschlossenen Kerzen dann verlassen.
+ */
+export function messeZeitrahmen(kerzen, tf, { grenze = OB_LVL, kurs: chartKurs } = {}) {
     if (!Array.isArray(kerzen) || kerzen.length < MIN_KERZEN) return null
     const a = atr(kerzen, 14)
     const atrWert = a[a.length - 1]
     if (!(atrWert > 0)) return null
-    const kurs = kerzen[kerzen.length - 1].c
+    const schluss = kerzen[kerzen.length - 1].c
+    const vomChart = Number.isFinite(chartKurs) && chartKurs > 0
+    const kurs = vomChart ? chartKurs : schluss
     const s = marktstruktur(kerzen)
     const sp = spanneLetzte(kerzen, SPANNE_KERZEN, atrWert)
     const w1 = welle(kerzen).w1
@@ -53,11 +66,13 @@ export function messeZeitrahmen(kerzen, tf, { grenze = OB_LVL } = {}) {
     return {
         tf,
         kurs,
+        kursQuelle: vomChart ? 'chart' : 'schluss',
+        schluss,
         atr: atrWert,
-        atrPct: (atrWert / kurs) * 100,
+        atrPct: (atrWert / schluss) * 100,
         zustand: s.zustand,
         bruch: s.bruch,
-        lagePct: sp?.positionPct ?? null,
+        lagePct: !sp ? null : sp.hoch > sp.tief ? ((kurs - sp.tief) / (sp.hoch - sp.tief)) * 100 : 50,
         tief: sp?.tief ?? null,
         hoch: sp?.hoch ?? null,
         welle: Number.isFinite(w) ? w : null,
@@ -99,13 +114,21 @@ export function findeTreffen(marken, toleranz, kurs) {
  * @param {object} p
  * @param {Record<string, Array>} p.serien  tf → geschlossene Kerzen (fehlend: null)
  * @param {string} p.interval               Zeiteinheit des Charts
- * @param {number} p.kurs                   letzter Schluss des Charts
+ * @param {number} p.kurs                   Kurs des Charts (letzter Schluss der Chart-Zeiteinheit); fehlt er,
+ *                                          gilt der jüngste Schluss des feinsten Zeitrahmens mit Kerzen
  * @param {number} p.atrChart               ATR des Charts (Ersatz für die Toleranz)
  * @param {Array}  p.eigene                 `paket.beziehungen.marken`: [{u, art, preis}]
  */
-export function baueZeitrahmen({ serien, interval, kurs, atrChart, eigene = [], grenze = OB_LVL, jetzt = Date.now() }) {
+export function baueZeitrahmen({ serien, interval, kurs: kursEin, atrChart, eigene = [], grenze = OB_LVL, jetzt = Date.now() }) {
     const reihenfolge = zeitrahmenFuer(interval)
-    const zeilen = reihenfolge.map((tf) => messeZeitrahmen(serien[tf], tf, { grenze }) || { tf, unbekannt: true })
+    // Ein Kurs für alle Zeilen: der des Charts, sonst der jüngste Schluss des feinsten Zeitrahmens.
+    let kurs = Number.isFinite(kursEin) && kursEin > 0 ? kursEin : null
+    for (let i = reihenfolge.length - 1; kurs == null && i >= 0; i--) {
+        const k = serien[reihenfolge[i]]
+        const c = Array.isArray(k) && k.length ? k[k.length - 1].c : null
+        if (Number.isFinite(c) && c > 0) kurs = c
+    }
+    const zeilen = reihenfolge.map((tf) => messeZeitrahmen(serien[tf], tf, { grenze, kurs }) || { tf, unbekannt: true })
     const marken = []
     for (const z of zeilen) {
         if (z.unbekannt) continue
@@ -137,11 +160,16 @@ const MOMENTUM = { long: 'überverkauft', fastLong: 'nahe überverkauft', neutra
 
 /** Der Block für das Modell. */
 export function zeitrahmenText(zr, zeit) {
-    const z = ['ZEITRAHMEN — vom Code gemessen, nur geschlossene Kerzen, von gross nach klein (Struktur = gilt bis zum Bruch):']
+    const z = ['ZEITRAHMEN — vom Code gemessen, nur geschlossene Kerzen, von gross nach klein (Struktur = gilt bis zum Bruch; Lage in der Spanne und Abstand der Marken gegen den Kurs des Charts):']
     for (const x of zr.zeilen) {
         if (x.unbekannt) { z.push(`${x.tf}: unbekannt (zu wenige Kerzen)`); continue }
         const bruch = x.bruch ? `, letzter Bruch ${x.bruch.richtung === 'auf' ? 'über' : 'unter'} ${zahl(x.bruch.marke)} am ${zeit(x.bruch.t)}` : ''
-        const lage = Number.isFinite(x.lagePct) ? `Kurs bei ${x.lagePct.toFixed(0)} % der Spanne der letzten ${SPANNE_KERZEN} Kerzen (${zahl(x.tief)}–${zahl(x.hoch)})` : 'Spanne unbekannt'
+        const spanne = `der Spanne der letzten ${SPANNE_KERZEN} Kerzen (${zahl(x.tief)}–${zahl(x.hoch)})`
+        // Der Kurs des Charts kann die Spanne der geschlossenen Kerzen verlassen haben: das sagen, statt «135 %»
+        const lage = !Number.isFinite(x.lagePct) ? 'Spanne unbekannt'
+            : x.lagePct > 100 ? `Kurs über ${spanne}`
+            : x.lagePct < 0 ? `Kurs unter ${spanne}`
+            : `Kurs bei ${x.lagePct.toFixed(0)} % ${spanne}`
         const mom = x.welle == null ? 'Momentum unbekannt' : `Momentum ${MOMENTUM[x.momentum] || x.momentum} (${x.welle.toFixed(0)})`
         z.push(`${x.tf}: Struktur ${STRUKTUR[x.zustand]}${bruch}; ${lage}; ${mom}; ATR ${x.atrPct.toFixed(2)} %`)
     }

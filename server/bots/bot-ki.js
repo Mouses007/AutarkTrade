@@ -56,7 +56,8 @@ export function marktLage(tagesKerzen, kurs) {
  * `serien` = { '1w': [...], '1d': [...], '4h': [...] } geschlossene Kerzen.
  */
 export function hoheZeitrahmen(serien, kurs) {
-    const zeilen = BOT_ZEITRAHMEN.map((tf) => messeZeitrahmen(serien?.[tf], tf) || { tf, unbekannt: true })
+    // Marken und Lage gegen den Kurs des Bots, nicht gegen den letzten Schluss je Zeitrahmen (FUN-R-202)
+    const zeilen = BOT_ZEITRAHMEN.map((tf) => messeZeitrahmen(serien?.[tf], tf, { kurs: istZahl(kurs) ? kurs : undefined }) || { tf, unbekannt: true })
     const bekannt = zeilen.filter((z) => !z.unbekannt)
     if (!bekannt.length) return null
     const marken = []
