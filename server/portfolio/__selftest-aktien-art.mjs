@@ -28,15 +28,9 @@ import knexLib from 'knex'
 import { ausBitpandaPortfolio } from './normal.js'
 import { ausBitpanda } from '../aktien/einordnung.js'
 import { bewertbareSeiten } from './abruf.js'
-import axios from 'axios'
 
 // Ohne Netz: Preise und Listen kommen als Attrappen herein. Ginge doch ein Abruf hinaus, fällt der Test.
 const keinNetz = async (ziel) => { throw new Error(`Abruf im Selbsttest: ${ziel?.url || ziel}`) }
-globalThis.fetch = keinNetz
-axios.defaults.adapter = keinNetz
-
-// Kein Abruf nach aussen: `abruf.js` zieht `kurse.js` mit, und das fragt Bitget über axios.
-const keinNetz = async () => { throw new Error('kein Netz im Selbsttest') }
 globalThis.fetch = keinNetz
 axios.defaults.adapter = keinNetz
 
