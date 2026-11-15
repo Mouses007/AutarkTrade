@@ -18,7 +18,8 @@ import { ordneAlle } from './einordnung.js'
 import { speichereStamm } from './stamm-speicher.js'
 import {
     listungsMeldung, faelligeZahlen, zahlenMeldung, zahlenTag, newcomerKandidaten, newcomerMeldung, watchlistSymbole,
-    MAX_ZEILEN, MAX_NEWCOMER, NEWCOMER_SCHWELLE, ZAHLEN_VORLAUF_MS,
+    meldeEinmalig, zahlenFenster,
+    MAX_ZEILEN, MAX_NEWCOMER, NEWCOMER_SCHWELLE, ZAHLEN_VORLAUF_MS, ZAHLEN_MAX_TITEL, ZAHLEN_PRUEF_MS,
 } from './meldungen.js'
 import { kennzahlen } from '../newcomer-radar/kennzahlen.js'
 import { bewerte } from '../newcomer-radar/bewertung.js'
@@ -204,7 +205,40 @@ gleich(watchlistSymbole([
     const g = newcomerMeldung(viele)
     gleich(g.text.split('\n').filter((z) => /^N\d\d /.test(z)).length, MAX_NEWCOMER, `höchstens ${MAX_NEWCOMER} Titel in der Mail`)
     ok(g.text.includes(`… und ${25 - MAX_NEWCOMER} weitere.`), 'der Rest ist gezählt')
-    gleich(g.schluessel.split(',').length, 25, 'alle 25 stehen im Schlüssel (sie gelten als gemeldet und tröpfeln nicht nach)')
+    gleich(g.schluessel.split(',').length, MAX_NEWCOMER, 'im Schlüssel stehen nur die genannten Titel (FUN-F-009)')
+
+    // FUN-F-009: beansprucht wird nur, was die Mail nennt — der Rest kommt in der nächsten Mail dran.
+    const ansprueche = new Map()           // Schlüssel → gesetzt (Attrappe der Datenbank-Ansprüche)
+    const post = []
+    const dienste = {
+        beanspruche: async (k) => (ansprueche.has(k) ? false : (ansprueche.set(k, true), true)),
+        gibFrei: async (k) => { ansprueche.delete(k) },
+        istFrei: async (k) => !ansprueche.has(k),
+        melde: async (id, m) => { post.push(m); return true },
+    }
+    const sende = () => meldeEinmalig('aktienNewcomer', viele, (x) => `aktien_newcomer|${x.ticker}`, 1,
+        (frei, o) => newcomerMeldung(frei, NEWCOMER_SCHWELLE, o), { hoechstens: MAX_NEWCOMER, dienste })
+    ok(await sende() === true && ansprueche.size === MAX_NEWCOMER, `erste Mail beansprucht genau ${MAX_NEWCOMER} von 25`)
+    const genannt = (m) => m.text.split('\n').filter((z) => /^N\d\d /.test(z)).map((z) => z.slice(0, 3))
+    gleich(genannt(post[0]).sort(), [...ansprueche.keys()].map((k) => k.split('|')[1]).sort(), 'beansprucht sind genau die genannten Titel')
+    ok(post[0].text.includes('folgen in einer späteren Mail') && !post[0].text.includes('… und'), 'die Mail sagt, dass weitere folgen')
+    ok(await sende() && await sende(), 'zweite und dritte Mail')
+    gleich([...genannt(post[0]), ...genannt(post[1]), ...genannt(post[2])].sort(), viele.map((x) => x.ticker).sort(), 'nach drei Mails ist jeder der 25 Titel einmal namentlich gemeldet')
+    ok(genannt(post[2]).length === 5 && !post[2].text.includes('späteren Mail'), 'die letzte Mail kündigt nichts mehr an')
+    ok(await sende() === false && post.length === 3, 'danach: nichts mehr frei, keine Mail')
+    // Scheitert der Versand, sind die Ansprüche wieder frei
+    ansprueche.clear()
+    ok(await meldeEinmalig('aktienNewcomer', viele, (x) => `n|${x.ticker}`, 1, (frei, o) => newcomerMeldung(frei, NEWCOMER_SCHWELLE, o),
+        { hoechstens: MAX_NEWCOMER, dienste: { ...dienste, melde: async () => false } }) === false && ansprueche.size === 0, 'gescheiterter Versand gibt die Ansprüche zurück')
+
+    // Zahlen-Mail: der Deckel von 40 Titeln je Runde wandert, statt immer dieselben zu prüfen
+    const wl = Array.from({ length: 95 }, (_, i) => ({ ticker: `W${String(i).padStart(2, '0')}` })).reverse()
+    gleich(zahlenFenster(wl.slice(0, 12), 0).length, 12, 'kleine Watchlist: alle Titel, jede Runde')
+    const runden = [0, 1, 2].map((r) => zahlenFenster(wl, r * ZAHLEN_PRUEF_MS).map((x) => x.ticker))
+    ok(runden.every((r) => r.length <= ZAHLEN_MAX_TITEL), `nie mehr als ${ZAHLEN_MAX_TITEL} Titel je Runde`)
+    gleich(new Set(runden.flat()).size, 95, 'drei Runden decken alle 95 Titel der Watchlist ab')
+    gleich(zahlenFenster(wl, 3 * ZAHLEN_PRUEF_MS).map((x) => x.ticker), runden[0], 'danach beginnt es von vorn')
+    ok(zahlenMeldung([{ ticker: 'MSFT', zeit: Date.UTC(2026, 0, 28, 21) }], 'Europe/Zurich', { offen: 2 }).text.includes('späteren Mail'), 'Zahlen-Mail nennt, dass weitere folgen')
 }
 
 // ── 5. Verdrahtung: wo gemeldet wird, und dass nichts am Schalter vorbeigeht ──
@@ -227,6 +261,7 @@ gleich(watchlistSymbole([
     ok(zahlen.indexOf("await bereit('aktienZahlen')") < zahlen.indexOf('ladeTermine('), 'Zahlentermine: erst Schalter, dann Abruf')
     ok(zahlen.indexOf("quelleErlaubt('yahoo')") < zahlen.indexOf('ladeTermine('), 'Zahlentermine: Kursquelle nur mit Freigabe')
     ok(zahlen.indexOf("beansprucheAufgabe('aktien_zahlen_pruefung'") < zahlen.indexOf('ladeTermine('), 'Zahlentermine: höchstens alle sechs Stunden')
+    ok(/hoechstens: MAX_ZEILEN/.test(zahlen) && /hoechstens: MAX_NEWCOMER/.test(meldungen) && /zahlenFenster\(/.test(zahlen), 'FUN-F-009: beide Mails beanspruchen nur Genanntes, die Zahlen-Runde wandert')
 }
 
 console.log(`Aktien-Benachrichtigungen: ${n} bestanden, 0 fehlgeschlagen`)

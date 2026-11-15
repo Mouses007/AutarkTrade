@@ -20,7 +20,7 @@
  * Der obere Teil ist rein (Auswahl und Wortlaut) und im Selbsttest geprüft.
  */
 import { getKnex } from '../database.js'
-import { beansprucheAufgabe, gibAufgabeFrei } from '../db-claim.js'
+import { beansprucheAufgabe, gibAufgabeFrei, leseAufgabe } from '../db-claim.js'
 import { logWarn } from '../logger.js'
 import { zeitzoneAus } from '../../shared/zeitzone.js'
 import { MIN_MOMENTUM_TEILE } from '../newcomer-radar/bewertung.js'
@@ -43,9 +43,14 @@ export const NEWCOMER_SCHWELLE = 80
 export const NEWCOMER_KATEGORIEN = ['boersengang', 'neuGelistet']
 /** Höchstens so viele Newcomer in einer Mail (der erste Lauf fände sonst alle auf einmal). */
 export const MAX_NEWCOMER = 10
+/** Die Kursquelle sparsam fragen: höchstens alle sechs Stunden, höchstens so viele Titel je Runde. */
+export const ZAHLEN_PRUEF_MS = 6 * 3600e3
+export const ZAHLEN_MAX_TITEL = 40
 
 const platzName = (p) => PLATZ[p] || p
 const mehr = (rest) => (rest > 0 ? `\n… und ${rest} weitere.` : '')
+/** Kandidaten, die diese Mail nicht nennt, bleiben unbeansprucht und kommen später dran (Audit FUN-F-009). */
+const spaeter = (offen) => (offen > 0 ? '\nWeitere Titel sind noch nicht gemeldet; sie folgen in einer späteren Mail.' : '')
 
 /**
  * Neue Listungen → eine Mail. `neu` ist das Feld gleichen Namens aus
@@ -101,7 +106,7 @@ export function zahlenTag(zeit) {
 }
 
 /** @returns {{betreff: string, text: string, schluessel: string}|null} */
-export function zahlenMeldung(liste = [], zeitzone = 'Europe/Zurich') {
+export function zahlenMeldung(liste = [], zeitzone = 'Europe/Zurich', { offen = 0 } = {}) {
     if (!liste.length) return null
     const format = new Intl.DateTimeFormat('de-CH', { timeZone: zeitzone, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     const zeilen = liste.slice(0, MAX_ZEILEN).map((t) =>
@@ -111,7 +116,7 @@ export function zahlenMeldung(liste = [], zeitzone = 'Europe/Zurich') {
             ? `Quartalszahlen: ${liste[0].ticker} am ${format.format(new Date(liste[0].zeit))}`
             : `Quartalszahlen stehen an: ${liste.length} Titel deiner Watchlist`,
         text: 'Für Titel deiner Aktien-Watchlist stehen Quartalszahlen an:\n\n'
-            + zeilen.join('\n') + mehr(liste.length - MAX_ZEILEN)
+            + zeilen.join('\n') + mehr(liste.length - MAX_ZEILEN) + spaeter(offen)
             + `\n\nZeiten in ${zeitzone}. Die Meldung kommt meist kurz nach Börsenschluss in New York; `
             + 'der Aktien-Future nimmt den Sprung in dünnen Stunden vorweg. Der Termin stammt von der Kursquelle '
             + 'und kann sich verschieben.',
@@ -136,8 +141,11 @@ export function newcomerKandidaten(titel = [], schwelle = NEWCOMER_SCHWELLE) {
         .sort((a, b) => b.note - a.note || a.ticker.localeCompare(b.ticker))
 }
 
-/** @returns {{betreff: string, text: string, schluessel: string}|null} */
-export function newcomerMeldung(liste = [], schwelle = NEWCOMER_SCHWELLE) {
+/**
+ * @param {{offen?: number}} [o]  so viele Kandidaten sind noch nicht beansprucht (folgen später)
+ * @returns {{betreff: string, text: string, schluessel: string}|null}
+ */
+export function newcomerMeldung(liste = [], schwelle = NEWCOMER_SCHWELLE, { offen = 0 } = {}) {
     if (!liste.length) return null
     const KAT = { boersengang: 'junger Börsengang', neuGelistet: 'neu handelbar' }
     const gezeigt = liste.slice(0, MAX_NEWCOMER)
@@ -150,11 +158,28 @@ export function newcomerMeldung(liste = [], schwelle = NEWCOMER_SCHWELLE) {
             ? `Newcomer-Radar: ${liste[0].ticker} mit Note ${Math.round(liste[0].note)}`
             : `Newcomer-Radar: ${liste.length} Titel mit Note ab ${schwelle}`,
         text: `Im letzten Lauf des Newcomer-Radars haben diese jungen Titel eine Note ab ${schwelle} erreicht:\n\n`
-            + zeilen.join('\n') + mehr(liste.length - gezeigt.length)
+            + zeilen.join('\n') + mehr(liste.length - gezeigt.length) + spaeter(offen)
             + '\n\nDie Note misst Neuheit, Momentum und Beteiligung — sie ist ein Anlass hinzusehen, keine Empfehlung. '
             + 'Jeder Titel wird höchstens einmal in dreissig Tagen gemeldet.',
-        schluessel: liste.map((t) => t.ticker).sort().join(','),
+        // Nur die genannten: wer nicht in der Mail steht, gilt nicht als gemeldet (FUN-F-009).
+        schluessel: gezeigt.map((t) => t.ticker).sort().join(','),
     }
+}
+
+/**
+ * Welche Titel der Watchlist fragt diese Runde nach ihrem Zahlentermin? Höchstens
+ * `max` — sind es mehr, wandert das Fenster von Runde zu Runde weiter, statt
+ * immer dieselben ersten `max` zu nehmen (Audit FUN-F-009: Titel 41 ff. wurden
+ * nie geprüft). Die Runde ergibt sich aus der Uhr, es braucht keinen gemerkten
+ * Zeiger; der Vorlauf von drei Tagen sind zwölf Runden.
+ * @param {{ticker: string}[]} titel
+ */
+export function zahlenFenster(titel = [], jetzt = Date.now(), max = ZAHLEN_MAX_TITEL, taktMs = ZAHLEN_PRUEF_MS) {
+    const sortiert = [...titel].sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)))
+    if (sortiert.length <= max) return sortiert
+    const fenster = Math.ceil(sortiert.length / max)
+    const beginn = (Math.floor(jetzt / taktMs) % fenster) * max
+    return sortiert.slice(beginn, beginn + max)
 }
 
 /** Symbole aus gespeicherten Watchlists (Einträge als Text oder `{symbol}`), ohne Doppelte. */
@@ -173,8 +198,6 @@ export function watchlistSymbole(zeilen = []) {
 
 /* ── Mit Datenbank und Versand ────────────────────────────────────── */
 
-const ZAHLEN_PRUEF_MS = 6 * 3600e3      // die Kursquelle sparsam fragen
-const ZAHLEN_MAX_TITEL = 40
 const ZAHLEN_SPERRE_MS = 45 * 24 * 3600e3
 const NEWCOMER_SPERRE_MS = 30 * 24 * 3600e3
 const warte = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -210,23 +233,44 @@ export async function meldeNeueListungen(neu = []) {
 
 /**
  * Titel einmal je Anlass beanspruchen, melden, bei Fehlschlag zurückgeben.
+ *
+ * Beansprucht wird nur, was die Mail auch namentlich nennt (`hoechstens`): ein
+ * Anspruch sperrt den Titel für Wochen, und wer nur als «… und N weitere»
+ * mitlief, wäre nie gemeldet worden (Audit FUN-F-009). Der Rest bleibt frei und
+ * kommt bei der nächsten Prüfung dran.
  * @param {string} id
  * @param {object[]} liste
  * @param {(t: object) => string} schluesselVon
- * @param {(frei: object[]) => object|null} baue  Meldung aus den noch nicht gemeldeten Titeln
+ * @param {(frei: object[], o: {offen: number}) => object|null} baue  Meldung aus den beanspruchten Titeln;
+ *        `offen` = Kandidaten, die noch nicht beansprucht sind
+ * @param {{hoechstens?: number, dienste?: object}} [o]  `dienste`: nur der Selbsttest reicht Attrappen herein
  */
-async function meldeEinmalig(id, liste, schluesselVon, sperreMs, baue) {
+export async function meldeEinmalig(id, liste, schluesselVon, sperreMs, baue, { hoechstens = Infinity, dienste = {} } = {}) {
+    const beanspruche = dienste.beanspruche || beansprucheAufgabe
+    const gibFrei = dienste.gibFrei || gibAufgabeFrei
     const frei = []
+    let offen = 0
     for (const t of liste) {
         const k = schluesselVon(t)
-        if (await beansprucheAufgabe(k, sperreMs)) frei.push({ t, k })
+        if (frei.length >= hoechstens) {
+            // Nur nachsehen, nicht beanspruchen: steht schon ein gültiger Anspruch, folgt der Titel nicht mehr.
+            if (await (dienste.istFrei || istFrei)(k, sperreMs)) offen++
+            continue
+        }
+        if (await beanspruche(k, sperreMs)) frei.push({ t, k })
     }
-    const m = baue(frei.map((f) => f.t))
+    const m = baue(frei.map((f) => f.t), { offen })
     if (!m) return false
-    const { melde } = await import('../benachrichtigungen.js')
+    const melde = dienste.melde || (await import('../benachrichtigungen.js')).melde
     const verschickt = await melde(id, m)
-    if (!verschickt) for (const f of frei) await gibAufgabeFrei(f.k)
+    if (!verschickt) for (const f of frei) await gibFrei(f.k)
     return verschickt
+}
+
+/** Ist die Aufgabe unbeansprucht oder ihr Anspruch abgelaufen? Liest nur. */
+async function istFrei(key, sperreMs) {
+    const z = await leseAufgabe(key)
+    return !z || !(Number(z.fetchedAt) > Date.now() - sperreMs)
 }
 
 /**
@@ -250,7 +294,7 @@ export async function pruefeZahlentermine() {
     const zeilen = await knex('instrument_listungen as l').join('instrumente as i', 'i.id', 'l.instrumentId')
         .whereIn('l.symbol', symbole.slice(0, 400)).where({ 'l.aktiv': 1, 'i.anlageklasse': 'aktien' })
         .select('i.id', 'i.ticker', 'i.name', 'i.region')
-    const titel = [...new Map(zeilen.map((z) => [z.id, z])).values()].slice(0, ZAHLEN_MAX_TITEL)
+    const titel = zahlenFenster([...new Map(zeilen.map((z) => [z.id, z])).values()])
     if (!titel.length) return false
     const kursSymbole = new Map()
     if (await knex.schema.hasTable('newcomer_titel')) {
@@ -273,7 +317,7 @@ export async function pruefeZahlentermine() {
     const faellig = faelligeZahlen(mitTermin)
     if (!faellig.length) return false
     return meldeEinmalig('aktienZahlen', faellig, (t) => `aktien_zahlen|${t.ticker}|${zahlenTag(t.zeit)}`, ZAHLEN_SPERRE_MS,
-        (frei) => zahlenMeldung(frei, zeitzoneAus(s.timeZone)))
+        (frei, o) => zahlenMeldung(frei, zeitzoneAus(s.timeZone), o), { hoechstens: MAX_ZEILEN })
 }
 
 /**
@@ -288,7 +332,7 @@ export async function meldeNewcomer(seit = 0) {
         const kandidaten = newcomerKandidaten(titel)
         if (!kandidaten.length) return false
         return await meldeEinmalig('aktienNewcomer', kandidaten, (t) => `aktien_newcomer|${t.ticker}`, NEWCOMER_SPERRE_MS,
-            (frei) => newcomerMeldung(frei))
+            (frei, o) => newcomerMeldung(frei, NEWCOMER_SCHWELLE, o), { hoechstens: MAX_NEWCOMER })
     } catch (e) {
         logWarn('aktien-meldungen', `Newcomer: ${e.message}`)
         return false
