@@ -8723,7 +8723,7 @@
         "beenden": "Pionex closes the position at market price and releases the margin. The floating loss or gain becomes final.",
         "starten": "Starts a new bot with this bot's type, direction and coin; empty fields take today's values.",
         "planStarten": "Starts the planned bot at Pionex with the plan's coin, type, direction and grid type. Pionex checks the request first (checkParams) and states the estimated liquidation.",
-        "reduzieren": "Sells part of the position at market and so realises part of the profit or loss. The bot keeps running. You enter the share in %; Pionex states beforehand how much is sold and what it yields."
+        "reduzieren": "Sells part of the position at market price and so realises part of the profit or loss. The bot keeps running. You enter the share in % or an amount. Pionex reduces in whole steps only and states beforehand how much is sold and what comes of it."
       },
       "warn": {
         "marktpreis": "Executed at market price.",
@@ -8780,13 +8780,15 @@
         "nichtFuerSpot": "For a spot grid the app can only stop it and start a new one.",
         "anteil": "Enter a share between 1 and 100 %.",
         "betragUnbekannt": "Pionex does not say how much investment the position ties up. Please enter the share in %.",
-        "betragZuGross": "The amount is larger than the whole position: at most {max}.",
+        "betragZuGross": "Pionex does not allow reducing that much: at most {max}.",
         "betragZuKlein": "The amount is too small: Pionex reduces in whole steps only, the smallest releases about {schritt}.",
+        "anteilZuGross": "Pionex does not allow reducing that much: at most {max} % of the position.",
         "anteilZuKlein": "The share is too small: Pionex reduces in whole steps only, the smallest is {schritt} % of the position.",
         "stopLossNull": "Stop loss is too small for this contract: it would be rounded to 0. Nothing was sent.",
         "takeProfitNull": "Take profit is too small for this contract: it would be rounded to 0. Nothing was sent."
       },
-      "anteilTatsaechlich": "Pionex reduces in whole steps only. Instead of {gewuenscht} %: {tatsaechlich} % of the position.",
+      "betragTatsaechlich": "Pionex reduces in whole steps of {schritt} % of the position each. Instead of {gewuenscht}, {tatsaechlich} will be released ({anteil} % of the position).",
+      "anteilTatsaechlich": "Pionex reduces in whole steps of {schritt} % of the position each. Instead of {gewuenscht} %, {tatsaechlich} % will be sold.",
       "protokollFehlerTitel": "Log not written",
       "protokollFehlerText": "The request went to Pionex, but the result could not be written to the log (database error). Do not treat the change as unsent: do not send again, look at the bot at Pionex (or here after reloading) first.",
       "unklarTitel": "Outcome unclear",

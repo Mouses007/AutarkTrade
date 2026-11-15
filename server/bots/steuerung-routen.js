@@ -394,27 +394,39 @@ export function setupBotSteuerungRoutes(app) {
                 const vor = await frage(k, probe.pruefen.pfad, probe.pruefen.body)
                 const max = reduzierAusPruefung(vor?.data)?.max
                 if (!(max >= 1)) return res.json({ ok: true, aktion, bestanden: false, grund: null, pruefung: { result: vor?.result ?? false, message: vor?.message || 'Pionex nennt keine Höchstmenge zum Reduzieren', code: null, data: vor?.data || null }, nachher: {}, warnungen: [], token: null, testbetrieb: istTestbetrieb() })
+                // Ein Schritt ist bei Pionex KEINE Stückzahl, sondern eine Stufe der Menge je Grid — er verkauft
+                // über alle gehaltenen Grids hinweg (XRP 15.11.2026: Menge je Grid 4 → 3 = 11 von 44 XRP = 25 %),
+                // und die Höchstmenge ist nicht die ganze Position (dort 2 Schritte = 50 %). Welchen Teil der
+                // Position ein Schritt ausmacht, sagt deshalb nur die frei werdende Investition der 1-Schritt-Prüfung
+                // gegen die heutige Investition. Bis 15.11.2026 galt «Schritte / Höchstmenge» als Anteil: der Dialog
+                // nannte 22 XRP (50 %), verkauft wurden 11.
+                const jeSchritt = reduzierAusPruefung(vor?.data)?.einsatz
+                const investition = Number(bot.einsatz?.aktuell)
+                const teil = jeSchritt > 0 && investition > 0 ? Math.min(1, jeSchritt / investition) : null   // Anteil der Position je Schritt
                 let schritte
                 if (inBetrag) {
-                    // Was die ganze Position an Investition freigäbe, sagt nur Pionex: Prüfung mit der Höchstmenge.
-                    const ganz = baueAktion(bot, aktion, { ...eingabe, reduceNum: max }, { stellen })
-                    const voll = ganz.fehler ? null : reduzierAusPruefung((await frage(k, ganz.pruefen.pfad, ganz.pruefen.body))?.data)?.einsatz
-                    if (!(voll > 0)) return res.status(400).json({ ok: false, code: 'betragUnbekannt' })
-                    const jeSchritt = voll / max
-                    if (wunsch > voll * 1.0001) return res.status(400).json({ ok: false, code: 'betragZuGross', max: Number(voll.toFixed(2)) })
+                    if (!(jeSchritt > 0)) return res.status(400).json({ ok: false, code: 'betragUnbekannt' })
+                    if (wunsch > jeSchritt * (max + 0.5)) return res.status(400).json({ ok: false, code: 'betragZuGross', max: Number((jeSchritt * max).toFixed(2)) })
                     schritte = Math.min(max, Math.round(wunsch / jeSchritt))
-                    if (schritte < 1) return res.status(400).json({ ok: false, code: 'betragZuKlein', schritt: Number(jeSchritt.toPrecision(3)) })
+                    if (schritte < 1) return res.status(400).json({ ok: false, code: 'betragZuKlein', schritt: Number(jeSchritt.toFixed(2)) })
+                } else if (teil) {
+                    // Audit FUN-R-105: nie stillschweigend auf einen Schritt aufrunden
+                    if (anteil / 100 > teil * (max + 0.5)) return res.status(400).json({ ok: false, code: 'anteilZuGross', max: Number((teil * max * 100).toFixed(1)) })
+                    schritte = Math.min(max, Math.round(anteil / 100 / teil))
+                    if (schritte < 1) return res.status(400).json({ ok: false, code: 'anteilZuKlein', schritt: Number((teil * 100).toFixed(1)) })
                 } else {
-                    // Audit FUN-R-105: Pionex kennt nur ganze Schritte. Früher wurde stillschweigend auf mindestens
-                    // einen Schritt aufgerundet (Höchstmenge 3, 10 % → 33 %). Rundet der Anteil auf 0, wird abgelehnt;
-                    // sonst geht der tatsächliche Anteil an den Dialog zurück.
+                    // Pionex nennt keine frei werdende Investition: der Anteil lässt sich nur an der Höchstmenge messen
                     schritte = Math.min(max, Math.round(max * anteil / 100))
                     if (schritte < 1) return res.status(400).json({ ok: false, code: 'anteilZuKlein', schritt: Number((100 / max).toFixed(1)) })
                 }
-                anteilInfo = { gewuenscht: inBetrag ? null : anteil, tatsaechlich: schritte / max * 100 }
+                anteilInfo = {
+                    gewuenscht: inBetrag ? null : anteil, tatsaechlich: teil ? schritte * teil * 100 : null,
+                    schritt: teil ? teil * 100 : null, hoechstens: teil ? max * teil * 100 : null,
+                    betragGewuenscht: inBetrag ? wunsch : null, betragTatsaechlich: jeSchritt > 0 ? schritte * jeSchritt : null,
+                }
                 // Verkaufte Stückzahl: derselbe Anteil der Position, die der Bot gerade hält
-                const menge = Number(bot.position?.menge)
-                stueck = Number.isFinite(menge) && menge > 0 ? menge * schritte / max : null
+                const menge = Math.abs(Number(bot.position?.menge))   // Short-Positionen meldet Pionex negativ
+                stueck = teil && Number.isFinite(menge) && menge > 0 ? menge * schritte * teil : null
                 eingabe = { ...eingabe, reduceNum: String(schritte) }
             }
             const a = baueAktion(bot, aktion, eingabe, { stellen })

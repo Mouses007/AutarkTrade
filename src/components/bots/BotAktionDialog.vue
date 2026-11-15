@@ -101,9 +101,15 @@ const meldung = (e) => {
 // FUN-R-105: Pionex reduziert nur in ganzen Schritten — weicht der tatsächliche Anteil vom gewünschten ab, sagen
 const anteilAbweichung = computed(() => {
     const a = pruefung.value?.anteil
-    if (!a || a.gewuenscht == null) return null
-    const gewuenscht = zahl(a.gewuenscht, 1), tatsaechlich = zahl(a.tatsaechlich, 1)
-    return gewuenscht === tatsaechlich ? null : { gewuenscht, tatsaechlich }
+    if (!a || a.tatsaechlich == null) return null
+    const tatsaechlich = zahl(a.tatsaechlich, 1)
+    if (a.betragGewuenscht != null && a.betragTatsaechlich != null) {
+        if (Math.abs(a.betragTatsaechlich - a.betragGewuenscht) <= 0.02 * a.betragGewuenscht) return null
+        return { text: t('bots.st.betragTatsaechlich', { gewuenscht: betrag(a.betragGewuenscht, mc.value), tatsaechlich: betrag(a.betragTatsaechlich, mc.value), anteil: tatsaechlich, schritt: zahl(a.schritt, 1) }) }
+    }
+    if (a.gewuenscht == null) return null
+    const gewuenscht = zahl(a.gewuenscht, 1)
+    return gewuenscht === tatsaechlich ? null : { text: t('bots.st.anteilTatsaechlich', { gewuenscht, tatsaechlich, schritt: zahl(a.schritt, 1) }) }
 })
 
 async function pruefen() {
@@ -150,7 +156,7 @@ const vergleich = computed(() => {
         const r = p.reduzieren
         const zeig = (titel, wert, f) => { if (wert != null) z.push({ titel, vorher: '', nachher: f(wert), pionex: true }) }
         const teil = p.anteil?.tatsaechlich
-        zeig(t('bots.st.redStueck'), r.stueck, (x) => `${zahl(x, 4)} ${props.bot.coin || ''}${teil != null ? ` (${zahl(teil, 1)} %)` : ''}`.trim())
+        zeig(t('bots.st.redStueck'), r.stueck, (x) => `${zahl(x, 4)} ${props.bot.coinM ? 'USD' : (props.bot.coin || '')}${teil != null ? ` (${zahl(teil, 1)} %)` : ''}`.trim())
         zeig(t('bots.st.redMenge'), r.menge, (x) => betrag(x, mc.value))
         zeig(t('bots.st.redPnl'), r.pnl, (x) => betrag(x, mc.value, { vorzeichen: true }))
         zeig(t('bots.st.redGrid'), r.gridGewinn, (x) => betrag(x, mc.value, { vorzeichen: true }))
@@ -216,7 +222,7 @@ const istZeilen = computed(() => {
                 </Hinweis>
                 <Hinweis v-else art="fehler" :titel="t('bots.st.abgelehnt')">{{ pruefung.pruefung?.data?.reason || pruefung.pruefung?.message || '' }}</Hinweis>
 
-                <Hinweis v-if="anteilAbweichung" art="warn">{{ t('bots.st.anteilTatsaechlich', anteilAbweichung) }}</Hinweis>
+                <Hinweis v-if="anteilAbweichung" art="warn">{{ anteilAbweichung.text }}</Hinweis>
 
                 <table v-if="vergleich.length" class="tabelle">
                     <thead><tr><th></th><th>{{ t('bots.st.vorher') }}</th><th>{{ t('bots.st.nachher') }}</th></tr></thead>

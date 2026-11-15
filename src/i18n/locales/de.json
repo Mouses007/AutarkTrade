@@ -8723,7 +8723,7 @@
         "beenden": "Pionex schliesst die Position zum Marktpreis und gibt die Marge frei. Der schwebende Verlust oder Gewinn wird damit fest.",
         "starten": "Startet einen neuen Bot mit Typ, Richtung und Coin dieses Bots; leere Felder übernehmen die heutigen Werte.",
         "planStarten": "Startet den geplanten Bot bei Pionex mit Coin, Art, Richtung und Grid-Art des Plans. Pionex prüft die Anfrage vorher (checkParams) und nennt die geschätzte Liquidation.",
-        "reduzieren": "Verkauft einen Teil der Position zum Marktpreis und realisiert so einen Teil des Gewinns oder Verlusts. Der Bot läuft weiter. Du gibst den Anteil in % an, Pionex nennt vorab, wie viel verkauft wird und was dabei herauskommt."
+        "reduzieren": "Verkauft einen Teil der Position zum Marktpreis und realisiert so einen Teil des Gewinns oder Verlusts. Der Bot läuft weiter. Du gibst den Anteil in % oder einen Betrag an. Pionex reduziert nur in ganzen Schritten und nennt vorab, wie viel verkauft wird und was dabei herauskommt."
       },
       "warn": {
         "marktpreis": "Ausführung zum Marktpreis.",
@@ -8780,13 +8780,15 @@
         "nichtFuerSpot": "Bei einem Spot-Grid kann die App nur beenden und einen neuen starten.",
         "anteil": "Anteil zwischen 1 und 100 % eingeben.",
         "betragUnbekannt": "Pionex nennt nicht, wie viel Investition die Position bindet. Bitte den Anteil in % eingeben.",
-        "betragZuGross": "Der Betrag ist grösser als die ganze Position: höchstens {max}.",
+        "betragZuGross": "So viel lässt Pionex nicht reduzieren: höchstens {max}.",
         "betragZuKlein": "Der Betrag ist zu klein: Pionex reduziert nur in ganzen Schritten, der kleinste gibt etwa {schritt} frei.",
+        "anteilZuGross": "So viel lässt Pionex nicht reduzieren: höchstens {max} % der Position.",
         "anteilZuKlein": "Der Anteil ist zu klein: Pionex reduziert nur in ganzen Schritten, der kleinste ist {schritt} % der Position.",
         "stopLossNull": "Stop-Loss ist für diesen Kontrakt zu klein: Er würde auf 0 gerundet. Es wurde nichts gesendet.",
         "takeProfitNull": "Take-Profit ist für diesen Kontrakt zu klein: Er würde auf 0 gerundet. Es wurde nichts gesendet."
       },
-      "anteilTatsaechlich": "Pionex reduziert nur in ganzen Schritten. Statt {gewuenscht} %: {tatsaechlich} % der Position.",
+      "betragTatsaechlich": "Pionex reduziert nur in ganzen Schritten von je {schritt} % der Position. Statt {gewuenscht} werden {tatsaechlich} frei ({anteil} % der Position).",
+      "anteilTatsaechlich": "Pionex reduziert nur in ganzen Schritten von je {schritt} % der Position. Statt {gewuenscht} % werden {tatsaechlich} % verkauft.",
       "protokollFehlerTitel": "Protokoll nicht geschrieben",
       "protokollFehlerText": "Die Anfrage ging an Pionex, das Ergebnis konnte aber nicht ins Protokoll geschrieben werden (Datenbankfehler). Die Änderung gilt nicht als ungesendet: nicht erneut senden, sondern den Bot bei Pionex (oder hier nach dem Neuladen) ansehen.",
       "unklarTitel": "Ausgang unklar",

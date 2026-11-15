@@ -54,7 +54,7 @@ globalThis.__botTest = {
             pionex.reduzierPruefungen = (pionex.reduzierPruefungen || 0) + 1
             const max = pionex.maxReduce || 200
             if (body.reduceNum > max) return { result: true, data: { checkResult: false, reason: 'REDUCE_TOO_MUCH', maxReduceNum: max } }
-            return { result: true, data: { checkResult: true, maxReduceNum: max, reduceAmount: String(body.reduceNum * 0.01), reducePnl: '1.25', reduceGridprofit: '0.4', reduceInvestment: String(body.reduceNum * 0.1), reduceFee: '0.01', estimateLiquidationPriceDown: '0.6', estimateLiquidationPriceDownAfter: '0.55' } }
+            return { result: true, data: { checkResult: true, maxReduceNum: max, reduceAmount: String(body.reduceNum * 0.01), reducePnl: '1.25', reduceGridprofit: '0.4', reduceInvestment: String(body.reduceNum * (pionex.jeSchritt ?? (pionex.investition ?? 20) / max)), reduceFee: '0.01', estimateLiquidationPriceDown: '0.6', estimateLiquidationPriceDownAfter: '0.55' } }
         }
         if (/Check$|checkParams$/.test(pfad)) return { result: true, data: { checkResult: true } }
         pionex.sendungen++
@@ -170,6 +170,8 @@ try {
     p('anderer Hebel als geprüft → 409 neuPruefen', anders.status === 409 && anders.d.code === 'neuPruefen')
 
     console.log('Position reduzieren')
+    // Der Nachbau gibt je Schritt 1/Höchstmenge der heutigen Investition frei (Anteil = Schritte / Höchstmenge)
+    pionex.investition = bot.einsatz.aktuell
     const vorR = pionex.sendungen
     const rp = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '25' } })).d
     p('25 % → reduceNum 50 von Pionex-Höchstmenge 200, Schätzungen von Pionex', rp.bestanden && rp.eingabe?.reduceNum === '50' && rp.reduzieren?.max === 200 && rp.reduzieren?.pnl === 1.25 && rp.anfrage.pfad.endsWith('/reduce') && rp.anfrage.body.reduceNum === 50 && rp.warnungen.includes('teilverkauf'), JSON.stringify(rp))
@@ -180,12 +182,13 @@ try {
     const rAnders = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion: 'reduzieren', eingabe: { reduceNum: '60' }, token: r2.token, haken: true, hakenText: haken })
     p('andere Menge als geprüft → abgewiesen, nichts gesendet', rAnders.status >= 400 && pionex.sendungen === vorR + 1)
     {
-        const b5 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '5' } })).d
-        p('Betrag 5 von 20 (ganze Position) → reduceNum 50, tatsächlich 25 %', b5.bestanden && b5.eingabe?.reduceNum === '50' && Math.abs(b5.anteil?.tatsaechlich - 25) < 1e-9 && b5.anteil?.gewuenscht === null, JSON.stringify(b5))
-        p('Stückzahl = Position × Anteil (oder unbekannt)', b5.reduzieren?.stueck === null || Math.abs(b5.reduzieren.stueck - Number(bot.position?.menge) * 0.25) < 1e-9, JSON.stringify(b5.reduzieren))
-        const zuGross = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '30' } })
-        p('Betrag über der ganzen Position → 400 betragZuGross mit Höchstwert', zuGross.status === 400 && zuGross.d.code === 'betragZuGross' && zuGross.d.max === 20, JSON.stringify(zuGross.d))
-        const zuKlein = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '0.01' } })
+        const inv = bot.einsatz.aktuell
+        const b5 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: String(inv / 4) } })).d
+        p('Betrag = ¼ der Investition → reduceNum 50, tatsächlich 25 %', b5.bestanden && b5.eingabe?.reduceNum === '50' && Math.abs(b5.anteil?.tatsaechlich - 25) < 1e-6 && b5.anteil?.gewuenscht === null, JSON.stringify(b5.anteil))
+        p('Stückzahl = Position × Anteil', Math.abs(b5.reduzieren.stueck - Math.abs(Number(bot.position?.menge)) * 0.25) < 1e-6 * Math.abs(Number(bot.position?.menge)), JSON.stringify(b5.reduzieren))
+        const zuGross = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: String(inv * 1.5) } })
+        p('Betrag über der Höchstmenge → 400 betragZuGross mit Höchstwert', zuGross.status === 400 && zuGross.d.code === 'betragZuGross' && Math.abs(zuGross.d.max - inv) < 0.01, JSON.stringify(zuGross.d))
+        const zuKlein = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: String(inv / 1000) } })
         p('Betrag unter einem halben Schritt → 400 betragZuKlein', zuKlein.status === 400 && zuKlein.d.code === 'betragZuKlein', JSON.stringify(zuKlein.d))
         p('Betrag 0 oder leer → 400 betrag', (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '' } })).d.code === 'betrag')
     }
@@ -198,6 +201,17 @@ try {
     p('Höchstmenge 3, 10 % → rundet auf 0: 400 anteilZuKlein, kein Token, kleinster Schritt genannt', k10.status === 400 && k10.d.code === 'anteilZuKlein' && !k10.d.token && k10.d.schritt === 33.3, JSON.stringify(k10.d))
     const k20 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '20' } })).d
     p('Höchstmenge 3, 20 % → 1 Schritt, tatsächlich 33 % statt 20 %', k20.bestanden && k20.eingabe?.reduceNum === '1' && k20.anteil?.gewuenscht === 20 && Math.abs(k20.anteil?.tatsaechlich - 100 / 3) < 1e-9, JSON.stringify(k20.anteil))
+    // Echter Fall XRP 15.11.2026: ein Schritt = 25 % der Position, Pionex erlaubt höchstens 2 Schritte
+    pionex.maxReduce = 2; pionex.jeSchritt = bot.einsatz.aktuell / 4
+    const x5 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: String(bot.einsatz.aktuell * 5 / 15.36) } })).d
+    p('5 von 15.36 gewünscht, Schritt 3.84 → 1 Schritt = 25 % (nicht 50 %), Abweichung gemeldet', x5.eingabe?.reduceNum === '1' && Math.abs(x5.anteil.tatsaechlich - 25) < 1e-6 && Math.abs(x5.anteil.betragTatsaechlich - bot.einsatz.aktuell / 4) < 1e-9 && Math.abs(x5.reduzieren.stueck - Math.abs(Number(bot.position.menge)) / 4) < 1e-6 * Math.abs(Number(bot.position.menge)), JSON.stringify(x5.anteil))
+    const x50 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '50' } })).d
+    p('50 % → 2 Schritte', x50.eingabe?.reduceNum === '2' && Math.abs(x50.anteil.tatsaechlich - 50) < 1e-6)
+    const x80 = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '80' } })
+    p('80 % bei Höchstmenge 50 % → 400 anteilZuGross', x80.status === 400 && x80.d.code === 'anteilZuGross' && x80.d.max === 50, JSON.stringify(x80.d))
+    const x10 = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '10' } })
+    p('10 % bei Schritt 25 % → 400 anteilZuKlein, Schritt 25', x10.status === 400 && x10.d.code === 'anteilZuKlein' && x10.d.schritt === 25, JSON.stringify(x10.d))
+    pionex.jeSchritt = undefined
     p('beides nur geprüft, nichts gesendet', pionex.sendungen === vorK)
     pionex.maxReduce = 0
 
