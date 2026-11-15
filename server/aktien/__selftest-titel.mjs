@@ -38,6 +38,20 @@ assert.throws(() => ausZusammenfassung({ quoteSummary: { result: null, error: { 
 assert.throws(() => ausZusammenfassung({}), /leere Antwort/); n++
 ok(zahl({ raw: NaN }) === null && zahl('5') === null && zahl(0) === 0, 'zahl: nur endliche Zahlen')
 
+// Newcomer-Karte: Streubesitz, Leerverkäufe, Insider, Kasse (echte Antwort CoreWeave, gekürzt)
+const crwv = ausZusammenfassung(JSON.parse(readFileSync(new URL('../fixtures/yahoo-quotesummary-crwv.json', import.meta.url), 'utf8')))
+const e = crwv.eigentum
+ok(e.streubesitz === 339637102 && Math.abs(e.streubesitzPct - 72.91) < 0.01, 'Streubesitz in Stück und Prozent der ausstehenden Aktien')
+ok(Math.abs(e.shortPctStreubesitz - 23.3) < 0.001 && e.shortTage === 1.34 && e.shortStand > 1.7e12, 'Leerverkäufe: Bruch wird Prozent, Stand in ms')
+ok(e.shortStueck === 74211562 && e.shortVormonatStueck === 59952639, 'Leerverkäufe jetzt und im Vormonat')
+ok(Math.abs(e.insiderPct - 19.986) < 0.001 && Math.abs(e.institutionenPct - 77.288) < 0.001, 'Anteile von Insidern und Institutionen')
+ok(e.insider.length === 8 && e.insider[0].art === 'verkauf' && e.insider[0].wert === 629237 && e.insider[0].rolle === 'Chief Operating Officer', 'Verkauf mit Wert und Rolle')
+ok(e.insider[2].art === 'zuteilung' && e.insider[2].wert === null, 'Zuteilung ist kein Kauf; Wert 0 heisst: keiner')
+ok(e.insider[1].art === 'sonstig', 'Geschäft ohne Text bleibt «sonstig»')
+ok(crwv.kasse.barmittel === 4228000000 && crwv.kasse.freierCashflow < 0 && crwv.kasse.schulden > 6e10, 'Kasse, Schulden, Mittelabfluss')
+ok(leer.eigentum === null && leer.kasse === null, 'nichts gemeldet: null statt lauter Nullen')
+ok(d.eigentum === null || d.eigentum.insider.length === 0, 'ältere Antwort ohne diese Felder bricht nichts')
+
 // Zahlentermine für Simulation und Radar
 const te = termineAus(roh)
 ok(te.naechster.zeit === Date.UTC(2026, 10, 17, 21, 0) && te.naechster.geschaetzt === false, 'nächster Termin mit Uhrzeit')

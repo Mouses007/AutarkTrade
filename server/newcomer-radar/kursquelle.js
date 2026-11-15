@@ -59,7 +59,7 @@ export async function sucheSymbol(name, ticker) {
  */
 const ZUSAMMENFASSUNG = 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/'
 const CRUMB = 'https://query1.finance.yahoo.com/v1/test/getcrumb'
-const MODULE = 'assetProfile,price,summaryDetail,defaultKeyStatistics,financialData,recommendationTrend,upgradeDowngradeHistory,earnings,calendarEvents'
+const MODULE = 'assetProfile,price,summaryDetail,defaultKeyStatistics,financialData,recommendationTrend,upgradeDowngradeHistory,earnings,calendarEvents,insiderTransactions'
 const SITZUNG_MS = 30 * 60_000
 const KOPF = { 'user-agent': 'Mozilla/5.0' }
 let sitzung = null

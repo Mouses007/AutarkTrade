@@ -8,6 +8,7 @@
  */
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { haltefrist } from '../../shared/aktien-newcomer.js'
 import axios from 'axios'
 import Knopf from '../components/basis/Knopf.vue'
 import Pille from '../components/basis/Pille.vue'
@@ -17,6 +18,9 @@ import Kreisel from '../components/basis/Kreisel.vue'
 import Quellenhinweis from '../components/basis/Quellenhinweis.vue'
 
 const { t, locale } = useI18n()
+
+/* Übliche Haltefrist nach dem Börsengang (180 Tage), gerechnet aus dem Alter — eine Schätzung, kein Prospektdatum. */
+const fristVon = (z) => (z.kennzahlen?.alterTage == null ? null : haltefrist(Date.now() - z.kennzahlen.alterTage * 86_400_000))
 
 const KATEGORIEN = ['boersengang', 'vorboerslich', 'neuGelistet', 'etabliert', 'unbekannt']
 const PLATZ = { binance: 'Binance', bitget: 'Bitget', bitunix: 'Bitunix', pionex: 'Pionex', bitpanda: 'Bitpanda' }
@@ -161,6 +165,9 @@ const notenText = (n) => t('newcomer.teilnoten', { neuheit: n?.neuheit ?? '—',
                         </td>
                         <td>
                             {{ alter(z.kennzahlen.alterTage) }}
+                            <div v-if="fristVon(z)" class="vermerk" :class="{ warn: fristVon(z).status !== 'laeuft' }" :title="t('newcomer.haltefristInfo')">
+                                {{ t('newcomer.haltefrist_' + fristVon(z).status, { n: Math.abs(fristVon(z).tage) }) }}
+                            </div>
                             <div v-if="z.kennzahlen.listungVorTagen != null && z.kennzahlen.listungVorTagen <= 45" class="vermerk">
                                 {{ t('newcomer.gelistetVor', { n: z.kennzahlen.listungVorTagen }) }}
                             </div>
@@ -186,6 +193,10 @@ const notenText = (n) => t('newcomer.teilnoten', { neuheit: n?.neuheit ?? '—',
 </template>
 
 <style scoped>
+.vermerk.warn {
+    color: var(--warn);
+}
+
 .ticker a {
     color: inherit;
     text-decoration: none;

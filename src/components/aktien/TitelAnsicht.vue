@@ -30,6 +30,7 @@ import { marktdaten, ladeMarktdaten } from '../../utils/marktdaten.js'
 import { symbolBei, vorzug } from '../../utils/chart/aktienSymbole.js'
 import { vorgabeBoerse, waehlbareBoersen } from '../../utils/chart/kerzenQuelle.js'
 import { lageInSpanne, abstandPct, tageBis, einstufungsBilanz, zielBalken } from '../../utils/aktienTitel.js'
+import { istJung, haltefrist, reichweite, insiderBilanz, shortVeraenderung, HALTEFRIST_TAGE } from '../../../shared/aktien-newcomer.js'
 
 const props = defineProps({ ticker: { type: String, required: true } })
 const { t, locale } = useI18n()
@@ -197,6 +198,32 @@ const saeulen = computed(() => {
     }
 })
 
+/* ── Aktionäre, Leerverkäufe, Kasse, junge Firma ──────────────────── */
+const eig = computed(() => d.value?.eigentum || null)
+const kas = computed(() => d.value?.kasse || null)
+const jung = computed(() => istJung(seite.value?.ipoDatum))
+const frist = computed(() => haltefrist(seite.value?.ipoDatum))
+const reicht = computed(() => reichweite(kas.value?.barmittel, kas.value?.freierCashflow))
+const insider = computed(() => insiderBilanz(eig.value?.insider || []))
+const shortDelta = computed(() => shortVeraenderung(eig.value?.shortStueck, eig.value?.shortVormonatStueck))
+const anteile = computed(() => {
+    const e = eig.value
+    if (!e) return []
+    return [
+        { id: 'streubesitz', pct: e.streubesitzPct, klasse: 'halten' },
+        { id: 'institutionen', pct: e.institutionenPct, klasse: 'halten' },
+        { id: 'insiderAnteil', pct: e.insiderPct, klasse: 'halten' },
+        { id: 'shortQuote', pct: e.shortPctStreubesitz, klasse: 'verkauf' },
+    ].filter((z) => z.pct != null)
+})
+const letzteInsider = computed(() => (eig.value?.insider || []).filter((e) => e.art === 'verkauf' || e.art === 'kauf').slice(0, 4))
+const alterText = computed(() => {
+    const ipo = seite.value?.ipoDatum
+    if (!ipo) return ''
+    const monate = Math.floor((Date.now() - ipo) / (30.44 * 86_400_000))
+    return monate < 24 ? t('titel.alterMonate', { n: monate }) : t('titel.alterJahre', { n: Math.floor(monate / 12) })
+})
+
 /* ── Handelbar ─────────────────────────────────────────────────────── */
 const listungen = computed(() => [...(seite.value?.titel?.listungen || [])].sort((a, b) => RANG[a.art] - RANG[b.art] || a.handelsplatz.localeCompare(b.handelsplatz)))
 const chartZiel = computed(() => {
@@ -337,6 +364,56 @@ const grundText = computed(() => {
                         <div v-if="d?.kennzahlen?.beta != null"><dt>{{ t('titel.beta') }}</dt><dd>{{ zahl(d.kennzahlen.beta) }}</dd></div>
                         <div v-if="d?.profil?.webseite"><dt>{{ t('titel.webseite') }}</dt><dd><a :href="d.profil.webseite" target="_blank" rel="noopener noreferrer">{{ host(d.profil.webseite) }}</a></dd></div>
                     </dl>
+                </Karte>
+            </div>
+
+            <!-- Aktionäre und Leerverkäufe · Kasse und junge Firma -->
+            <div v-if="eig || kas || frist" class="reihe zwei">
+                <Karte v-if="eig" :titel="t('titel.aktionaere')" :unter="eig.shortStand ? t('titel.shortStand', { datum: datum(eig.shortStand) }) : ''">
+                    <ul v-if="anteile.length" class="stimmen breit">
+                        <li v-for="z in anteile" :key="z.id">
+                            <span class="name">{{ t('titel.' + z.id) }}</span>
+                            <span class="spur"><i :class="z.klasse" :style="{ width: Math.min(100, z.pct) + '%' }"></i></span>
+                            <b>{{ anteil(z.pct) }}</b>
+                        </li>
+                    </ul>
+                    <p v-if="eig.shortTage != null || shortDelta != null" class="klein fuss">
+                        <template v-if="eig.shortTage != null">{{ t('titel.shortTage', { n: zahl(eig.shortTage, 1) }) }}</template>
+                        <template v-if="shortDelta != null">{{ ' ' + t('titel.shortDelta', { pct: prozent(shortDelta, 0) }) }}</template>
+                    </p>
+                    <h4>{{ t('titel.insiderTitel') }}</h4>
+                    <p class="insiderBild">
+                        <span :class="insider.verkaeufe.anzahl ? 'ab' : ''">{{ t('titel.insiderVerkaeufe', { n: insider.verkaeufe.anzahl, wert: gross(insider.verkaeufe.wert) }) }}</span>
+                        <span :class="insider.kaeufe.anzahl ? 'auf' : ''">{{ t('titel.insiderKaeufe', { n: insider.kaeufe.anzahl, wert: gross(insider.kaeufe.wert) }) }}</span>
+                    </p>
+                    <ol v-if="letzteInsider.length" class="zeitleiste schmal">
+                        <li v-for="e in letzteInsider" :key="e.name + e.zeit + e.stueck" :class="e.art === 'kauf' ? 'auf' : 'ab'">
+                            <span class="tag">{{ tagMonat(e.zeit) }}</span>
+                            <div class="was"><b>{{ e.name }}</b><span class="klein">{{ e.rolle }}</span></div>
+                            <span class="ziel"><span :class="e.art === 'kauf' ? 'auf' : 'ab'">{{ t('titel.insider_' + e.art) }}</span> {{ gross(e.wert ?? e.stueck) }}</span>
+                        </li>
+                    </ol>
+                    <p class="klein fuss">{{ t('titel.insiderHinweis') }}</p>
+                </Karte>
+
+                <Karte v-if="kas || frist" :titel="t(jung ? 'titel.jungTitel' : 'titel.kasseTitel')" :unter="jung && alterText ? t('titel.anDerBoerse', { alter: alterText }) : ''">
+                    <Hinweis v-if="frist" :art="frist.status === 'laeuft' ? 'info' : 'warn'" class="eng">
+                        {{ t('titel.haltefrist_' + frist.status, { n: Math.abs(frist.tage), datum: datum(frist.ablauf), tage: HALTEFRIST_TAGE }) }}
+                    </Hinweis>
+                    <dl v-if="kas" class="profil">
+                        <div v-if="kas.barmittel != null"><dt>{{ t('titel.barmittel') }}</dt><dd>{{ gross(kas.barmittel) }}</dd></div>
+                        <div v-if="kas.schulden != null"><dt>{{ t('titel.schulden') }}</dt><dd>{{ gross(kas.schulden) }}</dd></div>
+                        <div v-if="kas.freierCashflow != null"><dt>{{ t('titel.freierCashflow') }}</dt><dd :class="richtung(kas.freierCashflow)">{{ gross(kas.freierCashflow) }}</dd></div>
+                        <div v-if="kas.betrieblicherCashflow != null"><dt>{{ t('titel.betrieblicherCashflow') }}</dt><dd :class="richtung(kas.betrieblicherCashflow)">{{ gross(kas.betrieblicherCashflow) }}</dd></div>
+                        <div v-if="reicht">
+                            <dt>{{ t('titel.reichweite') }}</dt>
+                            <dd v-if="reicht.positiv" class="auf">{{ t('titel.reichweitePositiv') }}</dd>
+                            <dd v-else :class="{ ab: reicht.monate < 12 }">{{ t('titel.reichweiteMonate', { n: zahl(reicht.monate, reicht.monate < 10 ? 1 : 0) }) }}</dd>
+                        </div>
+                        <div v-if="kas.bruttomargePct != null"><dt>{{ t('titel.bruttomarge') }}</dt><dd>{{ anteil(kas.bruttomargePct) }}</dd></div>
+                    </dl>
+                    <p v-if="reicht && !reicht.positiv" class="klein fuss">{{ t('titel.reichweiteHinweis') }}</p>
+                    <p v-if="jung" class="klein fuss">{{ t('titel.jungHinweis') }}</p>
                 </Karte>
             </div>
 
@@ -703,6 +780,31 @@ h4 {
 
 .spur .verkauf {
     background: var(--bad);
+}
+
+/* Aktionäre und Insider */
+.stimmen.breit li {
+    grid-template-columns: 8.5rem minmax(0, 1fr) 4rem;
+}
+
+.insiderBild {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 1.4rem;
+    font-size: 0.86rem;
+}
+
+.zeitleiste.schmal {
+    margin-top: 0.5rem;
+}
+
+.zeitleiste.schmal .was {
+    flex-direction: column;
+    gap: 0;
+}
+
+.eng {
+    margin-bottom: 0.7rem;
 }
 
 /* Quartalszahlen */

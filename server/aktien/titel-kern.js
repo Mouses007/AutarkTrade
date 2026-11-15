@@ -70,9 +70,49 @@ function ertraege(r) {
     }).filter((q) => q.quartal && (q.eps != null || q.schaetzung != null))
 }
 
+const MAX_INSIDER = 150
+
+/** Art eines Insider-Geschäfts aus Yahoos Freitext. Zuteilungen aus Vergütungsplänen sind KEIN Kauf. */
+function insiderArt(text) {
+    const t = String(text || '')
+    if (/^Sale\b/i.test(t)) return 'verkauf'
+    if (/^Purchase\b/i.test(t)) return 'kauf'
+    if (/Award|Grant/i.test(t)) return 'zuteilung'
+    return 'sonstig'
+}
+
+/** Streubesitz, Leerverkäufe, Anteile von Insidern und Institutionen, Insider-Geschäfte. `null`, wenn nichts davon gemeldet ist. */
+function eigentum(r) {
+    const k = r.defaultKeyStatistics || {}
+    const streubesitz = zahl(k.floatShares), ausstehend = zahl(k.sharesOutstanding)
+    const insider = (r.insiderTransactions?.transactions || []).slice(0, MAX_INSIDER).map((e) => ({
+        zeit: ms(e.startDate), name: text(e.filerName, 60), rolle: text(e.filerRelation, 60),
+        art: insiderArt(e.transactionText), stueck: zahl(e.shares), wert: zahl(e.value) || null,
+    })).filter((e) => e.zeit)
+    const aus = {
+        streubesitz, ausstehend,
+        streubesitzPct: streubesitz != null && ausstehend > 0 ? (streubesitz / ausstehend) * 100 : null,
+        shortStueck: zahl(k.sharesShort), shortVormonatStueck: zahl(k.sharesShortPriorMonth),
+        shortPctStreubesitz: pct(k.shortPercentOfFloat),
+        // «Days to cover»: leerverkaufte Stücke geteilt durch das übliche Tagesvolumen
+        shortTage: zahl(k.shortRatio), shortStand: ms(k.dateShortInterest),
+        insiderPct: pct(k.heldPercentInsiders), institutionenPct: pct(k.heldPercentInstitutions),
+        insider,
+    }
+    const leer = !insider.length && Object.entries(aus).every(([feld, v]) => feld === 'insider' || v == null)
+    return leer ? null : aus
+}
+
+/** Barmittel, Schulden und Cashflow der letzten zwölf Monate. `null`, wenn nichts gemeldet ist. */
+function kasse(r) {
+    const f = r.financialData || {}
+    const aus = { barmittel: zahl(f.totalCash), schulden: zahl(f.totalDebt), freierCashflow: zahl(f.freeCashflow), betrieblicherCashflow: zahl(f.operatingCashflow), bruttomargePct: pct(f.grossMargins) }
+    return Object.values(aus).every((v) => v == null) ? null : aus
+}
+
 /**
  * @param {object} json  rohe `quoteSummary`-Antwort
- * @returns {{profil, kurs, kennzahlen, analysten, ertraege, termin}}
+ * @returns {{profil, kurs, kennzahlen, analysten, ertraege, termin, eigentum, kasse}}
  * @throws wenn die Antwort keinen Titel enthält
  */
 export function ausZusammenfassung(json) {
@@ -109,6 +149,8 @@ export function ausZusammenfassung(json) {
         },
         analysten: analysten(r),
         ertraege: ertraege(r),
+        eigentum: eigentum(r),
+        kasse: kasse(r),
         termin: termin?.earningsDate?.length ? {
             zeit: ms(termin.earningsDate[0]), geschaetzt: termin.isEarningsDateEstimate === true,
             epsSchaetzung: zahl(termin.earningsAverage),

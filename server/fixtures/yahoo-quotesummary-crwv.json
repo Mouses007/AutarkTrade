@@ -1,0 +1,309 @@
+{
+ "quoteSummary": {
+  "result": [
+   {
+    "price": {
+     "shortName": "CoreWeave, Inc.",
+     "longName": "CoreWeave, Inc.",
+     "currency": "USD",
+     "symbol": "CRWV",
+     "quoteType": "EQUITY",
+     "regularMarketPrice": {
+      "raw": 46.0,
+      "fmt": "46.00"
+     }
+    },
+    "defaultKeyStatistics": {
+     "floatShares": {
+      "raw": 339637102,
+      "fmt": "339.64M",
+      "longFmt": "339,637,102"
+     },
+     "sharesOutstanding": {
+      "raw": 465847732,
+      "fmt": "465.85M",
+      "longFmt": "465,847,732"
+     },
+     "sharesShort": {
+      "raw": 74211562,
+      "fmt": "74.21M",
+      "longFmt": "74,211,562"
+     },
+     "sharesShortPriorMonth": {
+      "raw": 59952639,
+      "fmt": "59.95M",
+      "longFmt": "59,952,639"
+     },
+     "shortPercentOfFloat": {
+      "raw": 0.233,
+      "fmt": "23.30%"
+     },
+     "shortRatio": {
+      "raw": 1.34,
+      "fmt": "1.34"
+     },
+     "dateShortInterest": {
+      "raw": 1793318400,
+      "fmt": "2026-10-30"
+     },
+     "heldPercentInsiders": {
+      "raw": 0.19986,
+      "fmt": "19.99%"
+     },
+     "heldPercentInstitutions": {
+      "raw": 0.77288,
+      "fmt": "77.29%"
+     }
+    },
+    "financialData": {
+     "totalCash": {
+      "raw": 4228000000,
+      "fmt": "4.23B",
+      "longFmt": "4,228,000,000"
+     },
+     "totalDebt": {
+      "raw": 66220998656,
+      "fmt": "66.22B",
+      "longFmt": "66,220,998,656"
+     },
+     "freeCashflow": {
+      "raw": -19649423360,
+      "fmt": "-19.65B",
+      "longFmt": "-19,649,423,360"
+     },
+     "operatingCashflow": {
+      "raw": 7197000192,
+      "fmt": "7.2B",
+      "longFmt": "7,197,000,192"
+     },
+     "totalRevenue": {
+      "raw": 9886000128,
+      "fmt": "9.89B",
+      "longFmt": "9,886,000,128"
+     },
+     "revenueGrowth": {
+      "raw": 1.682,
+      "fmt": "168.20%"
+     },
+     "grossMargins": {
+      "raw": 0.66751,
+      "fmt": "66.75%"
+     }
+    },
+    "netSharePurchaseActivity": {
+     "maxAge": 1,
+     "period": "6m",
+     "buyInfoCount": {
+      "raw": 97,
+      "fmt": "97",
+      "longFmt": "97"
+     },
+     "buyInfoShares": {
+      "raw": 7525898,
+      "fmt": "7.53M",
+      "longFmt": "7,525,898"
+     },
+     "buyPercentInsiderShares": {
+      "raw": 0.061,
+      "fmt": "6.10%"
+     },
+     "sellInfoCount": {
+      "raw": 121,
+      "fmt": "121",
+      "longFmt": "121"
+     },
+     "sellInfoShares": {
+      "raw": 19965360,
+      "fmt": "19.97M",
+      "longFmt": "19,965,360"
+     },
+     "sellPercentInsiderShares": {
+      "raw": 0.162,
+      "fmt": "16.20%"
+     },
+     "netInfoCount": {
+      "raw": 218,
+      "fmt": "218",
+      "longFmt": "218"
+     },
+     "netInfoShares": {
+      "raw": -12439463,
+      "fmt": "-12.44M",
+      "longFmt": "-12,439,463"
+     },
+     "netPercentInsiderShares": {
+      "raw": -0.101,
+      "fmt": "-10.10%"
+     },
+     "netInstSharesBuying": {
+      "raw": -18135441,
+      "fmt": "-18.14M",
+      "longFmt": "-18,135,441"
+     },
+     "netInstBuyingPercent": {
+      "raw": -0.05114,
+      "fmt": "-5.11%"
+     },
+     "totalInsiderShares": {
+      "raw": 111147288,
+      "fmt": "111.15M",
+      "longFmt": "111,147,288"
+     }
+    },
+    "insiderTransactions": {
+     "transactions": [
+      {
+       "shares": {
+        "raw": 13611,
+        "fmt": "13.61k",
+        "longFmt": "13,611"
+       },
+       "value": {
+        "raw": 629237,
+        "fmt": "629.24k",
+        "longFmt": "629,237"
+       },
+       "transactionText": "Sale at price 46.23 per share.",
+       "filerName": "JAIN SACHIN",
+       "filerRelation": "Chief Operating Officer",
+       "startDate": {
+        "raw": 1794182400,
+        "fmt": "2026-11-09"
+       },
+       "ownership": "D"
+      },
+      {
+       "shares": {
+        "raw": 33740,
+        "fmt": "33.74k",
+        "longFmt": "33,740"
+       },
+       "value": null,
+       "transactionText": "",
+       "filerName": "JAIN SACHIN",
+       "filerRelation": "Chief Operating Officer",
+       "startDate": {
+        "raw": 1793923200,
+        "fmt": "2026-11-06"
+       },
+       "ownership": "D"
+      },
+      {
+       "shares": {
+        "raw": 320,
+        "fmt": "320",
+        "longFmt": "320"
+       },
+       "value": {
+        "raw": 0,
+        "fmt": null,
+        "longFmt": "0"
+       },
+       "transactionText": "Stock Award(Grant) at price 0.00 per share.",
+       "filerName": "HUTCHINS GLENN H",
+       "filerRelation": "Director",
+       "startDate": {
+        "raw": 1792454400,
+        "fmt": "2026-10-20"
+       },
+       "ownership": "D"
+      },
+      {
+       "shares": {
+        "raw": 122,
+        "fmt": "122",
+        "longFmt": "122"
+       },
+       "value": {
+        "raw": 0,
+        "fmt": null,
+        "longFmt": "0"
+       },
+       "transactionText": "Stock Award(Grant) at price 0.00 per share.",
+       "filerName": "WHITMAN MARGARET C.",
+       "filerRelation": "Director",
+       "startDate": {
+        "raw": 1792454400,
+        "fmt": "2026-10-20"
+       },
+       "ownership": "D"
+      },
+      {
+       "shares": {
+        "raw": 37380,
+        "fmt": "37.38k",
+        "longFmt": "37,380"
+       },
+       "value": {
+        "raw": 2940519,
+        "fmt": "2.94M",
+        "longFmt": "2,940,519"
+       },
+       "transactionText": "Sale at price 77.18 - 80.36 per share.",
+       "filerName": "JONES JONATHAN",
+       "filerRelation": "Officer",
+       "startDate": {
+        "raw": 1791849600,
+        "fmt": "2026-10-13"
+       },
+       "ownership": "D"
+      },
+      {
+       "shares": {
+        "raw": 22579,
+        "fmt": "22.58k",
+        "longFmt": "22,579"
+       },
+       "value": {
+        "raw": 1809260,
+        "fmt": "1.81M",
+        "longFmt": "1,809,260"
+       },
+       "transactionText": "Sale at price 79.95 - 80.51 per share.",
+       "filerName": "AGRAWAL NITIN",
+       "filerRelation": "Chief Financial Officer",
+       "startDate": {
+        "raw": 1791763200,
+        "fmt": "2026-10-12"
+       },
+       "ownership": "D"
+      },
+      {
+       "shares": {
+        "raw": 42772,
+        "fmt": "42.77k",
+        "longFmt": "42,772"
+       },
+       "value": null,
+       "transactionText": "",
+       "filerName": "JONES JONATHAN",
+       "filerRelation": "Officer",
+       "startDate": {
+        "raw": 1791504000,
+        "fmt": "2026-10-09"
+       },
+       "ownership": "D"
+      },
+      {
+       "shares": {
+        "raw": 1460,
+        "fmt": "1.46k",
+        "longFmt": "1,460"
+       },
+       "value": null,
+       "transactionText": "",
+       "filerName": "BOONE KAREN",
+       "filerRelation": "Director",
+       "startDate": {
+        "raw": 1791244800,
+        "fmt": "2026-10-06"
+       },
+       "ownership": "D"
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}
