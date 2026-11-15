@@ -39,7 +39,7 @@ export const RISK_REASONS = {
 export function computePositionSize({
     equity, riskPerTradePct, entry, stopLoss, leverage = 1,
     maxNotionalUsdt = Infinity, stepSize = 0, minQty = 0, minNotional = 0, maxQty = 0,
-    costs = {}, setup = null,
+    costs = {}, setup = null, einstiegsZeit = 0,
 }) {
     const abstand = Math.abs(entry - stopLoss)
     if (!(equity > 0)) return { qty: 0, reason: RISK_REASONS.NO_EQUITY }
@@ -59,7 +59,10 @@ export function computePositionSize({
     // auch wenn die Vorgabe Limit ist. Bis 01.11.2026 wurde hier ohne Setup
     // gefragt — die Grösse war mit Maker-Kosten bemessen, gefüllt wurde mit
     // Taker, und das echte Risiko lag über dem eingestellten Prozentsatz.
-    const ein = satzFuer(costs, einstiegsSorte(costs, setup))
+    // `einstiegsZeit`: nur für den Aufschlag eines Aktien-Futures ausserhalb der
+    // regulären Sitzung (`rutschAufschlag`). Für den Stop ist die Zeit der
+    // Füllung noch unbekannt — dort bleibt es beim Grundsatz.
+    const ein = satzFuer(costs, einstiegsSorte(costs, setup), einstiegsZeit)
     const aus = satzFuer(costs, MARKT)
     const kostenBps = ein.feeBps + ein.slippageBps + aus.feeBps + aus.slippageBps
     const kostenJeEinheit = entry * kostenBps / 10000
@@ -172,6 +175,9 @@ export function stellenVon(schritt) {
  * @param {number} ctx.now              Zeitstempel des Auslösers
  * @param {object} [ctx.marketMeta]     { stepSize, minQty, minNotional, maxQty }
  * @param {boolean}[ctx.killSwitch]
+ * @param {boolean}[ctx.aktie]          Aktien-Future? Nur dann zählt …
+ * @param {number} [ctx.einstiegsZeit]  … die Zeit des Einstiegs für den Rutsch-Aufschlag
+ *                                      ausserhalb der regulären US-Sitzung (`rutschAufschlag`)
  *
  * @returns {{ ok: boolean, reason?: string, detail?: string, size?: object }}
  */
@@ -272,6 +278,8 @@ export function evaluateRisk(ctx) {
         ...grenzenFuer(marketMeta, einstiegsSorte(risk, setup)),
         costs: risk,
         setup,
+        // Coins: 0 — dann gibt es keinen Aufschlag, auch wenn `risk` den Wert trägt.
+        einstiegsZeit: ctx.aktie ? Number(ctx.einstiegsZeit) || 0 : 0,
     })
     if (!size.qty) return { ok: false, reason: size.reason || RISK_REASONS.SIZE_TOO_SMALL }
 

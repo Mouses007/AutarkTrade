@@ -38,7 +38,7 @@ import { istAus as marktdatenAus } from './marktdaten/index.js'
 import { aussortierteZeilen } from './strategie-aussortiert.js'
 import { zeitpunkt } from '../shared/strategieChart.js'
 import { aktienKontext } from './aktien/kontext.js'
-import { bereinigeSplits } from './aktien/splits.js'
+import { bereinigeSplits, positionUeberSplit, faelligeSplits, leseSplitVermerk } from './aktien/splits.js'
 import { sitzungVon, handelstagBeginn } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, terminListe } from '../shared/aktien-zahlen.js'
 
@@ -95,6 +95,16 @@ const stats = { ticks: 0, runs: 0, lastRunAt: 0, errors: 0, fremdgefuehrt: 0 }
  */
 let agentHook = agentenVeto
 export function setAgentHook(fn) { agentHook = fn }
+
+/**
+ * Woher die Engine weiss, ob ein Symbol ein Aktien-Future ist. Im Betrieb
+ * `aktienKontext` (Stamm in der Datenbank, Splits und Zahlentermine von der
+ * Kursquelle). Über `setAktienKontext` austauschbar — für Selbsttests, die
+ * einen Aktien-Kontext stellen, ohne Stamm und ohne Netz.
+ */
+let kontextQuelle = aktienKontext
+export function setAktienKontext(fn) { kontextQuelle = typeof fn === 'function' ? fn : aktienKontext }
+const kontextVon = async (symbol) => kontextQuelle(symbol)
 
 // ── Instanz laden ────────────────────────────────────────────────────────
 
@@ -317,14 +327,118 @@ export function risikoKontextAbfragen(knex, instanceId, now, tagesBeginn = start
  * Kerzen eines Aktien-Futures vor jedem Split umrechnen — wie im Backtest
  * (`server/aktien/splits.js`). Für Coins und bei unbekannten Splits unverändert.
  *
- * Achtung, nicht gelöst: eine Position, die ÜBER einen Split offen bleibt,
- * behält ihre alten Kurse. Die Börsen schliessen solche Positionen (Binance)
- * oder rechnen sie um (Bitget); die Simulation tut beides nicht.
+ * `bericht` nennt die Splits, deren Sprung in diesem Fenster steht
+ * (`angewendet`, `bei` = erste Kerze im neuen Massstab). Damit rechnet
+ * `rechneUeberSplitsUm` offene Positionen um.
  */
+async function mitSplits(symbol, candles) {
+    if (!candles?.length) return { kerzen: candles, bericht: [], aktie: null }
+    const aktie = await kontextVon(symbol)
+    if (!aktie?.splits?.length) return { kerzen: candles, bericht: [], aktie }
+    const b = bereinigeSplits(candles, aktie.splits)
+    return { kerzen: b.kerzen, bericht: b.splits.filter((x) => x.angewendet), aktie }
+}
+
 async function splitBereinigt(symbol, candles) {
-    if (!candles?.length) return candles
-    const aktie = await aktienKontext(symbol)
-    return aktie?.splits?.length ? bereinigeSplits(candles, aktie.splits).kerzen : candles
+    return (await mitSplits(symbol, candles)).kerzen
+}
+
+const kurz = (v) => (Number.isFinite(Number(v)) ? String(Number(Number(v).toPrecision(8))) : '–')
+const splitText = (x) => x.text || (x.faktor >= 1 ? `${kurz(x.faktor)}:1` : `1:${kurz(1 / x.faktor)}`)
+
+/**
+ * Offene Papier-/Schatten-Positionen und wartende Setups über einen Split.
+ *
+ * Die Kerzen sind ab dem Sprung im neuen Massstab (`mitSplits`); eine
+ * Position, die davor eröffnet wurde, trägt Einstieg, Stop und Ziel noch im
+ * alten. Ohne Umrechnung löste ein Split 20:1 sofort den Stop eines Longs aus
+ * (Kurs «fällt» um 95 %), eine Zusammenlegung das Ziel — Ergebnisse, die es
+ * nie gab. Gerechnet wird wie bei Bitget (`positionUeberSplit`): Menge ×
+ * Faktor, Kurse ÷ Faktor; der Wert der Position bleibt gleich. (Binance
+ * schliesst solche Positionen laut Sekundärquelle — das ist nicht belegt und
+ * wird nicht nachgebildet.)
+ *
+ * GENAU EINMAL je Split und Position: der Vermerk `splitsAngewendet` steht in
+ * derselben Transaktion wie die neuen Werte, und geändert wird nur, wenn der
+ * Vermerk noch so dasteht wie gelesen. Ein Neustart zwischen Umrechnung und
+ * Fortschreiben oder ein zweiter Prozess rechnet deshalb kein zweites Mal.
+ * Jede Umrechnung steht als Zeile `split` im Verlauf der Instanz
+ * (`strategy_runs`).
+ *
+ * Wartende Setups aus der Zeit vor dem Split werden NICHT umgerechnet, sondern
+ * mit dem Grund `split` beendet — so wie die Börsen offene Orders löschen.
+ * Ihre Kursmarken stehen zum Teil in strategie-eigenen Feldern
+ * (`confirmations`), die hier niemand kennt; ein halb umgerechnetes Setup
+ * würde zu einem Kurs «ausgelöst», den es nicht mehr gibt. Setups, die schon
+ * auf bereinigten Kerzen entstanden, tragen den Split im Vermerk und bleiben.
+ *
+ * Grenzen: gefunden wird ein Split nur, solange sein Sprung im Kerzenfenster
+ * steht und zur Angabe der Kursquelle passt (`bereinigeSplits`); sind die
+ * Splits unbekannt, wird nichts umgerechnet und nichts geraten.
+ *
+ * @returns {Promise<{positionen: number, setups: number}>} was umgerechnet bzw. beendet wurde
+ */
+export async function rechneUeberSplitsUm({ instanceId, symbol, timeframe = '', bericht, kerzeMs = 0 }) {
+    const wirksam = (bericht || []).filter((x) => x.angewendet && x.bei > 0)
+    const aus = { positionen: 0, setups: 0 }
+    if (!wirksam.length) return aus
+    const knex = getKnex()
+
+    const offen = await knex('strategy_positions')
+        .where({ instanceId, symbol, status: 'open' })
+        .modify((q) => { if (timeframe) q.where('timeframe', timeframe) })
+        .whereIn('mode', BETRIEBSARTEN)
+    for (const row of offen) {
+        const vermerk = leseSplitVermerk(row.splitsAngewendet)
+        const faellig = faelligeSplits(wirksam, {
+            lastCandleTime: Number(row.lastCandleTime) || Number(row.entryTime) || 0, kerzeMs, vermerk,
+        })
+        if (!faellig.length) continue
+        const stand = { ...row }
+        const aenderung = {}
+        for (const x of faellig) {
+            const d = positionUeberSplit(stand, x.faktor)
+            Object.assign(stand, d)
+            Object.assign(aenderung, d)
+        }
+        const neuerVermerk = JSON.stringify([...vermerk,
+            ...faellig.map((x) => ({ t: x.t, faktor: x.faktor, bei: x.bei, text: x.text || '' }))])
+        const text = faellig.map((x) => `${splitText(x)} am ${new Date(x.t).toISOString().slice(0, 10)}`).join(', ')
+        await knex.transaction(async (trx) => {
+            const q = trx('strategy_positions').where({ id: row.id, status: 'open' })
+            const beansprucht = await (row.splitsAngewendet
+                ? q.where('splitsAngewendet', row.splitsAngewendet)
+                : q.where((w) => w.whereNull('splitsAngewendet').orWhere('splitsAngewendet', '')))
+                .update({ ...aenderung, splitsAngewendet: neuerVermerk, updatedAt: trx.fn.now() })
+            if (!beansprucht) return
+            aus.positionen++
+            await trx('strategy_runs').insert({
+                instanceId, setupId: Number(row.setupId) || 0, finalAction: 'split',
+                reason: (`split: ${symbol} ${text} — offene Position #${row.id} umgerechnet: `
+                    + `Menge ${kurz(row.qty)} → ${kurz(stand.qty)}, Einstieg ${kurz(row.entryPrice)} → ${kurz(stand.entryPrice)}, `
+                    + `Stop ${kurz(row.stopLoss)} → ${kurz(stand.stopLoss)}, Ziel ${kurz(row.takeProfit)} → ${kurz(stand.takeProfit)}`).slice(0, 400),
+                executionOutput: JSON.stringify({
+                    art: 'split', positionId: row.id, splits: faellig.map((x) => ({ t: x.t, faktor: x.faktor, bei: x.bei, text: x.text || '' })),
+                    vorher: Object.fromEntries(Object.keys(aenderung).map((k) => [k, Number(row[k])])),
+                    nachher: aenderung,
+                }),
+            })
+        })
+    }
+
+    const wartend = await knex('strategy_setups')
+        .where({ instanceId, symbol })
+        .modify((q) => { if (timeframe) q.where('timeframe', timeframe) })
+        .whereIn('status', WARTEND)
+    for (const r of wartend) {
+        const gesehen = new Set(leseSplitVermerk(r.splitsAngewendet).map((x) => Number(x.t)))
+        const split = wirksam.find((x) => !gesehen.has(Number(x.t)) && Number(r.obCandleTime) < x.bei)
+        if (!split) continue
+        aus.setups += await knex('strategy_setups').where('id', r.id).whereIn('status', WARTEND).update({
+            status: 'invalidated', invalidReason: 'split', endeT: split.bei, updatedAt: knex.fn.now(),
+        })
+    }
+    return aus
 }
 
 export function risikoStichtag(ev, tfMs) {
@@ -401,7 +515,6 @@ async function instanzNochAktiv(instanceId) {
 async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     const knex = getKnex()
     const p = instance.params
-    const costs = kostenAus(instance.risk)
 
     // Verankerte Linien brauchen ihren Anker im Sichtfenster (Wochen-VWAP auf
     // 15m ≈ 700 Kerzen). Ohne diesen Aufschlag bliebe die Linie im Betrieb leer,
@@ -412,7 +525,11 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     // (`sichtFensterKerzen`), samt Indikatorperioden und `ltfKerzen`.
     const bedarf = sichtFensterKerzen(instance.strategie, p, timeframeMs(timeframe), { endlich: true })
 
-    let candles = await splitBereinigt(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }))
+    let { kerzen: candles, bericht: splitBericht, aktie } = await mitSplits(symbol,
+        await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }))
+    // Für Aktien-Futures reist der Rutsch-Aufschlag ausserhalb der regulären
+    // Sitzung mit (Vorgabe 0); bei Coins nie.
+    const costs = kostenAus(instance.risk, { aktie: Boolean(aktie) })
     if (!candles.length) return { skipped: 'zu wenige Kerzen' }
     const key = `${instance.id}|${symbol}|${timeframe}`
     if (lastProcessed.get(key) === candles[candles.length - 1].t) return { skipped: 'keine neue Kerze' }
@@ -427,14 +544,20 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     const kurzVon = candles[candles.length - 1].t
     if (candles.length < bedarf * 0.9 && nachgefragt.get(key) !== kurzVon) {
         nachgefragt.set(key, kurzVon)
-        const frisch = await splitBereinigt(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }))
-        if (frisch.length > candles.length) candles = frisch
+        const frisch = await mitSplits(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }))
+        if (frisch.kerzen.length > candles.length) { candles = frisch.kerzen; splitBericht = frisch.bericht }
     }
     if (candles.length < 50) return { skipped: 'zu wenige Kerzen' }
 
     // Neu lesen: die frische Reihe kann eine Kerze weiter reichen.
     const neueste = candles[candles.length - 1].t
     if (lastProcessed.get(key) === neueste) return { skipped: 'keine neue Kerze' }
+
+    // ── 0. Split im Fenster: offene Positionen umrechnen, alte Setups beenden ──
+    // VOR dem Fortschreiben — die Kerzen sind ab dem Sprung im neuen Massstab.
+    if (splitBericht.length) {
+        await rechneUeberSplitsUm({ instanceId: instance.id, symbol, timeframe, bericht: splitBericht, kerzeMs: timeframeMs(timeframe) })
+    }
 
     // ── 1. Offene Positionen fortschreiben ───────────────────────────────
     const geschlossen = await stepPaperPositions({
@@ -448,7 +571,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         partialTpPct: p.partialTpPct,
         // Wartungsmarge je Symbol (0 in der Instanz = von der Börse holen),
         // damit Papierbetrieb und Backtest denselben Liquidationspreis rechnen.
-        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(await aktienKontext(symbol)) }),
+        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie) }),
     })
 
     // ── 2. Erkennen ──────────────────────────────────────────────────────
@@ -575,6 +698,11 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
             confirmations: JSON.stringify(s.confirmations || {}),
             paramsVersion: instance.paramsVersion,
             detectorVersion: s.detectorVersion || 1,
+            // Auf Kerzen entstanden, in denen diese Splits schon umgerechnet
+            // sind — `rechneUeberSplitsUm` lässt das Setup dann stehen.
+            ...(splitBericht.length
+                ? { splitsAngewendet: JSON.stringify(splitBericht.map((x) => ({ t: x.t, faktor: x.faktor, bei: x.bei }))) }
+                : {}),
         }))
         // Der Unique-Index ist der Rückfallschutz gegen Doppelanlagen
         await knex('strategy_setups')
@@ -712,7 +840,7 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     // (a3) Aktien-Futures: Börsensitzung statt UTC-Tag. Auf Wunsch nur in der
     // regulären US-Sitzung einsteigen — massgebend ist der Beginn der
     // Auslösekerze, wie im Backtest (`ausserhalb_sitzung`).
-    const aktie = await aktienKontext(setup.symbol)
+    const aktie = await kontextVon(setup.symbol)
     if (aktie && instance.risk?.nurRegulaereSitzung) {
         const sitzung = sitzungVon(Number(ev?.candleTime ?? ev?.triggeredAt) || now)
         if (sitzung !== 'regulaer') return beenden('reject_risk', 'ausserhalb_sitzung', `Sitzung ${sitzung}`)
@@ -792,6 +920,9 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
         now: stichtag,
         marketMeta: meta || {},
         killSwitch: schalter.killSwitch,
+        // Nur für den Rutsch-Aufschlag eines Aktien-Futures ausserhalb der Sitzung.
+        aktie: Boolean(aktie),
+        einstiegsZeit: sameBarStop ? now : einstiegsZeit(ev, setup, now, timeframeMs(setup.timeframe)),
     })
     lauf.riskOutput = JSON.stringify({ equity, todayNetPnl: kontext.todayNetPnl, ...pruefung })
     if (!pruefung.ok) return beenden('reject_risk', pruefung.reason, pruefung.detail)
@@ -1001,7 +1132,8 @@ async function pflegeOffenePositionen() {
             const pflegeTf = isValidTimeframe(posTf) ? posTf : instance.timeframe
             const tfMs = timeframeMs(pflegeTf)
             const bedarf = Math.min(990, Math.max(60, Math.ceil((Date.now() - minAb) / tfMs) + 3))
-            const candles = await splitBereinigt(symbol, await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }))
+            const { kerzen: candles, bericht: splitBericht, aktie } = await mitSplits(symbol,
+                await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }))
             if (!candles?.length) continue
             if (candles[0].t > minAb + tfMs * 1.5) {
                 logWarn('strategy-engine', `Kerzenlücke ${symbol}: Abdeckung beginnt erst ${new Date(candles[0].t).toISOString()} — Nachlauf ausgesetzt, um keine Stops zu überspringen`)
@@ -1013,14 +1145,18 @@ async function pflegeOffenePositionen() {
             const regeln = Number(row.archiviert)
                 ? (await regelnZumArchiv(knex, row)) || instance.strategie?.regeln
                 : instance.strategie?.regeln
+            // Split seit dem letzten Stand: erst umrechnen, dann fortschreiben.
+            if (splitBericht.length) {
+                await rechneUeberSplitsUm({ instanceId: instance.id, symbol, timeframe: pflegeTf, bericht: splitBericht, kerzeMs: tfMs })
+            }
             await stepPaperPositions({
                 instance, symbol, timeframe: pflegeTf, candles,
-                costs: kostenAus(instance.risk),
+                costs: kostenAus(instance.risk, { aktie: Boolean(aktie) }),
                 breakEvenAtR: instance.params.breakEvenAtR ?? regeln?.breakEvenAtR ?? 0,
                 maxHoldMs: ((instance.params.maxHoldCandles ?? regeln?.maxHoldCandles ?? 0) || 0) * timeframeMs(pflegeTf),
                 partialTpR: instance.params.partialTpR,
                 partialTpPct: instance.params.partialTpPct,
-                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(await aktienKontext(symbol)) }),
+                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie) }),
             })
         } catch (e) {
             // Ohne Marktdaten steht es schon einmal bei der Instanz im Log (`ausGemeldet`).
@@ -1188,7 +1324,7 @@ export async function killSwitch({ closePositions = false } = {}) {
             const preis = await getLastPrice(row.symbol, { market: instance.market }).catch(() => Number(row.entryPrice))
             const r = await schliessePositionManuell({
                 instance, positionRow: row, price: preis, time: Date.now(),
-                costs: kostenAus(instance.risk),
+                costs: kostenAus(instance.risk, { aktie: Boolean(await kontextVon(row.symbol).catch(() => null)) }),
                 reason: 'manual',
             }).catch((err) => ({ ok: false, reason: err.message }))
             if (r.ok) geschlossen++

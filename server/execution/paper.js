@@ -15,6 +15,7 @@ import { getKnex } from '../database.js'
 import { createPosition, stepCandle, closePosition } from '../fill-simulator.js'
 import { getFundingHistory, timeframeMs, isValidTimeframe } from '../market-data.js'
 import { fundingAusVerlauf } from './zwischenstand.js'
+import { bereinigeFunding, leseSplitVermerk } from '../aktien/splits.js'
 
 /**
  * Echte Funding-Summe einer Position bis `bis` — dieselbe Rechnung wie der
@@ -24,13 +25,17 @@ import { fundingAusVerlauf } from './zwischenstand.js'
  *
  * `undefined` heisst unbekannt (Abruf gescheitert, Spot) — dann rechnet
  * `closePosition` mit der Annahme aus den Kosten.
+ *
+ * Wurde die Position über einen Split umgerechnet (`pos.splits`), stehen die
+ * Mark-Preise der Abrechnungen DAVOR noch im alten Massstab, die Menge im
+ * neuen — `bereinigeFunding` bringt beides zusammen.
  */
 async function echtesFunding(instance, pos, bis) {
     if (instance?.market === 'spot') return undefined
     try {
         const verlauf = await getFundingHistory(pos.symbol, pos.entryTime, bis)
         if (!Array.isArray(verlauf)) return undefined
-        return fundingAusVerlauf(verlauf, {
+        return fundingAusVerlauf(pos.splits?.length ? bereinigeFunding(verlauf, pos.splits) : verlauf, {
             qty: pos.qty, direction: pos.direction, entryTime: pos.entryTime, bis, ersatzPreis: pos.entryPrice,
         })
     } catch {
@@ -161,6 +166,8 @@ export function zuPosition(row) {
         partialGross: Number(row.partialGross) || 0,
         partialFee: Number(row.partialFee) || 0,
         initialQty: Number(row.initialQty) || Number(row.qty),
+        // Splits, über die die Position schon umgerechnet wurde (Aktien-Futures; sonst leer)
+        splits: leseSplitVermerk(row.splitsAngewendet),
         status: row.status,
     }
 }

@@ -9264,5 +9264,12 @@
     "quelleAus": "The market-data source is switched off (Settings › Data sources).",
     "ladeFehler": "Stock radar could not be loaded",
     "hinweis": "Strength and 52-week high come from daily prices of the stock, everything else from the future at the exchange. Outside market hours there is little volume there. Not a recommendation."
+  },
+  "aktienEngine": {
+    "rutschAusserhalb": "Stocks: extra slippage outside the session (basis points)",
+    "rutschAusserhalbHint": "Stock futures only. Extra slippage per market order (stop, time exit, market entry) when it fills outside the regular US session: pre-market, after hours, overnight, on weekends and holidays. The tape is thin there (hourly volume overnight about 28 %, on weekends about 10 % of a regular hour). Spread and depth have not been measured, so the default is 0 (off) and any value is your own assumption. No effect on coins.",
+    "rutschAn": "Extra slippage outside the regular session: {bps} basis points per market order on top. This is the configured assumption, not a measurement.",
+    "rutschAus": "Slippage outside the regular session is not modelled separately: every market order slips the same, although the tape is thinner overnight and on weekends. A surcharge can be set in the risk settings (off by default, because spread and depth have not been measured).",
+    "dividenden": "Dividends are missing from the simulation. For stock futures Bitget books a one-off payment from short to long on the day before the ex-date (not for ETFs); for Binance and Bitunix this is not documented. None of it is booked here: a long position held over an ex-date looks slightly worse in the result than it was, a short position slightly better."
   }
 }

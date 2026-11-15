@@ -21,6 +21,13 @@
  *    Kopfleiste) und `modusAktienAn` (Vorgabe aus — solange der Aktien-Teil
  *    im Bau ist, sieht niemand einen Schalter ohne Wirkung).
  *
+ * 6. `splitsAngewendet` an `strategy_positions` und `strategy_setups` — welche
+ *    Splits an einer offenen Papier-Position schon umgerechnet sind bzw.
+ *    welche ein wartendes Setup schon im neuen Massstab gesehen hat
+ *    (`server/aktien/splits.js`, `rechneUeberSplitsUm` in der Engine). JSON
+ *    `[{t, faktor, bei}]`; leer = keiner. Sichert «genau einmal je Split»
+ *    über Neustarts.
+ *
  * 5. `edgarKontakt` — womit sich die App bei der SEC ausweist (`server/aktien/edgar.js`).
  *    Trägt der Nutzer selbst ein; leer = EDGAR aus.
  */
@@ -108,4 +115,8 @@ export async function migriereAktien(knex, addColumnIfNotExists) {
     await addColumnIfNotExists('settings', 'aktiverMarkt', (t) => t.string('aktiverMarkt').defaultTo('krypto'))
     await addColumnIfNotExists('settings', 'modusAktienAn', (t) => t.boolean('modusAktienAn').defaultTo(false))
     await addColumnIfNotExists('settings', 'edgarKontakt', (t) => t.string('edgarKontakt').defaultTo(''))
+
+    // Offene Papier-Positionen und wartende Setups über einen Split (Punkt 6 oben).
+    await addColumnIfNotExists('strategy_positions', 'splitsAngewendet', (t) => t.text('splitsAngewendet').defaultTo(''))
+    await addColumnIfNotExists('strategy_setups', 'splitsAngewendet', (t) => t.text('splitsAngewendet').defaultTo(''))
 }

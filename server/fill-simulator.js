@@ -22,6 +22,7 @@
  */
 
 import { liqPreis } from '../shared/liquidation.js'
+import { sitzungVon } from '../shared/aktien-sitzung.js'
 
 const BPS = 10000
 
@@ -86,16 +87,40 @@ function zahl(v) {
  *
  * `feeBps` bleibt als Rückfall lesbar: alte Instanzen und alte gespeicherte
  * Läufe tragen nur diesen einen Satz.
+ *
+ * `zeit` (Zeitpunkt der Füllung) zählt nur für den Aufschlag ausserhalb der
+ * regulären US-Sitzung (`rutschAufschlag`) — ohne Angabe gibt es keinen.
  */
-export function satzFuer(costs, sorte) {
+export function satzFuer(costs, sorte, zeit = 0) {
     const c = costs || {}
     const alt = zahl(c.feeBps)
     const maker = zahl(c.feeMakerBps) ?? alt ?? 0
     const taker = zahl(c.feeTakerBps) ?? alt ?? 0
     return {
         feeBps: sorte === LIMIT ? maker : taker,
-        slippageBps: sorte === LIMIT ? 0 : (zahl(c.slippageBps) ?? 0),
+        slippageBps: sorte === LIMIT ? 0 : (zahl(c.slippageBps) ?? 0) + rutschAufschlag(c, zeit),
     }
+}
+
+/**
+ * Zusätzlicher Rutsch einer MARKTORDER auf einem Aktien-Future ausserhalb der
+ * regulären US-Sitzung, in Basispunkten.
+ *
+ * Dort ist das Band dünn: gemessen am Volumen je Stunde (Binance NVDA,
+ * `docs/RECHERCHE-AKTIEN.md`) über Nacht rund 28 %, am Wochenende rund 10 %
+ * der regulären Stunde. Spread und Tiefe je Sitzung sind NICHT gemessen —
+ * deshalb ist der Aufschlag eine Annahme des Nutzers (`slippageAusserhalbBps`,
+ * Vorgabe 0 = aus) und kein eingebauter Satz, und er ist ein einziger Wert
+ * für alles ausserhalb der regulären Sitzung statt einer erfundenen Staffel.
+ *
+ * Wirkt nur, wenn das Kostenobjekt ihn trägt — `kostenAus` gibt ihn nur für
+ * Aktien-Futures weiter — und der Zeitpunkt der Füllung bekannt ist.
+ */
+export function rutschAufschlag(costs, zeit) {
+    const auf = zahl(costs?.slippageAusserhalbBps) ?? 0
+    const t = Number(zeit)
+    if (!(auf > 0) || !(t > 0)) return 0
+    return sitzungVon(t) === 'regulaer' ? 0 : auf
 }
 
 /**
@@ -107,8 +132,12 @@ export function satzFuer(costs, sorte) {
  * weil `Number(undefined) || 0` sauber 0 ergibt und die Zahlen bloss zu gut
  * waren. `__selftest-kostenweitergabe.mjs` bewacht, dass es bei einer Stelle
  * bleibt.
+ *
+ * `aktie`: nur für einen Aktien-Future reist der Aufschlag ausserhalb der
+ * regulären Sitzung mit (`rutschAufschlag`). Bei Coins ist er immer 0, auch
+ * wenn die Instanz den Wert gesetzt hat.
  */
-export function kostenAus(risk) {
+export function kostenAus(risk, { aktie = false } = {}) {
     const r = risk || {}
     return {
         feeMakerBps: r.feeMakerBps,
@@ -116,6 +145,7 @@ export function kostenAus(risk) {
         // Rückfall für alte gespeicherte Läufe, die nur einen Satz kennen.
         feeBps: r.feeBps,
         slippageBps: r.slippageBps,
+        slippageAusserhalbBps: aktie ? r.slippageAusserhalbBps : 0,
         fundingBpsPer8h: r.fundingBpsPer8h,
         // Der Takt gehört zum Satz. Ohne ihn wäre `fundingBpsPer8h` eine Zahl
         // ohne Einheit — genau der Fehler, den der Funding-Takt-Kanon im
@@ -312,7 +342,7 @@ export function fundingFor(notional, entryTime, exitTime, fundingBpsProPeriode, 
  * `costs` = { feeMakerBps, feeTakerBps, slippageBps, entryOrder, fundingBpsPer8h }
  */
 export function createPosition({ setup, qty, entryPrice, entryTime, leverage = 1, costs }) {
-    const ein = satzFuer(costs, einstiegsSorte(costs, setup))
+    const ein = satzFuer(costs, einstiegsSorte(costs, setup), entryTime)
     const fill = applySlippage(entryPrice, setup.direction, 'entry', ein.slippageBps)
     return {
         setupId: setup.id ?? 0,
@@ -565,7 +595,7 @@ export function stepCandle(pos, candle, opts = {}) {
  * (Feldnamen wie in der Tabelle `strategy_trades`).
  */
 export function closePosition(pos, { price, reason, time }, costs, extra = {}) {
-    const satz = satzFuer(costs, ordersorte(reason))
+    const satz = satzFuer(costs, ordersorte(reason), time)
     const fill = applySlippage(price, pos.direction, 'exit', satz.slippageBps)
     const feeClose = feeFor(fill, pos.qty, satz.feeBps)
     // Die Eröffnungsgebühr wurde auf die volle Menge gezahlt und bleibt deshalb

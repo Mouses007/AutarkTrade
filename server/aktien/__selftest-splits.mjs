@@ -4,7 +4,7 @@
  *   node server/aktien/__selftest-splits.mjs
  */
 import assert from 'node:assert/strict'
-import { ausSplits, bereinigeSplits, bereinigeSeite, verdaechtigeSpruenge } from './splits.js'
+import { ausSplits, bereinigeSplits, bereinigeSeite, verdaechtigeSpruenge, bereinigeFunding, positionUeberSplit, faelligeSplits, leseSplitVermerk } from './splits.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -115,5 +115,50 @@ ok(bereinigeSeite([], [split], wissen).kerzen.length === 0 && bereinigeSeite(sei
 // Zusammengesetzt ergibt sich dieselbe Reihe wie beim Rechnen in einem Stück
 const gestueckelt = [...s3.kerzen, ...s2.kerzen, ...s1.kerzen]
 ok(gestueckelt.every((k, i) => Math.abs(k.c - r.kerzen[i].c) < 1e-9 && Math.abs(k.v - r.kerzen[i].v) < 1e-9), 'seitenweise gerechnet = in einem Stück gerechnet')
+
+// ── Funding über einen Split: Mark-Preise davor in den neuen Massstab ──
+{
+    const bericht = [{ t: 1000, faktor: 20, bei: 1000, angewendet: true }, { t: 5000, faktor: 0.5, bei: 5000, angewendet: true },
+        { t: 3000, faktor: 4, bei: null, angewendet: false }]
+    const verlauf = [{ t: 500, rate: 0.0001, markPrice: 400 }, { t: 1000, rate: 0.0001, markPrice: 20 }, { t: 6000, rate: 0.0001, markPrice: 40 }, { t: 700, rate: 0.0002 }]
+    const b = bereinigeFunding(verlauf, bericht)
+    ok(b[0].markPrice === 400 / 20 / 0.5 && b[1].markPrice === 20 / 0.5 && b[2] === verlauf[2], 'Mark-Preis vor dem Sprung durch jeden späteren Faktor geteilt, danach unverändert')
+    ok(b[3] === verlauf[3] && verlauf[0].markPrice === 400, 'ohne Mark-Preis unverändert; die Eingabe bleibt, wie sie war')
+    ok(bereinigeFunding(verlauf, []) === verlauf && bereinigeFunding(null, bericht) === null && bereinigeFunding(verlauf, [bericht[2]]) === verlauf, 'kein angewendeter Split: dieselbe Liste')
+}
+
+// ── Offene Position über einen Split (Bitget-Regel: Menge × Faktor, Kurse ÷ Faktor) ──
+{
+    const pos = { qty: 2, initialQty: 3, partialQty: 1, entryPrice: 480, stopLoss: 470, initialStopLoss: 460, takeProfit: 520,
+        maePrice: 475, mfePrice: 500, partialPrice: 490, notionalUsdt: 1440, marginUsdt: 288, feeOpen: 0.86, partialGross: 10, partialFee: 0.3, leverage: 5 }
+    const vor = positionUeberSplit(pos, 20)
+    ok(vor.qty === 40 && vor.initialQty === 60 && vor.partialQty === 20, 'Vorwärts-Split 20:1: Mengen mal 20')
+    ok(vor.entryPrice === 24 && vor.stopLoss === 23.5 && vor.initialStopLoss === 23 && vor.takeProfit === 26 && vor.maePrice === 23.75 && vor.mfePrice === 25 && vor.partialPrice === 24.5, 'Einstieg, Stop, Ursprungsstop, Ziel, MAE/MFE, Teilausstieg durch 20')
+    ok(!('notionalUsdt' in vor) && !('marginUsdt' in vor) && !('feeOpen' in vor) && !('partialGross' in vor) && !('leverage' in vor), 'Geldbeträge und Hebel bleiben')
+    nah(vor.qty * vor.entryPrice, pos.qty * pos.entryPrice, 'der Wert der Position bleibt gleich')
+    nah((vor.entryPrice - vor.initialStopLoss) * vor.initialQty, (pos.entryPrice - pos.initialStopLoss) * pos.initialQty, 'das Risiko in USDT (Basis für R) bleibt gleich')
+    const rueck = positionUeberSplit(pos, 0.1)
+    ok(Math.abs(rueck.qty - 0.2) < 1e-12 && Math.abs(rueck.entryPrice - 4800) < 1e-9 && Math.abs(rueck.stopLoss - 4700) < 1e-9 && Math.abs(rueck.takeProfit - 5200) < 1e-9, 'Zusammenlegung 1:10: Menge durch 10, Kurse mal 10')
+    const hin = { ...pos, ...vor }
+    const zurueck = { ...hin, ...positionUeberSplit(hin, 1 / 20) }
+    ok(['qty', 'entryPrice', 'stopLoss', 'takeProfit', 'mfePrice'].every((k) => Math.abs(zurueck[k] - pos[k]) < 1e-9), 'hin und zurück ergibt die Ausgangswerte')
+    const ohneZiel = positionUeberSplit({ qty: 1, entryPrice: 100, stopLoss: 90, takeProfit: 0, partialQty: 0 }, 2)
+    ok(!('takeProfit' in ohneZiel) && !('partialQty' in ohneZiel) && !('initialQty' in ohneZiel), '0 = «kein Ziel»/«kein Teilausstieg» und fehlende Felder bleiben unberührt')
+    ok(Object.keys(positionUeberSplit(pos, 1)).length === 0 && Object.keys(positionUeberSplit(pos, 0)).length === 0 && Object.keys(positionUeberSplit(pos, NaN)).length === 0, 'Faktor 1 oder unbrauchbar: nichts')
+    ok(pos.qty === 2 && pos.entryPrice === 480, 'die Eingabe bleibt unverändert')
+}
+
+// ── Welche Splits sind an einer Position noch fällig? ──
+{
+    const bericht = [{ t: 9 * H, faktor: 20, bei: 10 * H, angewendet: true }, { t: 30 * H, faktor: 2, bei: null, angewendet: false }]
+    const f = (lastCandleTime, vermerk = []) => faelligeSplits(bericht, { lastCandleTime, kerzeMs: H, vermerk }).length
+    ok(f(9 * H) === 1 && f(5 * H) === 1, 'zuletzt auf einer Kerze vor dem Sprung bewertet: fällig')
+    ok(f(10 * H) === 0 && f(12 * H) === 0, 'auf der Sprungkerze oder danach bewertet: schon im neuen Massstab')
+    ok(f(10 * H - 1) === 0, 'Einstieg zur Eröffnung der Sprungkerze (Stand = ihr Beginn − 1 ms): neuer Massstab')
+    ok(f(9 * H - 1) === 1, 'Einstieg zur Eröffnung der Kerze davor: alter Massstab')
+    ok(f(9 * H, [{ t: 9 * H, faktor: 20, bei: 10 * H }]) === 0, 'steht im Vermerk: erledigt — kein zweites Mal')
+    ok(f(0) === 0 && faelligeSplits([], { lastCandleTime: 5 * H, kerzeMs: H }).length === 0, 'ohne Stand oder ohne Bericht: nichts')
+    ok(leseSplitVermerk('[{"t":5,"faktor":2,"bei":6}]').length === 1 && leseSplitVermerk('').length === 0 && leseSplitVermerk(null).length === 0 && leseSplitVermerk('{kaputt').length === 0 && leseSplitVermerk([{ t: 3 }]).length === 1, 'Vermerk lesen: JSON, leer, kaputt, Liste')
+}
 
 console.log(`✓ Split-Wache: ${n} Prüfungen`)

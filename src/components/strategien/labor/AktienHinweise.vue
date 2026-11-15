@@ -3,7 +3,9 @@
  * Was ein Backtest auf einem Aktien-Future anders gerechnet hat und worauf
  * sein Ergebnis steht (`stats.aktien` aus `server/strategy-backtest.js`):
  * Börsensitzungen statt UTC-Tagen, umgerechnete Splits, Stichtage der Börse —
- * und das Ergebnis je Sitzung des Einstiegs. Ohne `aktien` (Coin) zeigt die
+ * und das Ergebnis je Sitzung des Einstiegs. Dazu, was der Simulation FEHLT:
+ * Dividenden werden nicht gebucht, und der Rutsch ausserhalb der regulären
+ * Sitzung ist nur eine einstellbare Annahme (Texte im Namensraum `aktienEngine`). Ohne `aktien` (Coin) zeigt die
  * Komponente nichts.
  */
 import { computed } from 'vue'
@@ -52,6 +54,14 @@ const summeTrades = computed(() => (props.aktien?.sitzungen || []).reduce((n, s)
 
         <Hinweis v-if="aktien.regime" art="warn" class="abstandUnten">
             {{ t(aktien.regime.ganzDavor ? 'strategies.aktien.regimeDavor' : 'strategies.aktien.regimeUeber', { boerse, tag: datum(aktien.regime.stichtag) }) }}
+        </Hinweis>
+
+        <!-- Was der Simulation fehlt: Dividenden werden nicht gebucht, Rutsch je Sitzung ist eine Annahme -->
+        <Hinweis art="warn" class="abstandUnten">{{ t('aktienEngine.dividenden') }}</Hinweis>
+        <Hinweis art="info" class="abstandUnten">
+            {{ aktien.rutschAusserhalbBps > 0
+                ? t('aktienEngine.rutschAn', { bps: zahl(aktien.rutschAusserhalbBps) })
+                : t('aktienEngine.rutschAus') }}
         </Hinweis>
 
         <!-- Quartalszahlen: Ergebnis mit und ohne Trades, die ein Zahlen-Fenster berührt haben -->

@@ -18,6 +18,8 @@
  * Backtest, den sie beurteilen soll.
  */
 
+import { aktienKontext } from './aktien/kontext.js'
+import { bereinigeSplits, bereinigeFunding } from './aktien/splits.js'
 import { runBacktest, berechneStatistik, MIN_TRADES_BELASTBAR, MAX_BACKTEST_CANDLES } from './strategy-backtest.js'
 import { getStrategy, validateParams, htfBedarf } from './strategies/index.js'
 import { getHistoricalCandles, getFundingHistory, getSymbolMeta, timeframeMs } from './market-data.js'
@@ -71,6 +73,13 @@ export async function ladeVorrat(basis, { stufen = [] } = {}) {
         candles: await getHistoricalCandles(basis.symbol, basis.timeframe,
             Number(basis.fromTs) - vorlauf, basis.toTs, { market, maxCandles: MAX_BACKTEST_CANDLES }),
         marketMeta: null, fundingVerlauf: null, htf: null,
+        // Aktien-Future? EINMAL gefragt (Stamm, Splits, Zahlentermine) und an
+        // jeden Teillauf weitergereicht — sonst fragte jede Stufe und jedes
+        // Fenster den Zehn-Minuten-Cache neu, und ein langer Lauf konnte
+        // mittendrin einen anderen Stand bekommen (Kursquelle fällt aus →
+        // Splits «unbekannt» → die zweite Hälfte rechnet unbereinigt).
+        // `basis.aktie` (auch `null` = Coin) geht vor.
+        aktie: basis.aktie !== undefined ? basis.aktie : await aktienKontext(basis.symbol),
     }
     try { vorrat.marketMeta = await getSymbolMeta(basis.symbol, { market }) } catch { vorrat.marketMeta = null }
     if (market === 'futures') {
@@ -112,6 +121,8 @@ function ausVorrat(vorrat, basis, params, von, bis) {
     const opts = {
         ...basis, params, fromTs: ab, toTs: bis, candles,
         marketMeta: vorrat.marketMeta, fundingVerlauf: vorrat.fundingVerlauf,
+        // `undefined` (Vorrat von vor dieser Angabe) lässt den Backtest selbst fragen.
+        aktie: vorrat.aktie,
     }
     const stufe = htfVorlaufKerzen(getStrategy(basis.strategyId), basis, params)
     if (vorrat.htf && stufe.tf === vorrat.htf.tf) {
@@ -415,7 +426,10 @@ export async function stabilitaetsMatrix(basis, paramKey, werte, { symbole = [] 
 
     const zellen = []
     for (const symbol of syms) {
-        const vorrat = await ladeVorrat({ ...basis, symbol }, { stufen: stufenParams(basis, paramKey, stufen) })
+        // Ein mitgegebener Aktien-Kontext gehört zum Symbol der Basis — für
+        // die anderen Symbole der Matrix fragt der Vorrat selbst.
+        const vorrat = await ladeVorrat({ ...basis, symbol, aktie: symbol === basis.symbol ? basis.aktie : undefined },
+            { stufen: stufenParams(basis, paramKey, stufen) })
         for (const f of fenster) {
             const r = await parameterStabilitaet(
                 { ...basis, symbol, fromTs: f.von, toTs: f.bis }, paramKey, stufen,
@@ -579,7 +593,18 @@ export async function ausstiegsPruefung(basis, { variante = null } = {}) {
     if (market === 'futures') {
         try { fundingVerlauf = await getFundingHistory(basis.symbol, basis.fromTs, basis.toTs) } catch { fundingVerlauf = null }
     }
-    const lauf = await runBacktest({ ...basis, candles, marketMeta, fundingVerlauf })
+    // Aktien-Future: einmal fragen und durchreichen. Der Lauf rechnet auf
+    // split-bereinigten Kerzen und Mark-Preisen — das Raster unten muss
+    // dieselben sehen, sonst spielt es Trades im neuen Massstab auf Kerzen im
+    // alten nach.
+    const aktie = basis.aktie !== undefined ? basis.aktie : await aktienKontext(basis.symbol)
+    const lauf = await runBacktest({ ...basis, candles, marketMeta, fundingVerlauf, aktie })
+    let rasterKerzen = candles
+    if (aktie?.splits) {
+        const b = bereinigeSplits(candles, aktie.splits)
+        rasterKerzen = b.kerzen
+        fundingVerlauf = bereinigeFunding(fundingVerlauf, b.splits)
+    }
     const stats = lauf.stats || {}
     const kopf = {
         trades: stats.trades || 0,
@@ -604,8 +629,8 @@ export async function ausstiegsPruefung(basis, { variante = null } = {}) {
             return summe
         }
     }
-    const ausstiege = await ausstiegsRaster(lauf.trades, candles, {
-        costs: kostenAus(risk),
+    const ausstiege = await ausstiegsRaster(lauf.trades, rasterKerzen, {
+        costs: kostenAus(risk, { aktie: Boolean(aktie) }),
         kerzeMs: timeframeMs(basis.timeframe),
         wartungsmargePct: stats.wartungsmargePct,
         funding,

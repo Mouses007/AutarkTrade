@@ -156,3 +156,87 @@ export function verdaechtigeSpruenge(kerzen = []) {
     }
     return aus
 }
+
+/* ── Funding und offene Papier-Positionen über einen Split ────────── */
+
+/**
+ * Funding-Verlauf in den Massstab der bereinigten Kerzen bringen.
+ *
+ * Die Börse rechnet Funding auf Menge × Mark-Preis der Abrechnung. Der
+ * Mark-Preis im Verlauf steht — wie die Kerzen — im Massstab seiner Zeit; die
+ * Menge einer Position dagegen im Massstab NACH dem Split (Backtest: bereinigte
+ * Kerzen, Papier: umgerechnete Position). Ohne diese Umrechnung zählte jede
+ * Abrechnung vor einem Split 20:1 das Zwanzigfache.
+ *
+ * @param {{t, rate, markPrice?}[]|null} verlauf  wird nicht verändert
+ * @param {{faktor, bei, angewendet?}[]} splits   Bericht aus `bereinigeSplits` (nur `angewendet` zählt)
+ *                                                oder der Vermerk einer Position
+ */
+export function bereinigeFunding(verlauf, splits = []) {
+    const wirksam = (splits || []).filter((s) => s && s.angewendet !== false && s.faktor > 0 && s.bei > 0)
+    if (!Array.isArray(verlauf) || !wirksam.length) return verlauf
+    return verlauf.map((e) => {
+        if (!(Number(e?.markPrice) > 0)) return e
+        let f = 1
+        for (const s of wirksam) if (Number(e.t) < s.bei) f *= s.faktor
+        return f === 1 ? e : { ...e, markPrice: Number(e.markPrice) / f }
+    })
+}
+
+/** Felder einer Position (`strategy_positions`), die Stückzahlen bzw. Kurse sind. */
+const POSITION_MENGEN = ['qty', 'initialQty', 'partialQty']
+const POSITION_KURSE = ['entryPrice', 'stopLoss', 'initialStopLoss', 'takeProfit', 'maePrice', 'mfePrice', 'partialPrice']
+
+/**
+ * Eine offene Position über einen Split umrechnen — so, wie Bitget es tut
+ * (`docs/RECHERCHE-AKTIEN.md`): Menge × Faktor, Kurse ÷ Faktor. Einstieg,
+ * laufender und ursprünglicher Stop, Ziel, die mitgeschriebenen Extreme
+ * (MAE/MFE) und ein schon genommener Teilausstieg wandern mit. Nominalwert,
+ * Marge, Gebühren und das gebuchte Teilergebnis sind Geldbeträge und bleiben.
+ *
+ * Gibt nur die GEÄNDERTEN Felder zurück (für ein `update`); Felder ohne Wert
+ * (0 = «kein Ziel», fehlende Spalte) bleiben unberührt.
+ *
+ * Die neue Menge wird nicht auf die Schrittweite der Börse gerundet: was die
+ * Börse mit Bruchteilen macht, ist nicht belegt.
+ *
+ * @param {object} zeile   Zeile aus `strategy_positions` oder Position des Simulators
+ * @param {number} faktor  > 1 = Aktiensplit (20:1 → 20), < 1 = Zusammenlegung (1:10 → 0,1)
+ */
+export function positionUeberSplit(zeile, faktor) {
+    const f = Number(faktor)
+    if (!(f > 0) || f === 1) return {}
+    const aus = {}
+    for (const k of POSITION_MENGEN) if (Number(zeile[k]) > 0) aus[k] = Number(zeile[k]) * f
+    for (const k of POSITION_KURSE) if (Number(zeile[k]) > 0) aus[k] = Number(zeile[k]) / f
+    return aus
+}
+
+/** Der Vermerk `splitsAngewendet` (JSON-Text oder Liste) als Liste `[{t, faktor, bei}]`. */
+export function leseSplitVermerk(wert) {
+    let liste = wert
+    if (typeof wert === 'string') {
+        try { liste = JSON.parse(wert) } catch { liste = null }
+    }
+    return Array.isArray(liste) ? liste.filter((s) => s && Number(s.t) > 0) : []
+}
+
+/**
+ * Welche Splits sind an einer offenen Position noch umzurechnen?
+ *
+ * Ein Split betrifft die Position, wenn sie zuletzt auf einer Kerze VOR dem
+ * Sprung bewertet wurde (`lastCandleTime` + Kerzenlänge ≤ Beginn der ersten
+ * Kerze im neuen Massstab) — dann stehen ihre Kurse noch im alten Massstab.
+ * Eine Position, die auf der Sprungkerze oder danach entstand, wurde schon aus
+ * bereinigten Kerzen gebaut. Was im Vermerk steht, ist erledigt.
+ *
+ * @param {{t, faktor, text?, angewendet, bei}[]} bericht  aus `bereinigeSplits`, aufsteigend
+ * @param {{lastCandleTime: number, kerzeMs: number, vermerk: object[]}} stand
+ * @returns {object[]} die fälligen Einträge des Berichts, aufsteigend
+ */
+export function faelligeSplits(bericht = [], { lastCandleTime, kerzeMs = 0, vermerk = [] } = {}) {
+    const erledigt = new Set(vermerk.map((s) => Number(s.t)))
+    const zuletzt = Number(lastCandleTime) || 0
+    return bericht.filter((s) => s.angewendet && s.bei > 0 && !erledigt.has(Number(s.t))
+        && zuletzt > 0 && zuletzt + (Number(kerzeMs) || 0) <= s.bei)
+}

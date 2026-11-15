@@ -21,6 +21,9 @@ await knex('settings').insert({ id: 1 })
 // Zwei der sechs Tabellen gibt es, mit je einer alten Zeile; die anderen fehlen.
 await knex.schema.createTable('coin_universen', (t) => { t.increments('id').primary(); t.string('name') })
 await knex.schema.createTable('strategy_instances', (t) => { t.increments('id').primary(); t.string('symbols') })
+// Eine offene Papier-Position von vor der Spalte `splitsAngewendet`; `strategy_setups` fehlt.
+await knex.schema.createTable('strategy_positions', (t) => { t.increments('id').primary(); t.double('qty') })
+await knex('strategy_positions').insert({ qty: 2 })
 await knex('coin_universen').insert({ name: 'alt' })
 await knex('strategy_instances').insert({ symbols: '["BTCUSDT"]' })
 
@@ -38,6 +41,9 @@ for (const t of TABELLEN_MIT_ANLAGEKLASSE) {
     if (await knex.schema.hasTable(t)) ok(await knex.schema.hasColumn(t, 'anlageklasse'), `${t}.anlageklasse`)
 }
 ok(!(await knex.schema.hasTable('chart_alarme')), 'fehlende Tabelle bleibt fehlend')
+ok(await knex.schema.hasColumn('strategy_positions', 'splitsAngewendet'), 'strategy_positions.splitsAngewendet')
+ok(!(await knex('strategy_positions').first()).splitsAngewendet, 'alte Position: kein Split vermerkt')
+ok(!(await knex.schema.hasTable('strategy_setups')), 'fehlende Tabelle strategy_setups bleibt fehlend')
 
 const s = await knex('settings').where('id', 1).first()
 ok(s.aktiverMarkt === 'krypto', 'Vorgabe aktiverMarkt = krypto')

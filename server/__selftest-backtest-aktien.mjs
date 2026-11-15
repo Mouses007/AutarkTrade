@@ -8,6 +8,9 @@
 import assert from 'node:assert/strict'
 import { runBacktest } from './strategy-backtest.js'
 import { sitzungVon } from '../shared/aktien-sitzung.js'
+import { bereinigeSplits } from './aktien/splits.js'
+import { satzFuer, kostenAus, rutschAufschlag, createPosition, closePosition, MARKT, LIMIT } from './fill-simulator.js'
+import { evaluateRisk } from './risk-engine.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -56,11 +59,11 @@ const manifest = {
         return { setups, events, diagnostics: {} }
     },
 }
-const lauf = (kerzen, aktie, risk = {}) => runBacktest({
+const lauf = (kerzen, aktie, risk = {}, extra = {}) => runBacktest({
     strategyId: 'aktien_test', strategie: manifest, symbol: 'TESTUSDT', timeframe: '1h', market: 'futures',
     risk: { riskPerTradePct: 1, maxNotionalUsdt: 1e6, leverage: 5, minRR: 1, maintenanceMarginPct: 0.5, cooldownMinutes: 0, maxDailyLossPct: 25, ...risk },
     startEquity: 10000, candles: kerzen, marketMeta: {}, fundingVerlauf: [], fromTs: T0, toTs: T0 + kerzen.length * H,
-    aktie,
+    aktie, ...extra,
 })
 const AKTIE = { ticker: 'TEST', boerse: 'bitunix', splits: [], splitsGrund: null }
 
@@ -135,5 +138,59 @@ ok(zl.stats.aktien.zahlen.bekanntAb < T0, 'Gegenprobe: im kurzen Lauf liegt der 
 
 const coinMitSperre = await lauf(kerzen, null, { meideZahlentermine: true })
 ok(coinMitSperre.trades.length === coin.trades.length, 'Coin: die Zahlen-Sperre wirkt nicht')
+
+// ── Funding über einen Split: Lauf auf rohen Kerzen + Split = Lauf auf vorab bereinigten Kerzen ──
+{
+    // Abrechnung alle 8 h zum Schlusskurs der Kerze — roh steht der Mark-Preis vor dem Sprung im alten Massstab.
+    const verlaufAus = (ks) => ks.filter((k) => k.t % (8 * H) === 0).map((k) => ({ t: k.t, rate: 0.0002, markPrice: k.c }))
+    const mitSplit = await lauf(mitSprung, { ...AKTIE, splits: [split] }, {}, { fundingVerlauf: verlaufAus(mitSprung) })
+    const sauber = bereinigeSplits(mitSprung, [split]).kerzen
+    const vorab = await lauf(sauber, AKTIE, {}, { fundingVerlauf: verlaufAus(sauber) })
+    ok(mitSplit.trades.length === vorab.trades.length && mitSplit.trades.length > 60, 'gleiche Trades auf rohen Kerzen mit Split wie auf vorab bereinigten')
+    ok(mitSplit.trades.some((t) => t.entryTime < T0 + 450 * H && t.funding !== 0), 'es gibt Trades vor dem Sprung, die Funding zahlen')
+    ok(mitSplit.trades.every((t, i) => Math.abs(t.funding - vorab.trades[i].funding) < 1e-9 && Math.abs(t.netPnl - vorab.trades[i].netPnl) < 1e-9),
+        'Funding und Netto je Trade gleich — die Mark-Preise vor dem Sprung sind umgerechnet')
+    const ohneUmrechnung = mitSprung.filter((k) => k.t % (8 * H) === 0 && k.t < T0 + 450 * H).length
+    ok(ohneUmrechnung > 20 && mitSprung[100].c / sauber[100].c > 9.9, 'Gegenprobe: der rohe Mark-Preis davor ist das Zehnfache — ohne Umrechnung wäre das Funding zehnmal zu hoch')
+}
+
+// ── Rutsch-Aufschlag ausserhalb der regulären Sitzung (Vorgabe aus) ──
+{
+    const SO = Date.UTC(2026, 10, 15, 13), DI = Date.UTC(2026, 10, 10, 16)   // Sonntag / Dienstag 11:00 New York
+    const risk = { feeMakerBps: 2, feeTakerBps: 6, slippageBps: 2, slippageAusserhalbBps: 40 }
+    const ka = kostenAus(risk, { aktie: true }), kc = kostenAus(risk)
+    ok(ka.slippageAusserhalbBps === 40 && kc.slippageAusserhalbBps === 0 && kostenAus(risk, { aktie: false }).slippageAusserhalbBps === 0, 'kostenAus: der Aufschlag reist nur für Aktien mit')
+    ok(rutschAufschlag(ka, SO) === 40 && rutschAufschlag(ka, DI) === 0 && rutschAufschlag(ka, 0) === 0 && rutschAufschlag(kc, SO) === 0 && rutschAufschlag({}, SO) === 0, 'Aufschlag nur ausserhalb der regulären Sitzung, nur mit Zeit, nur wenn gesetzt')
+    ok(satzFuer(ka, MARKT, SO).slippageBps === 42 && satzFuer(ka, MARKT, DI).slippageBps === 2 && satzFuer(ka, MARKT).slippageBps === 2, 'Marktorder: 2 + 40 bp am Sonntag, 2 bp regulär und ohne Zeit')
+    ok(satzFuer(ka, LIMIT, SO).slippageBps === 0 && satzFuer(ka, MARKT, SO).feeBps === 6, 'Limit rutscht nie; die Gebühr bleibt')
+    ok(satzFuer(kc, MARKT, SO).slippageBps === 2, 'Coin: 2 bp, auch am Sonntag')
+    const su = { direction: 'long', entry: 100, stopLoss: 95, takeProfit: 110, entryTrigger: 'market' }
+    const pSo = createPosition({ setup: su, qty: 1, entryPrice: 100, entryTime: SO, costs: ka })
+    const pDi = createPosition({ setup: su, qty: 1, entryPrice: 100, entryTime: DI, costs: ka })
+    ok(Math.abs(pSo.entryPrice - 100.42) < 1e-9 && Math.abs(pDi.entryPrice - 100.02) < 1e-9, 'Markt-Einstieg: am Sonntag 42 bp teurer, am Dienstag 2 bp')
+    ok(Math.abs(closePosition(pDi, { price: 95, reason: 'sl', time: SO }, ka).exitPrice - 95 * (1 - 0.0042)) < 1e-9
+        && Math.abs(closePosition(pDi, { price: 95, reason: 'sl', time: DI }, ka).exitPrice - 95 * (1 - 0.0002)) < 1e-9
+        && closePosition(pDi, { price: 110, reason: 'tp', time: SO }, ka).exitPrice === 110, 'Stop am Sonntag rutscht 42 bp, am Dienstag 2 bp; das Ziel (Limit) gar nicht')
+    // Positionsgrösse: der teurere Einstieg zählt zum Risiko am Stop
+    const groesse = (extra) => evaluateRisk({ setup: { ...su, symbol: 'X', rr: 2 }, equity: 10000, now: SO + H, marketMeta: {},
+        risk: { riskPerTradePct: 1, maxDailyLossPct: 50, maxConcurrentPositions: 5, maxNotionalUsdt: 1e9, leverage: 5, cooldownMinutes: 0, minRR: 1, ...risk }, ...extra }).size.qty
+    const qCoin = groesse({}), qSo = groesse({ aktie: true, einstiegsZeit: SO }), qDi = groesse({ aktie: true, einstiegsZeit: DI })
+    ok(qSo < qDi && qDi === qCoin && groesse({ aktie: false, einstiegsZeit: SO }) === qCoin, `Grösse: am Sonntag kleiner (${qSo.toFixed(3)} < ${qDi.toFixed(3)}), regulär und beim Coin unverändert`)
+
+    const auf = await lauf(kerzen, AKTIE, { slippageAusserhalbBps: 40 })
+    ok(aktie.stats.aktien.rutschAusserhalbBps === 0 && auf.stats.aktien.rutschAusserhalbBps === 40 && aktie.stats.aktien.dividendenGebucht === false, 'Ergebnis nennt den Aufschlag (Vorgabe 0) und dass Dividenden fehlen')
+    ok(auf.trades.length === aktie.trades.length, 'der Aufschlag ändert die Zahl der Trades nicht')
+    const paare = auf.trades.map((t, i) => [t, aktie.trades[i]])
+    ok(paare.every(([a, b]) => a.entryTime === b.entryTime && (a.sitzung === 'regulaer'
+        ? Math.abs(a.entryPrice - b.entryPrice) < 1e-9
+        : Math.abs(a.entryPrice / b.entryPrice - 1.0042 / 1.0002) < 1e-9)), 'Markt-Einstiege ausserhalb der Sitzung 40 bp teurer, in der Sitzung gleich')
+    const drinnen = paare.filter(([a]) => a.sitzung === 'regulaer' && (a.exitReason === 'tp' || sitzungVon(a.exitTime) === 'regulaer'))
+    ok(drinnen.length > 3 && drinnen.every(([a, b]) => Math.abs(a.rMultiple - b.rMultiple) < 1e-9), `Trades ganz in der regulären Sitzung: R unverändert (${drinnen.length})`)
+    const summe = (e) => e.trades.reduce((x, t) => x + t.rMultiple, 0)
+    ok(summe(auf) < summe(aktie) - 1, `Summe R mit Aufschlag schlechter (${summe(auf).toFixed(1)} gegen ${summe(aktie).toFixed(1)})`)
+    const coinAuf = await lauf(kerzen, null, { slippageAusserhalbBps: 40 })
+    ok(coinAuf.trades.length === coin.trades.length && coinAuf.trades.every((t, i) => t.netPnl === coin.trades[i].netPnl && t.qty === coin.trades[i].qty && t.entryPrice === coin.trades[i].entryPrice),
+        'Coin mit gesetztem Aufschlag: jeder Trade bitgleich')
+}
 
 console.log(`✓ Backtest Aktien: ${n} Prüfungen`)

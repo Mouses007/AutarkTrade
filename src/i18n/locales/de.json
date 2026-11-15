@@ -9264,5 +9264,12 @@
     "quelleAus": "Die Marktdatenquelle ist ausgeschaltet (Einstellungen › Datenquellen).",
     "ladeFehler": "Aktien-Radar nicht ladbar",
     "hinweis": "Stärke und 52-Wochen-Hoch stammen aus Tageskursen der Aktie, alles andere vom Future an der Börse. Ausserhalb der Börsenzeiten ist dort wenig Volumen. Keine Empfehlung."
+  },
+  "aktienEngine": {
+    "rutschAusserhalb": "Aktien: Rutsch-Aufschlag ausserhalb der Sitzung (Basispunkte)",
+    "rutschAusserhalbHint": "Nur bei Aktien-Futures. Zusätzlicher Rutsch je Marktorder (Stop, Zeitausstieg, Markt-Einstieg), wenn sie ausserhalb der regulären US-Sitzung füllt: vor- und nachbörslich, nachts, am Wochenende, an Feiertagen. Dort ist das Band dünn (Volumen je Stunde über Nacht rund 28 %, am Wochenende rund 10 % der regulären Stunde). Spread und Tiefe sind nicht gemessen, deshalb ist die Vorgabe 0 (aus) und jeder Wert eine eigene Annahme. Bei Coins ohne Wirkung.",
+    "rutschAn": "Rutsch-Aufschlag ausserhalb der regulären Sitzung: {bps} Basispunkte je Marktorder zusätzlich. Das ist die eingestellte Annahme, kein Messwert.",
+    "rutschAus": "Rutsch ausserhalb der regulären Sitzung ist nicht eigens gerechnet: jede Marktorder rutscht gleich viel, obwohl das Band über Nacht und am Wochenende dünner ist. Ein Aufschlag lässt sich in den Risiko-Einstellungen setzen (Vorgabe aus, weil Spread und Tiefe nicht gemessen sind).",
+    "dividenden": "Dividenden fehlen in der Simulation. Bitget bucht bei Aktien-Futures eine Einmalzahlung von Short an Long am Vortag des Ex-Tags (nicht bei ETFs); für Binance und Bitunix ist das nicht belegt. Hier wird nichts davon gebucht: eine Long-Position über einen Ex-Tag steht im Ergebnis etwas zu schlecht da, eine Short-Position etwas zu gut."
   }
 }

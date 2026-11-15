@@ -71,6 +71,16 @@ export const RISK_PARAMS = [
     { key: 'feeTakerBps', type: 'number', default: 6, min: 0, max: 100, step: 0.01, group: 'costs' },
     // Gilt nur für Marktorders — eine Limit-Order füllt zum Limitpreis.
     { key: 'slippageBps', type: 'number', default: 2, min: 0, max: 100, step: 0.01, group: 'costs' },
+    // Nur Aktien-Futures: zusätzlicher Rutsch je Marktorder AUSSERHALB der
+    // regulären US-Sitzung (vor-/nachbörslich, Nacht, Wochenende, Feiertag).
+    // Dort ist das Band dünn (Volumen je Stunde über Nacht rund 28 %, am
+    // Wochenende rund 10 % der regulären Stunde) — Spread und Tiefe sind aber
+    // nicht gemessen. Deshalb Vorgabe 0 (aus): wer einen Wert setzt, trifft
+    // eine eigene Annahme. Bei Coins ohne Wirkung (`kostenAus`, `rutschAufschlag`).
+    {
+        key: 'slippageAusserhalbBps', type: 'number', default: 0, min: 0, max: 200, step: 0.01, group: 'costs',
+        labelKey: 'aktienEngine.rutschAusserhalb', hintKey: 'aktienEngine.rutschAusserhalbHint',
+    },
     // Ordersorte des Einstiegs. Alle heutigen Strategien steigen auf einem
     // vorher berechneten Kursniveau ein (`setup.entry`), also als Limit — auch
     // die bestätigten Varianten, die nur später scharf schalten. Eine Strategie,

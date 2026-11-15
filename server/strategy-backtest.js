@@ -18,7 +18,7 @@ import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { evaluateRisk, startOfDayUtc } from './risk-engine.js'
 import { wartungsmargeMitQuelle } from './margin-rates.js'
 import { aktienKontext } from './aktien/kontext.js'
-import { bereinigeSplits, verdaechtigeSpruenge } from './aktien/splits.js'
+import { bereinigeSplits, bereinigeFunding, verdaechtigeSpruenge } from './aktien/splits.js'
 import { sitzungVon, handelstagBeginn, sitzungsBilanz, regimeWechsel } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, beruehrtZahlen, zahlenBilanz, terminListe } from '../shared/aktien-zahlen.js'
 import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, istSchlussEinstieg, riskPerUnit, fundingFor } from './fill-simulator.js'
@@ -336,7 +336,9 @@ export async function runBacktest(opts) {
     const volleHistorie = sichtBedarf === Infinity
     const fenster = volleHistorie ? 0 : sichtBedarf
 
-    const costs = kostenAus(risk)
+    // Für Aktien-Futures reist der Rutsch-Aufschlag ausserhalb der regulären
+    // Sitzung mit (Vorgabe 0); bei Coins nie.
+    const costs = kostenAus(risk, { aktie: Boolean(aktie) })
 
     // Rundung und Mindestmengen der Marktdatenquelle — dieselben, die der
     // Papierbetrieb anlegt. Ohne sie gab es `size_too_small` nur im Papier,
@@ -359,6 +361,9 @@ export async function runBacktest(opts) {
                 : await getFundingHistory(symbol, opts.fromTs, opts.toTs)
         } catch { fundingVerlauf = null }
     }
+    // Über einen Split: die Mark-Preise des Verlaufs stehen im Massstab ihrer
+    // Zeit, die Mengen des Laufs im Massstab nach dem Split (bereinigte Kerzen).
+    if (splitBericht.length) fundingVerlauf = bereinigeFunding(fundingVerlauf, splitBericht)
     const mitFundingVerlauf = Array.isArray(fundingVerlauf) && fundingVerlauf.length > 0
 
     // Deckt der Verlauf den gehandelten Zeitraum überhaupt ab?
@@ -660,6 +665,9 @@ export async function runBacktest(opts) {
                 lastExitBySymbol,
                 now: stichtag,
                 marketMeta,
+                // Nur für den Rutsch-Aufschlag eines Aktien-Futures ausserhalb der Sitzung.
+                aktie: Boolean(aktie),
+                einstiegsZeit: sameBarStop ? triggerKerze.t : einstiegsZeit(ev, setup, triggerKerze.t, timeframeMs(timeframe)),
             })
             if (!pruefung.ok) {
                 bump(funnel.riskRejected, pruefung.reason)
@@ -816,6 +824,12 @@ export async function runBacktest(opts) {
                 },
                 // Der Zeitraum reicht vor den Tag, ab dem die Börse am Wochenende frei handelt
                 regime: regimeWechsel(aktie.boerse, candles[warmup]?.t ?? candles[0].t, letzte.t),
+                // Rutsch-Aufschlag je Marktorder ausserhalb der regulären Sitzung (0 = aus).
+                // Eine Annahme des Nutzers — Spread und Tiefe je Sitzung sind nicht gemessen.
+                rutschAusserhalbBps: Number(risk.slippageAusserhalbBps) || 0,
+                // Dividenden bucht die Simulation nicht (nur Bitget zahlt belegt, Short → Long
+                // am Vortag des Ex-Tags; Binance und Bitunix unbelegt). `false` = fehlt im Ergebnis.
+                dividendenGebucht: false,
             } : null,
             unrealisiertPnl: unrealisiert,
             endEquityMitOffenen: equity + unrealisiert,
