@@ -166,7 +166,10 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? 'â
                             <router-link :to="chartZiel(z)" :title="t('aktienradar.zumChart')">{{ z.boersen?.ticker || z.symbol }}</router-link>
                             <span v-if="z.boersen?.unterart && z.boersen.unterart !== 'aktie'" class="art">{{ t('aktien.art_' + z.boersen.unterart) }}</span>
                         </td>
-                        <td class="name">{{ z.boersen?.name || 'â€”' }}</td>
+                        <td class="name">
+                            <router-link v-if="z.boersen?.ticker" :to="{ path: '/aktien', query: { titel: z.boersen.ticker } }" :title="t('titel.oeffnen')">{{ z.boersen?.name || z.boersen.ticker }}</router-link>
+                            <template v-else>â€”</template>
+                        </td>
                         <td class="rechts">{{ gross(z.umsatz24h) }}</td>
                         <td class="rechts">{{ z.spreadBp == null ? 'â€”' : zahl(z.spreadBp, 1) + ' bp' }}</td>
                         <template v-if="!mitHuerden">
@@ -272,12 +275,14 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? 'â
     cursor: help;
 }
 
-.ticker a {
+.ticker a,
+.name a {
     color: inherit;
     text-decoration: none;
 }
 
-.ticker a:hover {
+.ticker a:hover,
+.name a:hover {
     color: var(--accent);
 }
 

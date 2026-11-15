@@ -1,0 +1,518 @@
+{
+ "quoteSummary": {
+  "result": [
+   {
+    "assetProfile": {
+     "country": "United States",
+     "website": "https://www.nvidia.com",
+     "industry": "Semiconductors",
+     "sector": "Technology",
+     "longBusinessSummary": "NVIDIA Corporation operates as a data center scale AI infrastructure company in the United States, Taiwan, China, Hong Kong, Europe, and internationally. It operates through Compute & Networking, and Graphics segments. The Compute & Networking segment provides data center accelerated computing and n",
+     "fullTimeEmployees": 42000,
+     "companyOfficers": []
+    },
+    "recommendationTrend": {
+     "trend": [
+      {
+       "period": "0m",
+       "strongBuy": 10,
+       "buy": 37,
+       "hold": 14,
+       "sell": 0,
+       "strongSell": 0
+      },
+      {
+       "period": "-1m",
+       "strongBuy": 10,
+       "buy": 49,
+       "hold": 2,
+       "sell": 1,
+       "strongSell": 0
+      },
+      {
+       "period": "-2m",
+       "strongBuy": 10,
+       "buy": 49,
+       "hold": 2,
+       "sell": 1,
+       "strongSell": 0
+      },
+      {
+       "period": "-3m",
+       "strongBuy": 9,
+       "buy": 48,
+       "hold": 2,
+       "sell": 1,
+       "strongSell": 0
+      }
+     ],
+     "maxAge": 86400
+    },
+    "summaryDetail": {
+     "dayLow": {
+      "raw": 158.39,
+      "fmt": "158.39"
+     },
+     "dayHigh": {
+      "raw": 170.0,
+      "fmt": "170.00"
+     },
+     "fiftyTwoWeekLow": {
+      "raw": 148.8,
+      "fmt": "148.80"
+     },
+     "fiftyTwoWeekHigh": {
+      "raw": 243.37,
+      "fmt": "243.37"
+     },
+     "trailingPE": {
+      "raw": 20.587864,
+      "fmt": "20.59"
+     },
+     "forwardPE": {
+      "raw": 10.272057,
+      "fmt": "10.27"
+     },
+     "dividendYield": {
+      "raw": 0.0061000003,
+      "fmt": "0.61%"
+     },
+     "volume": {
+      "raw": 362490337,
+      "fmt": "362.49M",
+      "longFmt": "362,490,337"
+     },
+     "averageVolume": {
+      "raw": 146134656,
+      "fmt": "146.13M",
+      "longFmt": "146,134,656"
+     },
+     "marketCap": {
+      "raw": 3932339044352,
+      "fmt": "3.93T",
+      "longFmt": "3,932,339,044,352"
+     },
+     "beta": {
+      "raw": 2.247,
+      "fmt": "2.25"
+     }
+    },
+    "earnings": {
+     "earningsChart": {
+      "quarterly": [
+       {
+        "date": "3Q2025",
+        "actual": {
+         "raw": 1.3,
+         "fmt": "1.3"
+        },
+        "estimate": {
+         "raw": 1.25647,
+         "fmt": "1.26"
+        },
+        "fiscalQuarter": "3Q2026",
+        "calendarQuarter": "3Q2025",
+        "difference": "0.04",
+        "surprisePct": "3.46",
+        "periodEndDate": {
+         "raw": 1761868800,
+         "fmt": "2025-10-31"
+        },
+        "reportedDate": {
+         "raw": 1763587200,
+         "fmt": "2025-11-19"
+        }
+       },
+       {
+        "date": "4Q2025",
+        "actual": {
+         "raw": 1.62,
+         "fmt": "1.62"
+        },
+        "estimate": {
+         "raw": 1.53812,
+         "fmt": "1.54"
+        },
+        "fiscalQuarter": "4Q2026",
+        "calendarQuarter": "4Q2025",
+        "difference": "0.08",
+        "surprisePct": "5.32",
+        "periodEndDate": {
+         "raw": 1769817600,
+         "fmt": "2026-01-31"
+        },
+        "reportedDate": {
+         "raw": 1772055085,
+         "fmt": "2026-02-25"
+        }
+       },
+       {
+        "date": "1Q2026",
+        "actual": {
+         "raw": 1.87,
+         "fmt": "1.9"
+        },
+        "estimate": {
+         "raw": 1.77191,
+         "fmt": "1.8"
+        },
+        "fiscalQuarter": "1Q2027",
+        "calendarQuarter": "1Q2026",
+        "difference": "0.1",
+        "surprisePct": "5.54",
+        "periodEndDate": {
+         "raw": 1777507200,
+         "fmt": "2026-04-30"
+        },
+        "reportedDate": {
+         "raw": 1779308400,
+         "fmt": "2026-05-20"
+        }
+       },
+       {
+        "date": "2Q2026",
+        "actual": {
+         "raw": 2.22,
+         "fmt": "2.22"
+        },
+        "estimate": {
+         "raw": 2.09113,
+         "fmt": "2.09"
+        },
+        "fiscalQuarter": "2Q2027",
+        "calendarQuarter": "2Q2026",
+        "difference": "0.13",
+        "surprisePct": "6.16",
+        "periodEndDate": {
+         "raw": 1785456000,
+         "fmt": "2026-07-31"
+        },
+        "reportedDate": {
+         "raw": 1787775600,
+         "fmt": "2026-08-26"
+        }
+       }
+      ]
+     }
+    },
+    "calendarEvents": {
+     "maxAge": 1,
+     "earnings": {
+      "earningsDate": [
+       {
+        "raw": 1794949200,
+        "fmt": "2026-11-17"
+       }
+      ],
+      "earningsCallDate": [
+       {
+        "raw": 1794952800,
+        "fmt": "2026-11-17"
+       }
+      ],
+      "isEarningsDateEstimate": false,
+      "earningsAverage": {
+       "raw": 2.47121,
+       "fmt": "2.47"
+      },
+      "earningsLow": {
+       "raw": 2.25754,
+       "fmt": "2.26"
+      },
+      "earningsHigh": {
+       "raw": 2.7,
+       "fmt": "2.70"
+      },
+      "revenueAverage": {
+       "raw": 108731903900,
+       "fmt": "108.73B",
+       "longFmt": "108,731,903,900"
+      },
+      "revenueLow": {
+       "raw": 100481000000,
+       "fmt": "100.48B",
+       "longFmt": "100,481,000,000"
+      },
+      "revenueHigh": {
+       "raw": 116251000000,
+       "fmt": "116.25B",
+       "longFmt": "116,251,000,000"
+      }
+     },
+     "exDividendDate": {
+      "raw": 1788998400,
+      "fmt": "2026-09-10"
+     },
+     "dividendDate": {
+      "raw": 1790812800,
+      "fmt": "2026-10-01"
+     }
+    },
+    "upgradeDowngradeHistory": {
+     "history": [
+      {
+       "epochGradeDate": 1794605535,
+       "firm": "Rosenblatt",
+       "toGrade": "Buy",
+       "fromGrade": "Buy",
+       "action": "main",
+       "priceTargetAction": "Lowers",
+       "currentPriceTarget": 300.0,
+       "priorPriceTarget": 390.0
+      },
+      {
+       "epochGradeDate": 1794584380,
+       "firm": "Barclays",
+       "toGrade": "Overweight",
+       "fromGrade": "Overweight",
+       "action": "main",
+       "priceTargetAction": "Lowers",
+       "currentPriceTarget": 210.0,
+       "priorPriceTarget": 275.0
+      },
+      {
+       "epochGradeDate": 1794580480,
+       "firm": "Truist Securities",
+       "toGrade": "Hold",
+       "fromGrade": "Buy",
+       "action": "down",
+       "priceTargetAction": "Lowers",
+       "currentPriceTarget": 174.0,
+       "priorPriceTarget": 346.0
+      },
+      {
+       "epochGradeDate": 1794507445,
+       "firm": "Melius Research",
+       "toGrade": "Hold",
+       "fromGrade": "Buy",
+       "action": "down",
+       "priceTargetAction": "Lowers",
+       "currentPriceTarget": 185.0,
+       "priorPriceTarget": 315.0
+      },
+      {
+       "epochGradeDate": 1794507187,
+       "firm": "DA Davidson",
+       "toGrade": "Buy",
+       "fromGrade": "Buy",
+       "action": "main",
+       "priceTargetAction": "Lowers",
+       "currentPriceTarget": 200.0,
+       "priorPriceTarget": 300.0
+      },
+      {
+       "epochGradeDate": 1794505940,
+       "firm": "Craig-Hallum",
+       "toGrade": "Hold",
+       "fromGrade": "Buy",
+       "action": "down",
+       "priceTargetAction": "Announces",
+       "currentPriceTarget": 180.0,
+       "priorPriceTarget": 0.0
+      }
+     ],
+     "maxAge": 86400
+    },
+    "price": {
+     "regularMarketPrice": {
+      "raw": 162.85,
+      "fmt": "162.85"
+     },
+     "regularMarketChange": {
+      "raw": -3.3399963,
+      "fmt": "-3.34"
+     },
+     "regularMarketChangePercent": {
+      "raw": -0.020097457,
+      "fmt": "-2.01%"
+     },
+     "regularMarketTime": 1794603601,
+     "regularMarketPreviousClose": {
+      "raw": 166.19,
+      "fmt": "166.19"
+     },
+     "postMarketPrice": {
+      "raw": 161.01,
+      "fmt": "161.01"
+     },
+     "postMarketChangePercent": {
+      "raw": -0.011298811,
+      "fmt": "-1.13%"
+     },
+     "postMarketTime": 1794617996,
+     "marketState": "CLOSED",
+     "exchangeName": "NasdaqGS",
+     "longName": "NVIDIA Corporation",
+     "shortName": "NVIDIA Corporation",
+     "currency": "USD",
+     "symbol": "NVDA",
+     "quoteType": "EQUITY",
+     "marketCap": {
+      "raw": 3932339044352,
+      "fmt": "3.93T",
+      "longFmt": "3,932,339,044,352.00"
+     }
+    },
+    "earningsHistory": {
+     "history": [
+      {
+       "maxAge": 1,
+       "epsActual": {
+        "raw": 1.3,
+        "fmt": "1.3"
+       },
+       "epsEstimate": {
+        "raw": 1.25647,
+        "fmt": "1.26"
+       },
+       "epsDifference": {
+        "raw": 0.04,
+        "fmt": "0.04"
+       },
+       "surprisePercent": {
+        "raw": 0.0346,
+        "fmt": "3.46%"
+       },
+       "quarter": {
+        "raw": 1761868800,
+        "fmt": "2025-10-31"
+       },
+       "currency": "USD",
+       "period": "-4q"
+      },
+      {
+       "maxAge": 1,
+       "epsActual": {
+        "raw": 1.62,
+        "fmt": "1.62"
+       },
+       "epsEstimate": {
+        "raw": 1.53812,
+        "fmt": "1.54"
+       },
+       "epsDifference": {
+        "raw": 0.08,
+        "fmt": "0.08"
+       },
+       "surprisePercent": {
+        "raw": 0.053200003,
+        "fmt": "5.32%"
+       },
+       "quarter": {
+        "raw": 1769817600,
+        "fmt": "2026-01-31"
+       },
+       "currency": "USD",
+       "period": "-3q"
+      },
+      {
+       "maxAge": 1,
+       "epsActual": {
+        "raw": 1.87,
+        "fmt": "1.87"
+       },
+       "epsEstimate": {
+        "raw": 1.77191,
+        "fmt": "1.77"
+       },
+       "epsDifference": {
+        "raw": 0.1,
+        "fmt": "0.1"
+       },
+       "surprisePercent": {
+        "raw": 0.0554,
+        "fmt": "5.54%"
+       },
+       "quarter": {
+        "raw": 1777507200,
+        "fmt": "2026-04-30"
+       },
+       "currency": "USD",
+       "period": "-2q"
+      },
+      {
+       "maxAge": 1,
+       "epsActual": {
+        "raw": 2.22,
+        "fmt": "2.22"
+       },
+       "epsEstimate": {
+        "raw": 2.09113,
+        "fmt": "2.09"
+       },
+       "epsDifference": {
+        "raw": 0.13,
+        "fmt": "0.13"
+       },
+       "surprisePercent": {
+        "raw": 0.0616,
+        "fmt": "6.16%"
+       },
+       "quarter": {
+        "raw": 1785456000,
+        "fmt": "2026-07-31"
+       },
+       "currency": "USD",
+       "period": "-1q"
+      }
+     ]
+    },
+    "defaultKeyStatistics": {
+     "trailingEps": {
+      "raw": 7.91,
+      "fmt": "7.91"
+     },
+     "forwardEps": {
+      "raw": 15.85369,
+      "fmt": "15.85"
+     },
+     "profitMargins": {
+      "raw": 0.63663,
+      "fmt": "63.66%"
+     }
+    },
+    "financialData": {
+     "currentPrice": {
+      "raw": 162.85,
+      "fmt": "162.85"
+     },
+     "targetHighPrice": {
+      "raw": 515.0,
+      "fmt": "515.00"
+     },
+     "targetLowPrice": {
+      "raw": 170.0,
+      "fmt": "170.00"
+     },
+     "targetMeanPrice": {
+      "raw": 278.30756,
+      "fmt": "278.31"
+     },
+     "targetMedianPrice": {
+      "raw": 275.0,
+      "fmt": "275.00"
+     },
+     "recommendationMean": {
+      "raw": 1.62295,
+      "fmt": "1.62"
+     },
+     "recommendationKey": "buy",
+     "numberOfAnalystOpinions": {
+      "raw": 53,
+      "fmt": "53",
+      "longFmt": "53"
+     },
+     "revenueGrowth": {
+      "raw": 1.059,
+      "fmt": "105.90%"
+     },
+     "profitMargins": {
+      "raw": 0.63663,
+      "fmt": "63.66%"
+     }
+    }
+   }
+  ],
+  "error": null
+ }
+}

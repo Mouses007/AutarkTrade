@@ -149,7 +149,7 @@ const notenText = (n) => t('newcomer.teilnoten', { neuheit: n?.neuheit ?? '—',
                     <tr v-for="z in titel" :key="z.id">
                         <td class="rechts note" :title="notenText(z.noten)">{{ z.note == null ? '—' : zahl(z.note, 0) }}</td>
                         <td class="ticker">
-                            {{ z.ticker }}
+                            <router-link :to="{ path: '/aktien', query: { titel: z.ticker } }" :title="t('titel.oeffnen')">{{ z.ticker }}</router-link>
                             <span v-if="z.zuordnung === 'sucheFremd'" class="frage" :title="t('newcomer.zuordnung_sucheFremd')">?</span>
                         </td>
                         <td class="name">
@@ -186,6 +186,15 @@ const notenText = (n) => t('newcomer.teilnoten', { neuheit: n?.neuheit ?? '—',
 </template>
 
 <style scoped>
+.ticker a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.ticker a:hover {
+    color: var(--accent);
+}
+
 .newcomer-seite {
     display: flex;
     flex-direction: column;

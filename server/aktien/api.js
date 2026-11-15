@@ -6,10 +6,71 @@
  *   GET  /api/aktien/stamm/stand      Zahlen und letzter Lauf dieses Prozesses
  *   POST /api/aktien/stamm/abgleich   jetzt abgleichen (liest nur öffentliche Listen)
  *   GET  /api/aktien/chart-symbole    Aktien, deren Kerzen der Chart laden kann (Symbol je Börse)
+ *   GET  /api/aktien/titel/:ticker    Titel-Seite: Profil, Kurs, Kennzahlen, Analysten, Ertragsverlauf
+ *                                     (Yahoo, hinter dem Quellen-Schalter; 15 min im Speicher)
+ *   GET  /api/aktien/titel/:ticker/bewegung   gemerkte Recherche «was hat den Kurs bewegt» (liest nur)
+ *   POST /api/aktien/titel/:ticker/bewegung   Recherche jetzt holen (Perplexity, kostet — nur auf Knopfdruck)
  */
 import { getKnex } from '../database.js'
 import { gleicheAb, letzterLauf, leseStamm, stammZahlen, HANDELSPLAETZE } from './stamm.js'
 import { chartSymboleAus } from './chart-symbole.js'
+import { ausZusammenfassung, kursLinie, bewegungsFrage } from './titel-kern.js'
+import { holeZusammenfassung, holeChart, NichtGefunden, Gebremst } from '../newcomer-radar/kursquelle.js'
+import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
+import { sendeWennAus, istAus } from '../quellen/aus.js'
+import { ladeLlmConfig, merkeKiGuthaben, istGuthabenFehler } from '../llm.js'
+import { rechercheThema } from '../news-recherche.js'
+import { pruefeEinordnung } from '../coin-radar/einordnung.js'
+import { logWarn } from '../logger.js'
+
+const TICKER_RE = /^[A-Z0-9][A-Z0-9.\-]{0,14}$/
+const TITEL_MS = 15 * 60_000
+const BEWEGUNG_MS = 6 * 60 * 60_000
+const titelCache = new Map()      // ticker → { zeit, wert } | { laeuft: Promise }
+const bewegungCache = new Map()   // ticker → { zeit, wert }
+
+/** Titel des Stamms samt Listungen und dem Symbol bei der Kursquelle. */
+async function ladeTitel(knex, ticker) {
+    const zeile = await knex('instrumente').where({ anlageklasse: 'aktien', ticker }).first()
+    if (!zeile) return null
+    const [titel] = (await leseStamm(knex, { anlageklasse: 'aktien', suche: ticker, grenze: 50 })).filter((t) => t.id === zeile.id)
+    let kursSymbol = null
+    if (await knex.schema.hasTable('newcomer_titel')) {
+        kursSymbol = (await knex('newcomer_titel').where('instrumentId', zeile.id).first())?.kursSymbol || null
+    }
+    return { titel: titel || { ticker, name: zeile.name, unterart: zeile.unterart, listungen: [] }, kursSymbol: kursSymbol || kursSymbolKandidaten(ticker)[0] || null }
+}
+
+async function baueTitelSeite(ticker) {
+    const gefunden = await ladeTitel(getKnex(), ticker)
+    if (!gefunden) return { ok: false, grund: 'unbekannt' }
+    const { titel, kursSymbol } = gefunden
+    const kopf = {
+        ok: true,
+        titel: { ticker: titel.ticker, name: titel.name, unterart: titel.unterart, listungen: titel.listungen },
+        chart: chartSymboleAus([titel])[0]?.symbole || null,
+        kursSymbol,
+    }
+    if (!kursSymbol) return { ...kopf, daten: null, grund: 'keinKursSymbol' }
+    try {
+        // Kennzahlen und Kurslinie getrennt: fällt eines aus, bleibt das andere.
+        const [zus, chart] = await Promise.allSettled([holeZusammenfassung(kursSymbol), holeChart(kursSymbol)])
+        for (const r of [zus, chart]) if (r.status === 'rejected' && istAus(r.reason)) throw r.reason
+        if (zus.status === 'rejected' && chart.status === 'rejected') throw zus.reason
+        return {
+            ...kopf,
+            daten: zus.status === 'fulfilled' ? ausZusammenfassung(zus.value) : null,
+            datenFehler: zus.status === 'rejected' ? String(zus.reason?.message || zus.reason) : null,
+            linie: chart.status === 'fulfilled' ? kursLinie(chart.value.kerzen) : [],
+            ipoDatum: chart.status === 'fulfilled' ? chart.value.meta.ipoDatum : null,
+            stand: Date.now(),
+        }
+    } catch (e) {
+        if (e instanceof NichtGefunden) return { ...kopf, daten: null, grund: 'nichtGefunden' }
+        if (e instanceof Gebremst) return { ...kopf, daten: null, grund: 'gebremst' }
+        throw e
+    }
+}
 
 const ARTEN = ['perp', 'token-spot', 'broker-spot']
 const KLASSEN = ['aktien', 'sonstige']
@@ -42,6 +103,69 @@ export function setupAktienRoutes(app) {
             const titel = await leseStamm(getKnex(), { anlageklasse: 'aktien', art: 'perp', grenze: 5000 })
             res.json({ ok: true, titel: chartSymboleAus(titel) })
         } catch (e) { fehler(res, e) }
+    })
+
+    app.get('/api/aktien/titel/:ticker', async (req, res) => {
+        const ticker = String(req.params.ticker || '').toUpperCase()
+        if (!TICKER_RE.test(ticker)) return res.status(400).json({ ok: false, error: 'ungültiger Ticker' })
+        try {
+            const c = titelCache.get(ticker)
+            if (c?.wert && Date.now() - c.zeit < TITEL_MS && req.query.neu !== '1') return res.json(c.wert)
+            // Gleichzeitige Aufrufe teilen sich einen Abruf.
+            const laeuft = c?.laeuft || baueTitelSeite(ticker)
+            titelCache.set(ticker, { ...c, laeuft })
+            let wert
+            try { wert = await laeuft } finally { const d = titelCache.get(ticker); if (d?.laeuft === laeuft) titelCache.set(ticker, { zeit: d.zeit, wert: d.wert }) }
+            // Nur ein vollständiges Ergebnis wird gemerkt — ein gebremster Abruf soll beim nächsten Mal neu fragen.
+            if (wert.ok && wert.daten) titelCache.set(ticker, { zeit: Date.now(), wert })
+            res.json(wert)
+        } catch (e) {
+            if (sendeWennAus(res, e)) return
+            logWarn('aktien', `Titel ${ticker}: ${e.message}`)
+            res.status(502).json({ ok: false, error: String(e?.message || e) })
+        }
+    })
+
+    app.get('/api/aktien/titel/:ticker/bewegung', (req, res) => {
+        const c = bewegungCache.get(String(req.params.ticker || '').toUpperCase())
+        res.json({ ok: true, bewegung: c && Date.now() - c.zeit < BEWEGUNG_MS ? c.wert : null })
+    })
+
+    app.post('/api/aktien/titel/:ticker/bewegung', async (req, res) => {
+        const ticker = String(req.params.ticker || '').toUpperCase()
+        if (!TICKER_RE.test(ticker)) return res.status(400).json({ ok: false, error: 'ungültiger Ticker' })
+        try {
+            const gefunden = await ladeTitel(getKnex(), ticker)
+            if (!gefunden) return res.status(404).json({ ok: false, error: 'Titel nicht im Stamm' })
+            const cfg = await ladeLlmConfig({ provider: 'perplexity', model: 'sonar' })
+            if (!cfg.apiKey) return res.json({ ok: false, grund: 'schluesselFehlt' })
+            let r
+            try {
+                r = await rechercheThema({
+                    thema: ticker,
+                    frage: bewegungsFrage({ name: gefunden.titel.name, symbol: gefunden.kursSymbol || ticker, sprache: req.body?.sprache === 'en' ? 'en' : 'de' }),
+                    apiKey: cfg.apiKey, modell: 'sonar', timeoutMs: 60000, aktualitaet: 'week',
+                    ausloeser: 'manuell', funktion: 'aktien-titel',
+                })
+                merkeKiGuthaben('perplexity').catch(() => { })
+            } catch (e) {
+                if (istGuthabenFehler(e.message)) await merkeKiGuthaben('perplexity', e.message).catch(() => { })
+                throw e
+            }
+            // Wie überall: keine Prognosen, keine Empfehlungen — auch nicht aus der Websuche.
+            const geprueft = pruefeEinordnung({ text: r.text })
+            if (!geprueft.ok) return res.json({ ok: false, grund: 'verworfen', warum: geprueft.grund })
+            const wert = {
+                text: geprueft.text,
+                quellen: (r.citations || []).filter((u) => /^https?:\/\//.test(u)).slice(0, 12),
+                zeit: Date.now(), kiGeneriert: true,
+            }
+            bewegungCache.set(ticker, { zeit: Date.now(), wert })
+            res.json({ ok: true, bewegung: wert })
+        } catch (e) {
+            logWarn('aktien', `Bewegung ${ticker}: ${e.message}`)
+            res.status(502).json({ ok: false, error: String(e?.message || e) })
+        }
     })
 
     app.post('/api/aktien/stamm/abgleich', async (req, res) => {

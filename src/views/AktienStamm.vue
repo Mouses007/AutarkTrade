@@ -15,8 +15,14 @@ import Pille from '../components/basis/Pille.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Leerzustand from '../components/basis/Leerzustand.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
+import { useRoute } from 'vue-router'
+import TitelAnsicht from '../components/aktien/TitelAnsicht.vue'
 
 const { t } = useI18n()
+
+/* `/aktien?titel=NVDA` zeigt statt der Liste die Titel-Seite — so kommt sie ohne eigenen Menüeintrag aus. */
+const route = useRoute()
+const gewaehlt = computed(() => String(route.query.titel || '').toUpperCase().replace(/[^A-Z0-9.\-]/g, '').slice(0, 15))
 
 const GRENZE = 300
 const PLATZ = { binance: 'Binance', bitget: 'Bitget', bitunix: 'Bitunix', pionex: 'Pionex', bitpanda: 'Bitpanda' }
@@ -103,7 +109,8 @@ const geordnet = (listungen) => [...listungen].sort((a, b) => RANG[a.art] - RANG
 </script>
 
 <template>
-    <div class="aktien-seite">
+    <TitelAnsicht v-if="gewaehlt" :ticker="gewaehlt" />
+    <div v-else class="aktien-seite">
         <div class="leiste">
             <input v-model="suche" class="suche" type="search" :placeholder="t('aktien.suche')" :aria-label="t('aktien.suche')" />
             <div class="filter" role="group" :aria-label="t('aktien.handelbarBei')">
@@ -137,7 +144,7 @@ const geordnet = (listungen) => [...listungen].sort((a, b) => RANG[a.art] - RANG
             </thead>
             <tbody>
                 <tr v-for="z in titel" :key="z.id">
-                    <td class="ticker">{{ z.ticker }}</td>
+                    <td class="ticker"><router-link :to="{ path: '/aktien', query: { titel: z.ticker } }" :title="t('titel.oeffnen')">{{ z.ticker }}</router-link></td>
                     <td class="name">{{ z.name || '—' }}</td>
                     <td>{{ t('aktien.art_' + (z.unterart || 'aktie')) }}</td>
                     <td class="plaetze">
@@ -156,6 +163,15 @@ const geordnet = (listungen) => [...listungen].sort((a, b) => RANG[a.art] - RANG
 </template>
 
 <style scoped>
+.ticker a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.ticker a:hover {
+    color: var(--accent);
+}
+
 .aktien-seite {
     display: flex;
     flex-direction: column;

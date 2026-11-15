@@ -31,7 +31,7 @@ export const VORGABE = true
  * Einstellungsseite (deutsch).
  */
 export const QUELLEN_OHNE_FREIGABE = {
-    yahoo: { name: 'Yahoo Finance', zeilen: ['28', '39', '32', '42'], was: 'Makro (ES/NQ/RTY/DXY), Indizes-Kachel, Live-Trading-Indizes, Gesamt-/Handelslage, Aktienkurse im Newcomer-Radar' },
+    yahoo: { name: 'Yahoo Finance', zeilen: ['28', '39', '32', '42'], was: 'Makro (ES/NQ/RTY/DXY), Indizes-Kachel, Live-Trading-Indizes, Gesamt-/Handelslage, Aktienkurse im Newcomer-Radar, Titel-Seite einer Aktie (Kennzahlen, Analysten, Ertragsverlauf)' },
     forexfactory: { name: 'ForexFactory', zeilen: ['40', '47'], was: 'Wirtschaftskalender (Woche/Monat) und Kalender-Countdown' },
     coinmarketcap: { name: 'CoinMarketCap', zeilen: ['20'], was: 'Dominanz-Historie (Import über den Webendpunkt)' },
     blockchaininfo: { name: 'blockchain.info', zeilen: ['25'], was: 'BTC-Historie ab 2009 für Rainbow und Pi Cycle' },
