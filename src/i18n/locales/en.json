@@ -6621,9 +6621,13 @@
       "liquidationen": "Liquidations (recorded)",
       "hebelzonen": "Leverage zones (model)",
       "orderbuch": "Order book walls",
+      "zahlen": "Earnings",
+      "sitzungen": "Trading sessions",
       "info": {
         "hebelzonen": "Leverage zones are a MODEL: from the open-interest history the code estimates where positions were opened and at which price they would be liquidated at common leverage. Below the price sit long liquidations — reaching them forces selling. Above sit short liquidations — forced buying. Dense zones often attract the price and speed up moves. Binance market data only.",
-        "liquidationen": "Liquidations are MEASURED: forced closures the exchange actually reported, in USD per candle. Bars up = shorts liquidated (price rose), down = longs (price fell). Large spikes often mark exhaustion of a move. Futures only, only as far back as the recording ran (at most 7 days)."
+        "liquidationen": "Liquidations are MEASURED: forced closures the exchange actually reported, in USD per candle. Bars up = shorts liquidated (price rose), down = longs (price fell). Large spikes often mark exhaustion of a move. Futures only, only as far back as the recording ran (at most 7 days).",
+        "zahlen": "A vertical line at every known earnings release (the last four and the next one), plus the earnings window as a faint area: one day before to one day after — the same span backtest and paper trading report as earnings days. The next date is dashed and marked “expected” until the company has confirmed it. Dates from Yahoo Finance; if they are unknown, the layer draws nothing.",
+        "sitzungen": "Shades the time outside the regular US session (09:30–16:00 New York time, with daylight saving and US holidays): turquoise = pre-market and after-hours (04:00–09:30, 16:00–20:00), grey = overnight, stronger grey = weekend or holiday. The future keeps trading there, but thinly — moves in these hours have less volume behind them. Up to the 4h timeframe; a candle that touches the regular session stays clear."
       }
     },
     "news": {
@@ -6789,7 +6793,8 @@
         "orderbuch": "Resting walls from the Binance order book (500 levels per side, every 10 s). A wall is a price zone with at least 2.5× the typical zone of its side AND at least 2 minutes of average turnover — \"· 9 min\" on the label means: that long the market would need on average to clear it. The snapshot reaches no further than ±… % — for BTC only a few hundredths of a percent.",
         "footprint": "Footprint from our own trade recording",
         "orderflow": "CVD and delta volume need the buy volume per candle",
-        "cvd": "CVD data from Binance"
+        "cvd": "CVD data from Binance",
+        "zahlen": "The earnings dates of this stock are unknown — no marker is drawn."
       },
       "buchReicht": "Order book: walls ±{p} %",
       "buchKeineWand": "Order book: no wall within ±{p} %",
@@ -7218,7 +7223,22 @@
       "markierung": "Marker"
     },
     "einpassenAlles": "Auto-fit including indicators",
-    "einpassenAllesInfo": "Off (default): “Auto” fits the price scale to the candles (and own open positions) only — an indicator line far from the price no longer squeezes the candles. On: indicator lines in the price pane are fitted too."
+    "einpassenAllesInfo": "Off (default): “Auto” fits the price scale to the candles (and own open positions) only — an indicator line far from the price no longer squeezes the candles. On: indicator lines in the price pane are fitted too.",
+    "aktien": {
+      "zahlen": "Earnings",
+      "zahlenHeute": "Earnings today",
+      "zahlenMorgen": "Earnings tomorrow",
+      "zahlenInTagen": "Earnings in {n} days",
+      "voraussichtlich": "expected",
+      "termineUnbekannt": "Earnings: dates unknown — {grund}",
+      "grund": {
+        "quelleAus": "the Yahoo Finance source is switched off (Settings › Data sources)",
+        "gebremst": "Yahoo Finance is rate-limiting, try again later",
+        "nichtGefunden": "Yahoo Finance does not know this stock",
+        "keinKursSymbol": "no quote symbol is known for this stock",
+        "abrufFehlgeschlagen": "the request failed"
+      }
+    }
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade is free software (AGPL-3.0). The source code of this version is available here:",

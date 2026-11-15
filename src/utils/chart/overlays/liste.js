@@ -16,7 +16,16 @@ export const OVERLAYS = [
     { id: 'hebelzonen', vorgabe: false },
     { id: 'orderbuch', vorgabe: false },
     // Nur Datenbank, kein Fremdabruf — deshalb ab Werk an.
+    // Nur bei Aktien-Futures angeboten (`overlaysFuer`): Quartalszahlen als Marker,
+    // die Zeiten ausserhalb der regulären US-Sitzung hinterlegt. Bei Coins gibt es sie nicht.
+    { id: 'zahlen', vorgabe: true, nurAktien: true },
+    { id: 'sitzungen', vorgabe: true, nurAktien: true },
 ]
+
+/** Die Overlays, die ein Panel anbietet: die Aktien-Ebenen nur, wenn sein Symbol ein Aktien-Future ist. */
+export function overlaysFuer(istAktie) {
+    return OVERLAYS.filter((o) => !o.nurAktien || istAktie)
+}
 
 export function overlayAn(panel, id) {
     const wert = panel?.overlays?.[id]

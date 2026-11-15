@@ -33,7 +33,8 @@ import MomentumBox from '../components/chart/MomentumBox.vue'
 import IndikatorSchalter from '../components/chart/IndikatorSchalter.vue'
 import { indBoxOffen } from '../stores/chartIndBox.js'
 import VorlagenMenue from '../components/chart/VorlagenMenue.vue'
-import { OVERLAYS, overlayAn } from '../utils/chart/overlays/liste.js'
+import { overlaysFuer, overlayAn } from '../utils/chart/overlays/liste.js'
+import { aktieVon, termineGrundSchluessel } from '../utils/chart/aktienKontext.js'
 import OffeneReiter from '../components/chart/OffeneReiter.vue'
 import { Symbol, Hinweis, Kreisel } from '../components/basis'
 import InfoTipp from '../components/InfoTipp.vue'
@@ -225,6 +226,10 @@ function vollbildVerlassen() {
 const sichtbarePanels = computed(() => daten.value.panels.slice(0, sichtbareAnzahl.value))
 const aktivIndex = computed(() => Math.min(daten.value.aktiv, sichtbareAnzahl.value - 1))
 const aktivesPanel = computed(() => daten.value.panels[aktivIndex.value])
+// Handy-Schublade: die Aktien-Ebenen (Quartalszahlen, Börsensitzungen) nur bei einem Aktien-Future.
+const aktiveAktie = computed(() => aktieVon(aktivesPanel.value))
+const schubOverlays = computed(() => overlaysFuer(!!aktiveAktie.value))
+const zahlenGrund = computed(() => termineGrundSchluessel(aktiveAktie.value))
 const rasterKlasse = computed(() => (telefon.value || vollbild.value ? 'r1' : 'r' + daten.value.raster))
 
 /*
@@ -1380,7 +1385,7 @@ watch(sichtbareAnzahl, async () => {
                             <div class="schubGruppe">
                                 <div class="schubTitel">{{ t('chart.schublade.imChart') }}</div>
                                 <div class="schubChips">
-                                    <div v-for="o in OVERLAYS" :key="o.id" class="schubChipZeile">
+                                    <div v-for="o in schubOverlays" :key="o.id" class="schubChipZeile">
                                         <button type="button" class="schubChip"
                                             :class="{ an: overlayAn(aktivesPanel, o.id) }" :aria-pressed="overlayAn(aktivesPanel, o.id)"
                                             @click="aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), [o.id]: !overlayAn(aktivesPanel, o.id) }">
@@ -1389,6 +1394,8 @@ watch(sichtbareAnzahl, async () => {
                                         <InfoTipp v-if="te('chart.overlay.info.' + o.id)" :schluessel="'chart.overlay.info.' + o.id" breit />
                                     </div>
                                 </div>
+                                <!-- Zahlentermine unbekannt: sagen warum, statt etwas zu zeichnen -->
+                                <p v-if="zahlenGrund" class="schubHinweis">{{ t('chart.aktien.termineUnbekannt', { grund: t(zahlenGrund) }) }}</p>
                             </div>
                         </aside>
                     </Transition>
@@ -2171,6 +2178,12 @@ watch(sichtbareAnzahl, async () => {
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--panel-soft);
+}
+
+.schubHinweis {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--warn);
 }
 
 .schubTitel {

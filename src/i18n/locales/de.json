@@ -6621,9 +6621,13 @@
       "liquidationen": "Liquidationen (aufgezeichnet)",
       "hebelzonen": "Hebelzonen (Modell)",
       "orderbuch": "Orderbuch-Wände",
+      "zahlen": "Quartalszahlen",
+      "sitzungen": "Börsensitzungen",
       "info": {
         "hebelzonen": "Hebelzonen sind ein MODELL: Aus dem Verlauf des Open Interest (offene Kontrakte) schätzt der Code, wo Positionen eröffnet wurden und bei welchem Kurs sie mit üblichem Hebel liquidiert würden. Unter dem Kurs liegen Long-Liquidationen — erreicht der Kurs sie, wird zwangsweise verkauft. Darüber liegen Short-Liquidationen — dort wird zwangsweise gekauft. Dichte Zonen ziehen den Kurs oft an und beschleunigen Bewegungen. Nur mit Binance als Marktdatenquelle.",
-        "liquidationen": "Liquidationen sind GEMESSEN: Zwangsschliessungen, die die Börse tatsächlich gemeldet hat, in USD je Kerze. Balken nach oben = Shorts wurden liquidiert (Kurs stieg), nach unten = Longs (Kurs fiel). Grosse Ausschläge markieren oft Erschöpfung einer Bewegung. Nur Futures, nur so weit zurück, wie die Aufzeichnung lief (höchstens 7 Tage)."
+        "liquidationen": "Liquidationen sind GEMESSEN: Zwangsschliessungen, die die Börse tatsächlich gemeldet hat, in USD je Kerze. Balken nach oben = Shorts wurden liquidiert (Kurs stieg), nach unten = Longs (Kurs fiel). Grosse Ausschläge markieren oft Erschöpfung einer Bewegung. Nur Futures, nur so weit zurück, wie die Aufzeichnung lief (höchstens 7 Tage).",
+        "zahlen": "Senkrechte Linie an jedem bekannten Meldezeitpunkt der Quartalszahlen (die letzten vier und der nächste), dazu als schwache Fläche das Zahlen-Fenster: ein Tag davor bis ein Tag danach — dieselbe Spanne, die Backtest und Papierbetrieb als Zahlen-Tage ausweisen. Der nächste Termin ist gestrichelt und als «voraussichtlich» gekennzeichnet, solange die Firma ihn nicht bestätigt hat. Termine von Yahoo Finance; sind sie unbekannt, zeichnet die Ebene nichts.",
+        "sitzungen": "Hinterlegt die Zeiten ausserhalb der regulären US-Börsensitzung (09:30–16:00 New Yorker Zeit, mit Sommerzeit und US-Feiertagen): türkis = vor- und nachbörslich (04:00–09:30, 16:00–20:00), grau = Nacht, kräftigeres Grau = Wochenende oder Feiertag. Der Future handelt dort weiter, aber dünn — Bewegungen in diesen Stunden haben weniger Umsatz hinter sich. Bis zur Zeiteinheit 4h; eine Kerze, die die reguläre Sitzung berührt, bleibt frei."
       }
     },
     "news": {
@@ -6789,7 +6793,8 @@
         "orderbuch": "Ruhende Wände aus dem Binance-Orderbuch (500 Stufen je Seite, alle 10 s). Eine Wand ist eine Preiszone, die mindestens das 2,5-Fache der üblichen Zone ihrer Seite UND mindestens 2 Minuten durchschnittlichen Umsatzes trägt — „· 9 min\" am Schild heisst: so lange bräuchte der Markt im Schnitt, um sie abzuräumen. Weiter als ±… % reicht der Snapshot nicht — bei BTC sind das nur wenige Hundertstel Prozent.",
         "footprint": "Footprint aus der eigenen Trade-Aufzeichnung",
         "orderflow": "CVD und Delta-Volumen brauchen das Kaufvolumen je Kerze",
-        "cvd": "CVD-Daten von Binance"
+        "cvd": "CVD-Daten von Binance",
+        "zahlen": "Die Zahlentermine dieses Titels sind unbekannt — es wird kein Marker gezeichnet."
       },
       "buchReicht": "Orderbuch: Wände ±{p} %",
       "buchKeineWand": "Orderbuch: keine Wand in ±{p} %",
@@ -7218,7 +7223,22 @@
       "markierung": "Markierung"
     },
     "einpassenAlles": "Auto-Einpassen mit Indikatoren",
-    "einpassenAllesInfo": "Aus (Vorgabe): „Auto“ passt die Preisachse nur an die Kerzen (und eigene offene Positionen) an — eine Indikatorlinie weit weg vom Kurs drückt die Kerzen nicht mehr zusammen. An: auch die Linien der Indikatoren im Kursfenster passen ins Bild."
+    "einpassenAllesInfo": "Aus (Vorgabe): „Auto“ passt die Preisachse nur an die Kerzen (und eigene offene Positionen) an — eine Indikatorlinie weit weg vom Kurs drückt die Kerzen nicht mehr zusammen. An: auch die Linien der Indikatoren im Kursfenster passen ins Bild.",
+    "aktien": {
+      "zahlen": "Zahlen",
+      "zahlenHeute": "Zahlen heute",
+      "zahlenMorgen": "Zahlen morgen",
+      "zahlenInTagen": "Zahlen in {n} Tagen",
+      "voraussichtlich": "voraussichtlich",
+      "termineUnbekannt": "Quartalszahlen: Termine unbekannt — {grund}",
+      "grund": {
+        "quelleAus": "die Quelle Yahoo Finance ist ausgeschaltet (Einstellungen › Datenquellen)",
+        "gebremst": "Yahoo Finance bremst gerade, später erneut versuchen",
+        "nichtGefunden": "Yahoo Finance kennt den Titel nicht",
+        "keinKursSymbol": "zum Titel ist kein Kurssymbol bekannt",
+        "abrufFehlgeschlagen": "der Abruf ist gescheitert"
+      }
+    }
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade ist freie Software (AGPL-3.0). Den Quellcode dieser Fassung gibt es hier:",

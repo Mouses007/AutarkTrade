@@ -49,6 +49,8 @@ import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { InstanzEbene } from '../../utils/chart/overlays/InstanzEbene.js'
 import { MarktEbene, waendeAusBuch } from '../../utils/chart/overlays/MarktEbene.js'
 import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
+import { AktienEbene } from '../../utils/chart/overlays/AktienEbene.js'
+import { ladeAktienKontext, aktieVon, termineGrundSchluessel } from '../../utils/chart/aktienKontext.js'
 import { POC_FEIN_PERIODEN, TF_MS as VV_TF_MS } from '../../utils/chart/vwapVector.js'
 import { benoetigteQuellen, vwapVectorQuellen, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
@@ -159,6 +161,7 @@ let positionsLinien = []               // [{ linie, art, pos }]
 let positionen = []
 let marktEbene = null
 let kerzenUhr = null
+let aktienEbene = null               // nur bei Aktien-Futures angelegt (Sitzungen, Quartalszahlen)
 let volumenKerzen = null
 let marktTakt = null
 let marktZaehler = 0
@@ -342,6 +345,7 @@ function baueChart() {
     journalEbene = new JournalEbene({ chart: c, serie: ks, formatPreis: (p) => ks.priceFormatter().format(p) })
     instanzEbene = new InstanzEbene({ chart: c, serie: ks, formatPreis: (p) => ks.priceFormatter().format(p) })
     instanzEbene.setzeDaten(props.strategieDaten)
+    aktienNeu()
     c.subscribeClick((p) => {
         if (!p?.point || props.werkzeug) return
         const pane = p.paneIndex ?? 0
@@ -443,6 +447,7 @@ function setzeDaten(liste) {
     journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     instanzEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     marktEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
+    aktienEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     kerzenUhr?.setze(liste[liste.length - 1], INTERVALL_MS[props.panel.interval], props.panel.interval)
     planeJournal()
     emit('kerzen', liste)
@@ -899,6 +904,7 @@ function marktTick() {
 function marktNeu() {
     marktZaehler = 0
     marktHinweise.value = {}
+    aktienNeu()
     clearInterval(marktTakt)
     clearTimeout(marktNeuUhr)
     marktTick()
@@ -907,6 +913,45 @@ function marktNeu() {
 
 // ── Journal und offene Positionen ────────────────────────────────────────
 const overlayAn = (name) => overlayAnFuer(props.panel, name)
+
+// ── Aktien-Futures: Börsensitzungen und Quartalszahlen ───────────────────
+/*
+ * Nur im Chart-Arbeitsplatz und nur, wenn das Symbol ein Aktien-Future ist
+ * (`aktienKontext.js` fragt im Krypto-Markt gar nicht erst). Bei einem Coin
+ * entsteht die Ebene nie — der Chart ist dann derselbe wie vor den Aktien.
+ * Unbekannte Termine zeichnen nichts; der Grund steht in der Legende.
+ */
+const aktie = computed(() => (props.ansicht ? null : aktieVon(props.panel)))
+function aktienNeu() {
+    const a = aktie.value
+    if (!a || !chart.value || !kerzenSerie.value) {
+        aktienEbene?.abbauen()
+        aktienEbene = null
+        if (marktHinweise.value.zahlen) hinweis('zahlen', null)
+        return
+    }
+    if (!aktienEbene) {
+        aktienEbene = new AktienEbene({
+            chart: chart.value, serie: kerzenSerie.value,
+            farben: {
+                rand: farbe('--accent', '#1fd6c4'), nacht: farbe('--muted', '#8ea5af'), zu: farbe('--muted', '#8ea5af'),
+                zahlen: farbe('--warn', '#d8a33a'), grund: farbe('--panel', '#0c1216'),
+            },
+            texte: {
+                zahlen: t('chart.aktien.zahlen'), heute: t('chart.aktien.zahlenHeute'), morgen: t('chart.aktien.zahlenMorgen'),
+                inTagen: (n) => t('chart.aktien.zahlenInTagen', { n }), voraussichtlich: t('chart.aktien.voraussichtlich'),
+            },
+        })
+        aktienEbene.setzeKerzen(kerzen.value, INTERVALL_MS[props.panel.interval])
+    }
+    aktienEbene.setzeSitzungen(overlayAn('sitzungen'))
+    const zahlenAn = overlayAn('zahlen')
+    aktienEbene.setzeTermine(zahlenAn ? a.termine : null)
+    const grund = zahlenAn ? termineGrundSchluessel(a) : null
+    if (grund || marktHinweise.value.zahlen) hinweis('zahlen', grund ? t('chart.aktien.termineUnbekannt', { grund: t(grund) }) : null)
+}
+watch(() => [props.panel.symbol, props.panel.markt], () => { if (!props.ansicht) ladeAktienKontext(props.panel.symbol) }, { immediate: true })
+watch(aktie, aktienNeu)
 
 /** Journal für den geladenen Zeitraum holen — entprellt, weil Nachladen und Live-Neuaufbau kurz hintereinander kommen.
  *  Die Strategie-Schicht ist seit 31.10.2026 aus dem Chart (sie gehört auf die Strategien-Seite). */
@@ -1726,6 +1771,7 @@ function starteLive(nr) {
                 journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
                 instanzEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
                 marktEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
+                aktienEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
             }
             kerzenSerie.value?.update(kerzenPunkt(bar, liste.length - 1))
             volumenSerie.value?.update(volumenBalken(bar))
@@ -1882,6 +1928,8 @@ onBeforeUnmount(() => {
     externNochmal.clear()
     marktEbene?.abbauen()
     marktEbene = null
+    aktienEbene?.abbauen()
+    aktienEbene = null
     kerzenUhr?.abbauen()
     kerzenUhr = null
     volumenKerzen?.abbauen()

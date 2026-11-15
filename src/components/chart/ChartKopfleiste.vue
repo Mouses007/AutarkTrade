@@ -8,7 +8,8 @@ import { useI18n } from 'vue-i18n'
 import SymbolSuche from './SymbolSuche.vue'
 import VorlagenMenue from './VorlagenMenue.vue'
 import { INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE, boerseFuer, waehlbareBoersen, binanceGewaehlt } from '../../utils/chart/kerzenQuelle.js'
-import { OVERLAYS, overlayAn } from '../../utils/chart/overlays/liste.js'
+import { overlaysFuer, overlayAn } from '../../utils/chart/overlays/liste.js'
+import { aktieVon, termineGrundSchluessel } from '../../utils/chart/aktienKontext.js'
 import { Symbol } from '../basis'
 
 const props = defineProps({
@@ -50,7 +51,12 @@ const OVERLAY_SYMBOL = {
     liquidationen: 'feuer',
     hebelzonen: 'ebenen',
     orderbuch: 'liste',
+    zahlen: 'kalender',
+    sitzungen: 'uhr',
 }
+// Die Aktien-Ebenen (Quartalszahlen, Börsensitzungen) gibt es nur, wenn das Symbol ein Aktien-Future ist.
+const aktie = computed(() => aktieVon(props.panel))
+const overlays = computed(() => overlaysFuer(!!aktie.value))
 const SKALEN = ['normal', 'log', 'prozent']
 // Kerzenansicht: normal, Breite nach Volumen (panel.volumenBreite) oder Footprint (sichtbarer Footprint-Indikator)
 const KERZEN_ARTEN = ['normal', 'volumen', 'footprint']
@@ -63,7 +69,10 @@ const kerzenArt = computed(() => {
 function overlayTitel(id) {
     const kopf = t('chart.overlay.' + id) + ' — ' + t(overlayAn(props.panel, id) ? 'chart.ausblenden' : 'chart.einblenden')
     const info = 'chart.overlay.info.' + id
-    return te(info) ? kopf + '\n\n' + t(info) : kopf
+    const text = te(info) ? kopf + '\n\n' + t(info) : kopf
+    // Fehlen die Zahlentermine, sagt der Knopf warum — die Ebene zeichnet dann nichts.
+    const grund = id === 'zahlen' ? termineGrundSchluessel(aktie.value) : null
+    return grund ? text + '\n\n' + t('chart.aktien.termineUnbekannt', { grund: t(grund) }) : text
 }
 
 /*
@@ -186,7 +195,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 
         <!-- Eigene Daten als Schnellschalter: ein Klick statt Menü öffnen, Häkchen setzen, zuklicken. -->
         <div v-if="!telefon" class="gruppe schnell" :title="t('chart.overlaysTitel')">
-            <button v-for="o in OVERLAYS" :key="o.id" class="tf" :class="{ an: overlayAn(panel, o.id) }"
+            <button v-for="o in overlays" :key="o.id" class="tf" :class="{ an: overlayAn(panel, o.id) }"
                 :title="overlayTitel(o.id)"
                 @click="schalteOverlay(o.id, !overlayAn(panel, o.id))" :aria-label="overlayTitel(o.id)"><Symbol :name="OVERLAY_SYMBOL[o.id] || 'ebenen'" groesse="16px" /></button>
         </div>

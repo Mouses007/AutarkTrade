@@ -6,6 +6,8 @@
  *   GET  /api/aktien/stamm/stand      Zahlen und letzter Lauf dieses Prozesses
  *   POST /api/aktien/stamm/abgleich   jetzt abgleichen (liest nur öffentliche Listen)
  *   GET  /api/aktien/chart-symbole    Aktien, deren Kerzen der Chart laden kann (Symbol je Börse)
+ *   GET  /api/aktien/kontext?symbol=  ist das Symbol ein Aktien-Future? Ticker, Name, Börse und Zahlentermine
+ *                                     für den Chart (`{ aktie: null }` = Coin)
  *   GET  /api/aktien/marktlage        Umfeld für Aktien: Index gegen 200-Tage-Linie, VIX, Sektoren, Zinsen,
  *                                     Dollar, Breite im eigenen Feld (Yahoo, 30 min im Speicher)
  *   GET  /api/aktien/titel/:ticker    Titel-Seite: Profil, Kurs, Kennzahlen, Analysten, Ertragsverlauf
@@ -17,6 +19,7 @@ import { getKnex } from '../database.js'
 import { gleicheAb, letzterLauf, leseStamm, stammZahlen, HANDELSPLAETZE } from './stamm.js'
 import { chartSymboleAus } from './chart-symbole.js'
 import { holeMarktlage } from './marktlage.js'
+import { aktienKontext } from './kontext.js'
 import { ausZusammenfassung, kursLinie, bewegungsFrage } from './titel-kern.js'
 import { holeZusammenfassung, holeChart, NichtGefunden, Gebremst } from '../newcomer-radar/kursquelle.js'
 import { kursSymbolKandidaten } from '../newcomer-radar/kursquelle-kern.js'
@@ -105,6 +108,28 @@ export function setupAktienRoutes(app) {
         try {
             const titel = await leseStamm(getKnex(), { anlageklasse: 'aktien', art: 'perp', grenze: 5000 })
             res.json({ ok: true, titel: chartSymboleAus(titel) })
+        } catch (e) { fehler(res, e) }
+    })
+
+    // Auskunft für den Chart (Zahlen-Marker, Sitzungen). Splits bleiben draussen — die Kerzen kommen schon umgerechnet.
+    app.get('/api/aktien/kontext', async (req, res) => {
+        const symbol = String(req.query.symbol || '').toUpperCase()
+        if (!/^[A-Z0-9_.\-]{2,30}$/.test(symbol)) return res.status(400).json({ ok: false, error: 'ungültiges Symbol' })
+        try {
+            const k = await aktienKontext(symbol)
+            if (!k) return res.json({ ok: true, aktie: null })
+            res.json({
+                ok: true,
+                aktie: {
+                    symbol, ticker: k.ticker, name: k.name, boerse: k.boerse,
+                    // null = unbekannt (Quelle aus, Abruf gescheitert) — der Grund steht daneben
+                    termine: k.termine ? {
+                        naechster: k.termine.naechster ? { zeit: k.termine.naechster.zeit, geschaetzt: k.termine.naechster.geschaetzt === true } : null,
+                        vergangene: k.termine.vergangene || [],
+                    } : null,
+                    termineGrund: k.termine ? null : (k.termineGrund || 'abrufFehlgeschlagen'),
+                },
+            })
         } catch (e) { fehler(res, e) }
     })
 
