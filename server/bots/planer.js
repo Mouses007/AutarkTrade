@@ -571,7 +571,7 @@ export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandi
     const zeilen = kandidaten.filter((c) => !c.fehler).map((c) => {
         const r = c.rueckblick, s = c.start, v = c.variante
         const m = mindest[c.id]
-        const pionexMin = !m ? 'nicht geprüft' : m.reichtAus === true ? `reicht (${zl(e.einsatz, 2)} ${einheit})` : istZahl(m.min) ? `ab ${zl(m.min, 2)} ${einheit}` : m.reichtAus === false ? 'Einsatz zu klein, Minimum unbekannt' : 'unbekannt'
+        const pionexMin = !m ? 'nicht geprüft' : m.reichtAus === true ? `reicht (${zl(e.einsatz, e.coinM ? 4 : 2)} ${einheit})` : istZahl(m.min) ? `ab ${zl(m.min, e.coinM ? 4 : 2)} ${einheit}` : m.reichtAus === false ? 'Einsatz zu klein, Minimum unbekannt' : 'unbekannt'
         const ende = r?.liquidation ? 'LIQUIDIERT' : r?.ausstieg ? r.ausstieg.art : 'läuft'
         return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), s?.verlustRand ? `${zl(s.verlustRand.betrag, 2)} bei ${zl(s.verlustRand.preis, 2)}${s.verlustRand.liquidiert ? ' LIQUIDIERT' : s.verlustRand.ausstieg ? ' (Stop)' : ''}` : '—', pionexMin, (c.warnungen || []).join(',') || '—'].join(' | ')
     })
