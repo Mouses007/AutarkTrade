@@ -4,7 +4,7 @@
  *   node server/aktien/__selftest-splits.mjs
  */
 import assert from 'node:assert/strict'
-import { ausSplits, bereinigeSplits, bereinigeSeite, verdaechtigeSpruenge, bereinigeFunding, positionUeberSplit, faelligeSplits, leseSplitVermerk } from './splits.js'
+import { ausSplits, bereinigeSplits, bereinigeSeite, verdaechtigeSpruenge, bereinigeFunding, positionUeberSplit, faelligeSplits, leseSplitVermerk, ohneSplitSprung, ohneSplitSpruengeJe, faktorNaheEins } from './splits.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -159,6 +159,75 @@ ok(gestueckelt.every((k, i) => Math.abs(k.c - r.kerzen[i].c) < 1e-9 && Math.abs(
     ok(f(9 * H, [{ t: 9 * H, faktor: 20, bei: 10 * H }]) === 0, 'steht im Vermerk: erledigt — kein zweites Mal')
     ok(f(0) === 0 && faelligeSplits([], { lastCandleTime: 5 * H, kerzeMs: H }).length === 0, 'ohne Stand oder ohne Bericht: nichts')
     ok(leseSplitVermerk('[{"t":5,"faktor":2,"bei":6}]').length === 1 && leseSplitVermerk('').length === 0 && leseSplitVermerk(null).length === 0 && leseSplitVermerk('{kaputt').length === 0 && leseSplitVermerk([{ t: 3 }]).length === 1, 'Vermerk lesen: JSON, leer, kaputt, Liste')
+}
+
+// ── Audit 15.11.2026, FUN-F-003: kleine Faktoren «fanden» immer einen Sprung ──
+{
+    // Flache Reihe ohne Sprung (pendelt ±0,5 %), Split-Eintrag mitten im Fenster
+    const flach = Array.from({ length: 24 * 8 }, (_, i) => { const c = 100 * (1 + 0.005 * Math.sin(i / 3)); return { t: t0 + i * H, o: c, h: c * 1.002, l: c * 0.998, c, v: 10 } })
+    for (const faktor of [1.05, 1.1, 1.2, 1.25, 1.5, 2, 20, 0.9, 0.8, 0.5, 0.1]) {
+        const b = bereinigeSplits(flach, [{ t: t0 + 4 * TAG, faktor }])
+        ok(b.kerzen === flach && b.splits.length === 1 && b.splits[0].angewendet === false && b.splits[0].bei === null, `flache Reihe, Faktor ${faktor}: nichts umgerechnet`)
+        ok(bereinigeSeite(flach, [{ t: t0 + 4 * TAG, faktor }], new Map()).kerzen === flach, `flache Reihe, Faktor ${faktor}: auch seitenweise nichts`)
+    }
+    ok(bereinigeSplits(flach, [{ t: t0 + 4 * TAG, faktor: 1.05 }]).splits[0].nurGemeldet === true
+        && bereinigeSplits(flach, [{ t: t0 + 4 * TAG, faktor: 2 }]).splits[0].nurGemeldet === undefined, 'Faktor nahe 1 ist als «nur gemeldet» gekennzeichnet')
+    ok(faktorNaheEins(1.25) && faktorNaheEins(0.8) && faktorNaheEins(1.05) && !faktorNaheEins(1.5) && !faktorNaheEins(2) && !faktorNaheEins(0.5) && !faktorNaheEins(0.1), 'Grenze der Faktoren nahe 1')
+
+    // Faktor nahe 1 wird auch dann nicht angewendet, wenn der Sprung wirklich dasteht — nur gemeldet
+    const stufe = (f) => flach.map((k, i) => (i < 96 ? k : { ...k, o: k.o / f, h: k.h / f, l: k.l / f, c: k.c / f }))
+    const klein = bereinigeSplits(stufe(1.1), [{ t: t0 + 4 * TAG, faktor: 1.1 }])
+    ok(klein.kerzen.every((k, i) => k === stufe(1.1)[i] || k.c === stufe(1.1)[i].c) && klein.splits[0].angewendet === false && klein.splits[0].nurGemeldet, 'Aktiendividende 11:10: gemeldet, nicht umgerechnet')
+    // … und altes Wissen des Charts über einen solchen Split wirkt nicht mehr
+    ok(bereinigeSeite(flach, [{ t: t0 + 4 * TAG, faktor: 1.1 }], new Map([[t0 + 4 * TAG, t0 + 96 * H]])).angewendet === 0, 'seitenweise: gemerkter Sprung eines kleinen Faktors zählt nicht')
+
+    // Echte Splits werden weiter erkannt: 3:2, 2:1, 20:1, 1:10
+    for (const f of [1.5, 2, 20, 0.1, 0.5]) {
+        const b = bereinigeSplits(stufe(f), [{ t: t0 + 4 * TAG + 13 * H, faktor: f }])
+        ok(b.splits[0].angewendet && b.splits[0].bei === t0 + 96 * H, `echter Split Faktor ${f} erkannt`)
+        ok(verdaechtigeSpruenge(b.kerzen, 1.02).length === 0, `Faktor ${f}: Reihe danach ohne Stufe`)
+    }
+    // Toleranz relativ zum Faktor: ein Kurstag von −22 % ist kein Split 3:2 (früher: innerhalb von 25 %)
+    ok(bereinigeSplits(stufe(1.22), [{ t: t0 + 4 * TAG, faktor: 1.5 }]).splits[0].angewendet === false, 'Stufe 1,22 passt nicht zu 3:2')
+    ok(bereinigeSplits(stufe(1.45), [{ t: t0 + 4 * TAG, faktor: 1.5 }]).splits[0].angewendet, 'Stufe 1,45 passt zu 3:2 (Kursbewegung am Ex-Tag)')
+    // Die feste Obergrenze bleibt: ein Sturz auf ein Sechstel ist kein Split 20:1
+    ok(bereinigeSplits(stufe(6), [{ t: t0 + 4 * TAG, faktor: 20 }]).splits[0].angewendet === false, 'Stufe 6 passt nicht zu 20:1')
+
+    // Der Sprung muss über der üblichen Kerzenbewegung liegen: Reihe, die je Kerze um ±12 % schwankt
+    const wild = Array.from({ length: 200 }, (_, i) => { const c = (i % 2 ? 112 : 100) / (i >= 101 ? 1.5 : 1); return { t: t0 + i * H, o: c, h: c * 1.01, l: c * 0.99, c, v: 1 } })
+    ok(bereinigeSplits(wild, [{ t: t0 + 101 * H, faktor: 1.5 }]).splits[0].angewendet === false, 'Sprung geht in der Kerzenbewegung unter: nicht angewendet')
+}
+
+// ── Messungen ohne Position (Radar, Erfolgskontrolle): `ohneSplitSprung` ──
+{
+    let abrufe = 0
+    const hole = (splits) => () => { abrufe++; return splits }
+    const ruhig = await ohneSplitSprung(glatt, hole([split]))
+    ok(ruhig.kerzen === glatt && !ruhig.offen && ruhig.splits.length === 0 && abrufe === 0, 'ohne Sprung in den Kerzen werden die Splits gar nicht erst geholt')
+    const sauber = await ohneSplitSprung(kerzen, hole([split]))
+    ok(abrufe === 1 && !sauber.offen && sauber.splits.length === 1 && sauber.splits[0].faktor === 20 && Math.abs(sauber.kerzen[0].c - 24) < 1e-9, 'Split erklärt den Sprung: bereinigt')
+    for (const unbekannt of [null, [], undefined]) {
+        const u = await ohneSplitSprung(kerzen, hole(unbekannt))
+        ok(u.offen && u.kerzen === kerzen && u.splits.length === 0, `Splits ${JSON.stringify(unbekannt)}: Sprung bleibt offen, nichts umgerechnet`)
+    }
+    const wirft = await ohneSplitSprung(kerzen, async () => { throw new Error('Quelle aus') })
+    ok(wirft.offen && wirft.kerzen === kerzen, 'Abruf scheitert: offen statt Absturz')
+    ok((await ohneSplitSprung(sturz, hole([split]))).offen === false, 'Sturz um 40 % ohne passenden Split: kein Split-Verdacht (unter 1,8×)')
+    ok((await ohneSplitSprung(rev, hole([{ t: t0 + 50 * H, faktor: 0.5 }]))).offen, 'Sprung ×10, Kursquelle nennt nur 1:2: bleibt offen')
+    ok((await ohneSplitSprung([], hole([split]))).kerzen.length === 0, 'leere Kerzen')
+
+    // Viele Symbole, mehrere Zeiteinheiten (Aktien-Radar): `merk` sammelt, was umgerechnet wurde und was offen blieb
+    const merk = new Map()
+    const gefragt = []
+    const quelle = async (symbol) => { gefragt.push(symbol); return symbol === 'KORU' ? [split] : symbol === 'SOXS' ? [] : null }
+    const eingabe = new Map([['KORU', kerzen], ['SOXS', kerzen], ['NVDA', glatt], ['MSTU', rev]])
+    const m1 = await ohneSplitSpruengeJe(eingabe, quelle, merk)
+    const m2 = await ohneSplitSpruengeJe(new Map([['KORU', kerzen], ['NVDA', glatt]]), quelle, merk)
+    ok(eingabe.get('KORU') === kerzen && m1 !== eingabe && m1.size === 4, 'Eingabe-Map bleibt, wie sie ist')
+    ok(Math.abs(m1.get('KORU')[0].c - 24) < 1e-9 && m1.get('NVDA') === glatt && m1.get('SOXS') === kerzen && Math.abs(m2.get('KORU')[0].c - 24) < 1e-9, 'bereinigt, wo ein Split den Sprung erklärt; sonst dieselbe Reihe')
+    ok(merk.size === 3 && merk.get('KORU').offen === false && merk.get('KORU').splits.length === 1 && merk.get('KORU').splits[0].text === '20:1', 'gemerkt: KORU umgerechnet — über zwei Zeiteinheiten nur ein Eintrag')
+    ok(merk.get('SOXS').offen && merk.get('MSTU').offen && !merk.has('NVDA'), 'gemerkt: SOXS (leere Liste) und MSTU (unbekannt) offen, NVDA ohne Sprung gar nicht')
+    ok(!gefragt.includes('NVDA') && gefragt.filter((x) => x === 'KORU').length === 2, 'Splits nur für Titel mit Sprung geholt')
 }
 
 console.log(`✓ Split-Wache: ${n} Prüfungen`)
