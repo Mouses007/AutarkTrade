@@ -77,6 +77,8 @@ export function ausloesungenAus(zeilen, { seit = 0, arten = new Set(ARTEN), gren
         const kanaele = parse(r.kanaele, null)
         if (kanaele && kanaele.push === false) continue
         const alarm = { id: Number(r.id), art, symbol: r.symbol || '', markt: r.markt === 'spot' ? 'spot' : 'futures', notiz: r.notiz || '' }
+        // Aktien-Alarme tragen ihre Anlageklasse (Zusatzfeld; fehlt die Spalte, ist es Krypto).
+        const anlageklasse = r.anlageklasse === 'aktien' ? 'aktien' : 'krypto'
         // Dringlichkeit fürs Handy (Sprachausgabe je Stufe); „kritisch“ ist der alte Name von „einstieg“
         const s = parse(r.bedingung, {})?.schwere
         const schwere = s === 'kritisch' ? 'einstieg' : ['info', 'warnung', 'einstieg'].includes(s) ? s : 'warnung'
@@ -96,7 +98,7 @@ export function ausloesungenAus(zeilen, { seit = 0, arten = new Set(ARTEN), gren
                 preis: Number.isFinite(Number(e.p)) ? Number(e.p) : null,
                 niveau: Number.isFinite(e.niveau) ? e.niveau : null,
                 tf: MEHRFACH.has(art) ? e.treffer?.[0]?.tf || null : null,
-                titel, text, schwere,
+                titel, text, schwere, anlageklasse,
             })
         }
     }

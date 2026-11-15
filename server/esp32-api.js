@@ -40,6 +40,7 @@ import { getRunningBotPositions } from './pionex-api.js'
 import { ausCache } from './marktradar-api.js'
 import { ausloesungenAus, leseArten } from './esp32-alarme.js'
 import { KURS_SPANNEN, kursSymbol, kursSpanne, kursN, kursAntwort } from './esp32-kurs.js'
+import { aktienTitelFuer, aktienSymbole, aktienFelder, boerseZuAntwort, boersenZustand } from './esp32-aktien.js'
 import * as marktdaten from './marktdaten/index.js'
 import { pruefeGeraet, mitGeraet, ohneGeraet, ladeGeraete, speichereGeraete, geraeteUebersicht, geraeteId, MAX_GERAETE } from './esp32-push.js'
 import { clientIp, passwortBestaetigen } from './auth.js'
@@ -401,6 +402,17 @@ export function setupEsp32Routes(app) {
             // _cache ist internes ausCache-Detail (sendeRadar zieht es sonst in
             // einen Kopf um) — die Firmware/Widget-Clients bekommen es nicht.
             const { _cache, ...antwort } = daten
+            // Aktien (nur mit eingeschaltetem Aktien-Modus, reine Zusatzfelder): Positionen
+            // auf Aktien-Futures tragen `anlageklasse`, dazu die Sitzung der US-Börse —
+            // «Börse zu» ist ein Zustand, den das Gerät zeigen kann, kein Datenfehler.
+            try {
+                const { modus, je } = await aktienSymbole(knex)
+                if (modus) {
+                    const marke = (p) => (je.get(p.broker)?.has(String(p.symbol || '').toUpperCase()) ? { ...p, anlageklasse: 'aktien' } : p)
+                    antwort.openPositions = (antwort.openPositions || []).map(marke)
+                    antwort.aktien = boersenZustand()
+                }
+            } catch (e) { console.warn('ESP32 Aktien-Zusatz:', e.message) }
             res.json(antwort)
         } catch (e) {
             console.error('ESP32 display error:', e)
@@ -422,8 +434,11 @@ export function setupEsp32Routes(app) {
             const seit = Math.max(0, Number(req.query.seit) || 0)
             const zeilen = await getKnex()('chart_alarme')
                 .where('ausgeloestAm', '>', seit)
-                .select('id', 'art', 'symbol', 'markt', 'notiz', 'kanaele', 'bedingung', 'verlauf')
-            res.json({ jetzt: Date.now(), alarme: ausloesungenAus(zeilen, { seit, arten: leseArten(req.query.arten) }) })
+                .select('*')
+            const alarme = ausloesungenAus(zeilen, { seit, arten: leseArten(req.query.arten) })
+            // Löste ein Aktien-Alarm aus, steht die Sitzung der US-Börse dabei (Zusatzfeld).
+            const aktien = alarme.some((a) => a.anlageklasse === 'aktien') ? { aktien: boersenZustand() } : {}
+            res.json({ jetzt: Date.now(), alarme, ...aktien })
         } catch (e) {
             console.error('ESP32 alarme error:', e)
             res.status(500).json({ error: 'Internal server error' })
@@ -439,15 +454,36 @@ export function setupEsp32Routes(app) {
     app.get('/api/esp32/kurs', async (req, res) => {
         try {
             if (!(await zugangGeprueft(req, res, { anzeige: true }))) return
-            const symbol = kursSymbol(req.query.symbol || 'BTC')
+            let symbol = kursSymbol(req.query.symbol || 'BTC')
             if (!symbol) return res.status(400).json({ error: 'symbol ungültig' })
             const spanne = kursSpanne(String(req.query.spanne || ''))
             const { interval, limit } = KURS_SPANNEN[spanne]
+            // ausCache verteilt das Ergebnis per Spread — darum eingepackt
+            const hole = async (sym) => (await ausCache(`esp32kurs|${sym}|${spanne}`, 30 * 1000, async () =>
+                ({ kerzen: await marktdaten.kerzen(sym, interval, { markt: 'futures', limit }) }))).kerzen
+            /*
+             * Aktien-Titel (`esp32-aktien.js`): Kennt der Stamm das Symbol als
+             * Aktien-Future der Marktdatenquelle, trägt die Antwort die Sitzung
+             * der US-Börse. Kennt die Quelle das Symbol gar nicht, wird der
+             * Ticker im Stamm gesucht («NVDA» heisst nicht überall NVDAUSDT).
+             * Schlägt die Stamm-Abfrage fehl, bleibt es beim alten Weg.
+             */
+            const knex = getKnex()
+            let quelle = null
+            try { quelle = await marktdaten.wahl() } catch { quelle = null }
+            const titelFuer = (opt) => aktienTitelFuer(knex, symbol, req.query.symbol, quelle, opt).catch(() => null)
+            let titel = await titelFuer({ nurGenau: true })
             let roh
             try {
-                // ausCache verteilt das Ergebnis per Spread — darum eingepackt
-                roh = (await ausCache(`esp32kurs|${symbol}|${spanne}`, 30 * 1000, async () =>
-                    ({ kerzen: await marktdaten.kerzen(symbol, interval, { markt: 'futures', limit }) }))).kerzen
+                try {
+                    roh = await hole(symbol)
+                } catch (e) {
+                    const perTicker = e.response?.status === 400 && !titel ? await titelFuer() : null
+                    if (!perTicker) throw e
+                    titel = perTicker
+                    symbol = perTicker.symbol
+                    roh = await hole(symbol)
+                }
             } catch (e) {
                 if (marktdaten.sendeWennAus(res, e)) return
                 const status = e.response?.status
@@ -455,8 +491,13 @@ export function setupEsp32Routes(app) {
                 throw e
             }
             const antwort = kursAntwort(symbol, spanne, roh || [], kursN(req.query.n, limit))
-            if (!antwort) return res.status(502).json({ error: 'Keine Kerzen' })
-            res.json(antwort)
+            if (!antwort) {
+                // Aktie ohne Kerzen bei geschlossener Börse: ein Zustand, kein Datenfehler.
+                const zu = titel ? boerseZuAntwort(symbol, spanne, titel) : null
+                if (zu) return res.json(zu)
+                return res.status(502).json({ error: 'Keine Kerzen' })
+            }
+            res.json(titel ? { ...antwort, ...aktienFelder(titel, roh || [], interval) } : antwort)
         } catch (e) {
             console.error('ESP32 kurs error:', e)
             res.status(500).json({ error: 'Internal server error' })
