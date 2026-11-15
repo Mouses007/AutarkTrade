@@ -84,6 +84,37 @@ e = await leseEinstellungen()
 gleich(e.huerdenAktien.maxSpreadBp, 7.5, 'eine abgelehnte Eingabe ändert nichts')
 gleich(e.aktienZeitplan.an, false, 'ein abgelehnter Zeitplan schaltet nichts ein')
 
+// SEC-S-006: Namen aus der Prototypenkette sind keine Einstellungsschlüssel
+{
+    await schreibeEinstellungen(JSON.parse('{"__proto__": {"x": 1}, "constructor": "boese", "toString": "boese", "hasOwnProperty": 1}'))
+    const fremd = await knex('coinradar_settings').whereIn('schluessel', ['__proto__', 'constructor', 'toString', 'hasOwnProperty'])
+    gleich(fremd.length, 0, 'SEC-S-006: `__proto__`, `constructor`, `toString` werden nicht gespeichert')
+    // … und eine Zeile, die schon in der Datenbank steht (Backup-Import), wird nicht gelesen
+    await knex('coinradar_settings').insert([
+        { schluessel: 'constructor', wert: '"boese"', aktualisiertAm: 1 }, { schluessel: 'toString', wert: '"boese"', aktualisiertAm: 1 },
+    ])
+    const gelesen = await leseEinstellungen()
+    ok(!Object.hasOwn(gelesen, 'constructor') && !Object.hasOwn(gelesen, 'toString') && String(gelesen) === '[object Object]', 'SEC-S-006: fremde Zeilen überschreiben nichts beim Lesen')
+    await knex('coinradar_settings').whereIn('schluessel', ['constructor', 'toString']).del()
+}
+
+// SEC-S-005: was an der Prüfung vorbei in der Datenbank steht (Backup-Import), wird beim Lesen bereinigt
+{
+    const vorher = await knex('coinradar_settings').whereIn('schluessel', ['huerdenAktien', 'gewichteAktien'])
+    const setze = (schluessel, wert) => knex('coinradar_settings').insert({ schluessel, wert: JSON.stringify(wert), aktualisiertAm: 1 }).onConflict('schluessel').merge(['wert'])
+    await setze('huerdenAktien', { minUmsatz24hUsd: 'viel', maxSpreadBp: 7.5, minKerzen: 9999, fremd: 1 })
+    await setze('gewichteAktien', { staerke: 'abc', trend: 20, bewegung: -5 })
+    let g = await leseEinstellungen()
+    gleich(g.huerdenAktien, { ...VORGABEN.huerdenAktien, maxSpreadBp: 7.5 }, 'SEC-S-005: ungültige Hürden fallen je Feld auf die Vorgabe, gültige bleiben')
+    gleich(g.gewichteAktien, { ...VORGABEN.gewichteAktien, trend: 20 }, 'SEC-S-005: Text und Negatives als Gewicht fallen auf die Vorgabe')
+    await setze('huerdenAktien', 'kaputt')
+    await setze('gewichteAktien', [1, 2, 3])
+    g = await leseEinstellungen()
+    gleich([g.huerdenAktien, g.gewichteAktien], [VORGABEN.huerdenAktien, VORGABEN.gewichteAktien], 'SEC-S-005: Text oder Liste statt Objekt → Vorgaben')
+    for (const z of vorher) await knex('coinradar_settings').where('schluessel', z.schluessel).update({ wert: z.wert })
+    gleich((await leseEinstellungen()).huerdenAktien.maxSpreadBp, 7.5, 'der Stand von vorher ist wiederhergestellt')
+}
+
 // Die Coin-Regeln der Route gelten weiter
 r = await rufe('put', '/api/coin-radar/einstellungen', { body: { gewichte: { bewegung: 0, imSpiel: 0, trend: 0, kosten: 0 } } })
 gleich(r.status, 400, 'Coin-Gewichte alle null: weiter abgelehnt')

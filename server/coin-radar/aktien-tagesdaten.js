@@ -9,7 +9,9 @@
  *                jeden Titel (`newcomer_titel.kennzahlen`) — ist sein Stand
  *                frisch, kostet der Lauf keinen Abruf;
  *   2. Abruf     sonst zwei Jahre Tageskerzen je Titel, nur für die Titel,
- *                die die Hürden genommen haben.
+ *                die die Hürden genommen haben. Die übrigen Titel des
+ *                Universums zählen mit ihrem gemerkten Stand zum Feld des
+ *                Stärke-Rangs (`nurGemerkt`), kosten aber nie einen Abruf.
  *
  * Fällt die Quelle aus, läuft der Radar weiter: die Stärke bleibt dann
  * unbekannt und fällt aus der Note (`bewerteAktie`), der Grund steht im Lauf.
@@ -51,7 +53,8 @@ async function gemerkte(knex, ids, jetzt) {
 
 /**
  * @param {object} knex
- * @param {{symbol: string, id: number|null, ticker: string, region?: string|null}[]} titel
+ * @param {{symbol: string, id: number|null, ticker: string, region?: string|null, nurGemerkt?: boolean}[]} titel
+ *        `nurGemerkt`: nur den Stand des Newcomer-Radars nutzen, nie abrufen
  * @param {(f: {fertig: number, gesamt: number}) => void} [melde]
  * @param {number} [jetzt]
  * @param {Function} [abruf]  nur der Selbsttest reicht eine Attrappe für `holeChart` herein
@@ -79,21 +82,24 @@ export async function ladeTagesdaten(knex, titel, melde = () => { }, jetzt = Dat
     }
 
     let fertig = 0
+    // Bremst die Quelle oder ist sie aus, wird nicht mehr gefragt — gemerkte Stände zählen weiter (Feld des Stärke-Rangs).
+    let ohneAbruf = false
     for (const t of titel) {
         fertig++
         const kursSymbol = aus.kursSymbole.get(t.symbol)
         // Gemerkte Kennzahlen gelten nur, wenn auch ihr Kurssymbol noch gilt (sonst sind es die einer fremden Firma).
         const k = t.id && kursSymbol && kursSymbol === zeilen.get(t.id)?.kursSymbol ? gemerkt.get(t.id) : null
         if (k) { aus.je.set(t.symbol, auszug(k, 'gemerkt')); aus.gemerkt++; continue }
-        if (!kursSymbol) continue
+        // Titel unter den Hürden weiten nur das Feld für den Stärke-Rang (FACH-H-013): für sie kein Abruf.
+        if (!kursSymbol || t.nurGemerkt || ohneAbruf) continue
         try {
             const chart = await holeChart(kursSymbol, jetzt)
             aus.je.set(t.symbol, auszug(kennzahlen(chart.kerzen, { jetzt, ipoDatum: chart.meta.ipoDatum }), 'abruf'))
             aus.abgerufen++
         } catch (e) {
             // Bremst die Quelle, hört der Lauf auf zu fragen — was schon da ist, bleibt.
-            if (e instanceof Gebremst) { aus.grund = 'gebremst'; break }
-            if (istAus(e)) { aus.grund = 'quelleAus'; break }
+            if (e instanceof Gebremst) { aus.grund = 'gebremst'; ohneAbruf = true; continue }
+            if (istAus(e)) { aus.grund = 'quelleAus'; ohneAbruf = true; continue }
             if (!(e instanceof NichtGefunden)) logWarn('coin-radar', `Tagesdaten ${kursSymbol}: ${e.message}`)
         }
         if (fertig % 10 === 0) melde({ fertig, gesamt: titel.length })

@@ -15,6 +15,7 @@ import { getKnex } from '../database.js'
 import { STANDARD_GEWICHTE, STANDARD_HUERDEN, STANDARD_HUERDEN_AKTIEN } from './bewertung.js'
 import { GEWICHTE_AKTIEN } from './aktien-kennzahlen.js'
 import { ZEITPLAN_VORGABE } from './aktien-zeitplan.js'
+import { leseHuerdenAktien, leseGewichteAktien } from './aktien-einstellungen.js'
 
 export const VORGABEN = {
     /*
@@ -70,7 +71,8 @@ export async function leseEinstellungen() {
 
     const e = { ...VORGABEN }
     for (const z of zeilen) {
-        if (!(z.schluessel in VORGABEN)) continue
+        // `Object.hasOwn`, nicht `in`: sonst gelten `__proto__`, `constructor`, `toString` als Schlüssel (SEC-S-006).
+        if (!Object.hasOwn(VORGABEN, z.schluessel)) continue
         let wert
         try {
             wert = JSON.parse(z.wert)
@@ -87,6 +89,13 @@ export async function leseEinstellungen() {
             ? { ...vorgabe, ...wert }
             : wert
     }
+    /*
+     * Hürden und Gewichte des Aktien-Radars auch beim LESEN prüfen (SEC-S-005):
+     * über einen Backup-Import oder direkten DB-Zugriff kommt ein Wert an der
+     * Prüfung beim Speichern vorbei — Text als Gewicht ergab NaN in der Note.
+     */
+    e.huerdenAktien = leseHuerdenAktien(e.huerdenAktien)
+    e.gewichteAktien = leseGewichteAktien(e.gewichteAktien)
     return e
 }
 
@@ -94,7 +103,7 @@ export async function leseEinstellungen() {
 export async function schreibeEinstellungen(neu = {}) {
     const jetzt = Date.now()
     const zeilen = Object.entries(neu)
-        .filter(([k]) => k in VORGABEN)
+        .filter(([k]) => Object.hasOwn(VORGABEN, k))
         .map(([schluessel, v]) => ({ schluessel, wert: JSON.stringify(v), aktualisiertAm: jetzt }))
     if (!zeilen.length) return
 

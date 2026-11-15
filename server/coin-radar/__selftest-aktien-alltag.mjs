@@ -15,12 +15,13 @@ import {
 } from './aktien-zeitplan.js'
 import {
     bereinigeHuerdenAktien, bereinigeGewichteAktien, bereinigeAktienEinstellungen, zahlAus, fehlerText, HUERDEN_GRENZEN,
+    leseHuerdenAktien, leseGewichteAktien,
 } from './aktien-einstellungen.js'
 import {
     ART_AKTIEN, HORIZONTE_AKTIEN, KERZEN_AKTIEN, waehleAktienRadar, werteAktienLaufAus, werteAusAktien, URTEILE_AKTIEN,
 } from './aktien-erfolg.js'
 import { STANDARD_HUERDEN_AKTIEN, STANDARD_HUERDEN, STANDARD_GEWICHTE } from './bewertung.js'
-import { GEWICHTE_AKTIEN } from './aktien-kennzahlen.js'
+import { GEWICHTE_AKTIEN, bewerteAktie } from './aktien-kennzahlen.js'
 import { VORGABEN } from './einstellungen.js'
 import { HORIZONTE, DECKEL_JE_ART, rechneFenster } from '../radar-ergebnisse.js'
 import { timeframeMs } from '../market-data.js'
@@ -206,6 +207,33 @@ gleich(bereinigeGewichteAktien({ staerke: 101 }).fehler, 'bereich', 'Gewichte: �
 gleich(bereinigeGewichteAktien({ staerke: -5 }).fehler, 'bereich', 'Gewichte: negativ abgelehnt')
 gleich(bereinigeGewichteAktien({ staerke: 'viel' }), { fehler: 'keineZahl', feld: 'staerke' }, 'Gewichte: Text abgelehnt')
 ok(!('kosten' in bereinigeGewichteAktien({ kosten: 20, staerke: 40 }).wert), 'Gewichte: Funding («kosten») wird nie zur Teilnote')
+
+// SEC-S-005: Bereinigung beim Lesen — nie ein Fehler, nie NaN, je Feld zurück auf die Vorgabe
+gleich(leseHuerdenAktien(undefined), STANDARD_HUERDEN_AKTIEN, 'Lesen: ohne Wert die Vorgaben')
+gleich(leseHuerdenAktien({ maxSpreadBp: '7,5', minUmsatz24hUsd: 'abc', minTiefeUsd: -1, minKerzen: 30.5 }), { ...STANDARD_HUERDEN_AKTIEN, maxSpreadBp: 7.5 }, 'Lesen: gültige Hürde bleibt, ungültige fallen auf die Vorgabe')
+gleich(leseHuerdenAktien('x'), STANDARD_HUERDEN_AKTIEN, 'Lesen: Text statt Objekt → Vorgaben')
+gleich(leseHuerdenAktien(JSON.parse('{"__proto__": {"maxSpreadBp": 1}}')), STANDARD_HUERDEN_AKTIEN, 'Lesen: nur eigene Felder zählen')
+ok(leseHuerdenAktien({}) !== STANDARD_HUERDEN_AKTIEN, 'Lesen: eine Kopie, nicht die Vorgabe selbst')
+gleich(leseGewichteAktien({ staerke: 'viel', trend: 25, kosten: 20, imSpiel: 101 }), { ...GEWICHTE_AKTIEN, trend: 25 }, 'Lesen: Text, Unbekanntes und zu Grosses als Gewicht fallen weg')
+gleich(leseGewichteAktien({ staerke: 0, hochNaehe: 0, imSpiel: 0, bewegung: 0, trend: 0 }), GEWICHTE_AKTIEN, 'Lesen: alle null → Vorgaben')
+gleich(leseGewichteAktien(null), GEWICHTE_AKTIEN, 'Lesen: null → Vorgaben')
+{
+    const b = bewerteAktie({ kerzen: { atrPct: 1, adx: 30 }, rvol: 2, staerkeRang: 80, abstandHochPct: -5 }, leseGewichteAktien({ staerke: 'abc', trend: {} }))
+    ok(Number.isFinite(b.note) && b.gewichtBekannt === 100, 'Lesen: Text als Gewicht ergibt keine NaN-Note mehr')
+}
+{
+    // FUN-F-008: die Hürde wirkt jetzt im Lauf — mehr als ein Lauf holt, darf sie nicht verlangen
+    const { readFileSync } = await import('node:fs')
+    const hier = new URL('.', import.meta.url)
+    const anzahl = Number(/export const KERZEN_ANZAHL = (\d+)/.exec(readFileSync(new URL('daten.js', hier), 'utf8'))?.[1])
+    gleich(HUERDEN_GRENZEN.minKerzen.max, anzahl, 'Hürden: Obergrenze der Kerzenzahl = was ein Lauf je Titel holt')
+    gleich(bereinigeHuerdenAktien({ minKerzen: anzahl + 1 }).fehler, 'bereich', 'Hürden: mehr Kerzen als geholt werden — abgelehnt')
+    gleich(leseHuerdenAktien({ minKerzen: 500 }).minKerzen, STANDARD_HUERDEN_AKTIEN.minKerzen, 'Lesen: ein alter Wert über der Grenze fällt auf die Vorgabe')
+    const lauf = readFileSync(new URL('lauf.js', hier), 'utf8')
+    ok(/aktien && [^\n]*genugKerzen\(kerzen\[haupt\], huerden\.minKerzen\)/.test(lauf), 'der Lauf wendet `minKerzen` an — nur bei Aktien')
+    ok(lauf.includes('leseHuerdenAktien(einst.huerdenAktien)') && lauf.includes('leseGewichteAktien(einst.gewichteAktien)'), 'der Lauf liest Hürden und Gewichte bereinigt (SEC-S-005)')
+    ok(/if \(aktien\) \{\s+const handel = rechneAlle\(/.test(lauf), 'ATR/ADX ohne geschlossene Börse: nur bei Aktien (FACH-H-013)')
+}
 
 // Die Route prüft nur die Aktien-Schlüssel; Coin-Schlüssel fasst sie nicht an
 gleich(bereinigeAktienEinstellungen({ gewichte: { atr: 1 }, aktiv: true }).neu, {}, 'Coin-Schlüssel bleiben unberührt')

@@ -22,7 +22,9 @@ export const HUERDEN_GRENZEN = Object.freeze({
     minUmsatz24hUsd: { min: 0, max: 100_000_000_000 },
     maxSpreadBp: { min: 0.1, max: 1000 },
     minTiefeUsd: { min: 0, max: 1_000_000_000 },
-    minKerzen: { min: 20, max: 500, ganz: true },
+    // Obergrenze = was ein Lauf je Titel holt (`KERZEN_ANZAHL` in `daten.js`). Seit die Hürde im Lauf
+    // wirkt (FUN-F-008), liesse ein Wert darüber keinen einzigen Titel durch.
+    minKerzen: { min: 20, max: 200, ganz: true },
 })
 
 export const GEWICHT_GRENZEN = Object.freeze({ min: 0, max: 100 })
@@ -77,6 +79,43 @@ export function bereinigeGewichteAktien(roh) {
     }
     if (!(Object.values(wert).reduce((a, b) => a + b, 0) > 0)) return { fehler: 'gewichteNull' }
     return { wert: gleich(wert, GEWICHTE_AKTIEN) ? null : wert }
+}
+
+/*
+ * Bereinigung beim LESEN (Audit 15.11.2026, SEC-S-005). Was in der Datenbank
+ * steht, ist nicht zwingend durch die Prüfung oben gegangen: ein Backup-Import
+ * oder ein direkter DB-Zugriff schreibt daran vorbei. Text als Gewicht ergab
+ * NaN in der Note, eine Hürde «abc» liess jeden Vergleich scheitern.
+ *
+ * Anders als beim Speichern wird hier nichts abgelehnt: jedes Feld, das die
+ * Grenzen nicht einhält, fällt für sich auf die Vorgabe zurück — ein kaputter
+ * Wert soll den Lauf nicht anhalten und die übrigen nicht mitnehmen.
+ */
+
+/** Hürden, wie der Lauf sie benutzen darf: immer vollständig, immer Zahlen in den Grenzen. */
+export function leseHuerdenAktien(roh) {
+    const wert = { ...STANDARD_HUERDEN_AKTIEN }
+    if (!istObjekt(roh)) return wert
+    for (const [feld, g] of Object.entries(HUERDEN_GRENZEN)) {
+        if (!Object.hasOwn(roh, feld)) continue
+        const n = zahlAus(roh[feld])
+        if (n === null || n < g.min || n > g.max || (g.ganz && !Number.isInteger(n))) continue
+        wert[feld] = n
+    }
+    return wert
+}
+
+/** Gewichte, wie der Lauf sie benutzen darf. Sind danach alle null, gelten die Vorgaben. */
+export function leseGewichteAktien(roh) {
+    const wert = { ...GEWICHTE_AKTIEN }
+    if (!istObjekt(roh)) return wert
+    for (const feld of Object.keys(GEWICHTE_AKTIEN)) {
+        if (!Object.hasOwn(roh, feld)) continue
+        const n = zahlAus(roh[feld])
+        if (n === null || n < GEWICHT_GRENZEN.min || n > GEWICHT_GRENZEN.max) continue
+        wert[feld] = n
+    }
+    return Object.values(wert).reduce((a, b) => a + b, 0) > 0 ? wert : { ...GEWICHTE_AKTIEN }
 }
 
 /**

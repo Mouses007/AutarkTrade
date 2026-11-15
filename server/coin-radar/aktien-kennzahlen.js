@@ -27,7 +27,7 @@
  * Rein — kein Netz, keine Datenbank. Unbekannt bleibt `null` und fällt aus dem
  * Nenner der Note, statt als gut oder schlecht zu zählen.
  */
-import { sitzungVon, nyTeile } from '../../shared/aktien-sitzung.js'
+import { sitzungVon, nyTeile, sitzungenDerKerze, sitzungsRegelAnwendbar } from '../../shared/aktien-sitzung.js'
 import { skala, ANKER } from './bewertung.js'
 
 /** Vorgabe-Gewichte der Aktien-Note. Summe 100. */
@@ -100,6 +100,47 @@ export function rvolTageszeit(kerzen = []) {
     if (!proben) return null
     const mitte = median(proben)
     return mitte > 0 ? { rvol: aktuell / mitte, basis, proben: proben.length, sitzung } : null
+}
+
+/**
+ * Kerzen ohne die Zeit, in der die US-Börse geschlossen ist (Wochenende,
+ * Feiertag) — die Reihe, auf der ATR und ADX der Aktien-Note stehen.
+ *
+ * Der Future läuft am Wochenende weiter, aber flach und dünn. Auf der vollen
+ * Reihe fiel der ADX bis Sonntag auf 10 und sprang mit dem Wiederanlauf am
+ * Montagfrüh auf 48 — «starker Trend», Teilnote 100, Note 40 → 66 → 42
+ * binnen drei Tagen bei unveränderter Aktie (Audit 15.11.2026, FACH-H-013,
+ * gemessen an NVDA). Ohne diese Kerzen schliesst Sonntag 20:00 an Freitag
+ * 20:00 an; der Sprung dazwischen ist eine echte Kurslücke und bleibt als
+ * eine Spanne in der ATR.
+ *
+ * Eine Kerze fällt nur weg, wenn sie GANZ in geschlossener Zeit liegt (eine
+ * 4h-Kerze über Sonntag 20:00 bleibt). Ab Tageskerzen gilt die Regel nicht
+ * (`sitzungsRegelAnwendbar`); die Kerzenlänge wird aus der Reihe gelesen.
+ *
+ * @param {{t:number}[]} kerzen  geschlossene Kerzen, älteste zuerst
+ * @returns {{t:number}[]}  dieselben Objekte, gefiltert (oder die Eingabe selbst)
+ */
+export function ohneGeschlosseneBoerse(kerzen = []) {
+    if (!Array.isArray(kerzen) || kerzen.length < 2) return kerzen
+    let ivMs = Infinity
+    for (let i = 1; i < kerzen.length; i++) {
+        const d = Number(kerzen[i].t) - Number(kerzen[i - 1].t)
+        if (d > 0 && d < ivMs) ivMs = d
+    }
+    if (!sitzungsRegelAnwendbar(ivMs)) return kerzen
+    return kerzen.filter((k) => !sitzungenDerKerze(Number(k.t), ivMs).every((s) => GESCHLOSSEN.includes(s)))
+}
+
+/**
+ * Hürde «Mindestens N Kerzen»: hat der Future genug Historie? Gezählt werden
+ * die geholten Kerzen der Hauptzeiteinheit (alle, auch die vom Wochenende —
+ * die Hürde fragt nach dem Alter der Listung, nicht nach dem Wochentag).
+ * Bis 15.11.2026 las niemand den Wert (Audit FUN-F-008).
+ */
+export function genugKerzen(kerzen, minKerzen) {
+    const n = Number(minKerzen)
+    return !(n > 0) || (Array.isArray(kerzen) && kerzen.length >= n)
 }
 
 /**

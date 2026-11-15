@@ -33,9 +33,10 @@ import { vergleicheMitBtc, BTC_REFERENZ, BTC_ZEITEINHEIT } from './btc-vergleich
 import { rechneAlle, fundingJahresRate } from './kennzahlen.js'
 import {
     bewerte, pruefeHuerden, vergibRaenge, rangkorrelation,
-    STANDARD_GEWICHTE, STANDARD_HUERDEN, STANDARD_HUERDEN_AKTIEN,
+    STANDARD_GEWICHTE, STANDARD_HUERDEN,
 } from './bewertung.js'
-import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, GEWICHTE_AKTIEN } from './aktien-kennzahlen.js'
+import { rvolTageszeit, staerkeGegenIndex, staerkeImFeld, bewerteAktie, ohneGeschlosseneBoerse, genugKerzen } from './aktien-kennzahlen.js'
+import { leseHuerdenAktien, leseGewichteAktien } from './aktien-einstellungen.js'
 import { ladeTagesdaten, INDEX } from './aktien-tagesdaten.js'
 import { sitzungVon } from '../../shared/aktien-sitzung.js'
 import { ladeTermine } from '../aktien/termine.js'
@@ -148,8 +149,9 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         const { liste, unbekannt } = pruefeListung(basis, listen)
         return { liste, unbekannt }
     }
+    // Aktien: beim Lesen bereinigt (SEC-S-005) — auch wenn `einst` nicht aus `leseEinstellungen` kommt.
     const huerden = aktien
-        ? { ...STANDARD_HUERDEN_AKTIEN, ...(einst.huerdenAktien || {}) }
+        ? leseHuerdenAktien(einst.huerdenAktien)
         : { ...STANDARD_HUERDEN, ...(einst.huerden || {}) }
     // Woran die Kopplung gemessen wird — steht im Lauf, damit die Seite es nennen kann.
     const referenz = aktien ? waehleReferenz(aktienTitel) : { symbol: BTC_REFERENZ, ticker: 'BTC' }
@@ -337,27 +339,45 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
      */
     let tagesdaten = { je: new Map(), index: null, grund: null, gemerkt: 0, abgerufen: 0 }
     const staerkeJe = new Map()
+    let staerkeFeld = 0
     if (aktien && !abbruch()) {
         melde({ schritt: 'staerke', gesamt: offen.length })
+        /*
+         * Das Feld für den Rang ist das GANZE Universum, nicht nur was heute die
+         * Hürden nahm (Audit 15.11.2026, FACH-H-013): am Wochenende reissen
+         * kleinere Titel die Umsatz-Hürde, das Feld schrumpfte (Sonntag 91 von
+         * 227) und verschob den Rang aller übrigen — die Stärke einer Aktie über
+         * 3 bis 12 Monate hängt aber nicht am Wochentag. Abgerufen wird weiterhin
+         * nur für die Titel über den Hürden (zuerst in der Liste); die anderen
+         * zählen mit dem Stand, den der Newcomer-Radar gemerkt hat (`nurGemerkt`).
+         * Ohne dessen Stand bleibt das Feld, wie es war.
+         */
+        const titelFuer = (symbol, mehr = {}) => ({
+            symbol, id: aktienTitel.get(symbol)?.id ?? null, ticker: aktienTitel.get(symbol)?.ticker, region: aktienTitel.get(symbol)?.region, ...mehr,
+        })
+        const ueberHuerden = new Set(offen.map((a) => a.symbol))
+        const feld = [
+            ...offen.map((a) => titelFuer(a.symbol)),
+            ...universum.filter((s) => !ueberHuerden.has(s)).map((s) => titelFuer(s, { nurGemerkt: true })),
+        ]
         try {
-            tagesdaten = await ladeTagesdaten(
-                knex,
-                offen.map((a) => ({ symbol: a.symbol, id: aktienTitel.get(a.symbol)?.id ?? null, ticker: aktienTitel.get(a.symbol)?.ticker, region: aktienTitel.get(a.symbol)?.region })),
-                (f) => melde({ schritt: 'staerke', ...f }),
-            )
+            tagesdaten = await ladeTagesdaten(knex, feld, (f) => melde({ schritt: 'staerke', ...f }))
         } catch (e) {
             tagesdaten.grund = 'abrufFehlgeschlagen'
             logWarn('coin-radar', `Tagesdaten nicht ladbar: ${e.message}`)
         }
         const index = tagesdaten.index?.[INDEX.haupt]
-        const liste = offen.map((a) => {
-            const t = tagesdaten.je.get(a.symbol)
+        const liste = feld.map((f) => {
+            const t = tagesdaten.je.get(f.symbol)
             const st = t && index ? staerkeGegenIndex(t, index) : { rs3m: null, rs6m: null, rs12m: null }
-            staerkeJe.set(a.symbol, st)
+            staerkeJe.set(f.symbol, st)
             return st
         })
-        // Rang im Feld der Titel, die die Hürden genommen haben — je Zeitraum, dann gemittelt.
-        staerkeImFeld(liste).forEach((rang, i) => { staerkeJe.get(offen[i].symbol).rang = rang })
+        // Rang im Feld — je Zeitraum, dann gemittelt.
+        staerkeImFeld(liste).forEach((rang, i) => {
+            staerkeJe.get(feld[i].symbol).rang = rang
+            if (rang != null) staerkeFeld++
+        })
     }
 
     /*
@@ -390,7 +410,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
     // ── Stufe 4: Bewertung ──────────────────────────────────────────────
     melde({ schritt: 'bewerten', gesamt: offen.length })
     const gewichte = aktien
-        ? { ...GEWICHTE_AKTIEN, ...(einst.gewichteAktien || {}) }
+        ? leseGewichteAktien(einst.gewichteAktien)
         : { ...STANDARD_GEWICHTE, ...(einst.gewichte || {}) }
     const zeilen = []
 
@@ -403,6 +423,16 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
                 if (k) kerzen[ze] = k
             }
             const ze = rechneAlle(kerzen)
+            /*
+             * Aktien: ATR und ADX auf den Kerzen der Handelstage — ohne das flache
+             * Wochenende, dessen Wiederanlauf als «starker Trend» zählte
+             * (FACH-H-013, `ohneGeschlosseneBoerse`). Preis, Kerzenzahl und das alte
+             * RVOL bleiben von der vollen Reihe. Coins: unverändert.
+             */
+            if (aktien) {
+                const handel = rechneAlle(Object.fromEntries(Object.entries(kerzen).map(([k, v]) => [k, ohneGeschlosseneBoerse(v)])))
+                for (const k of Object.keys(ze)) ze[k] = { ...ze[k], atrPct: handel[k].atrPct, adx: handel[k].adx }
+            }
 
             /*
              * Ohne Kerzen auf der Hauptzeiteinheit keine Bewertung. Das als
@@ -413,10 +443,12 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
             // solchen Kerzen ist jede Kennzahl wertlos — nicht bewerten, und damit
             // auch nicht in die Erfolgskontrolle (die nur Bewertete verfolgt).
             const splitOffen = splitJe.get(a.symbol)?.offen === true
-            if (splitOffen || !ze[haupt] || ze[haupt].atrPct === null) {
+            // Nur Aktien: die Hürde «Mindestens N Kerzen» (FUN-F-008) — bei Coins las sie nie jemand, und das bleibt so.
+            const zuJung = aktien && Boolean(kerzen[haupt]?.length) && !genugKerzen(kerzen[haupt], huerden.minKerzen)
+            if (splitOffen || zuJung || !ze[haupt] || ze[haupt].atrPct === null) {
                 zeilen.push({
                     laufId: lauf.id, symbol: a.symbol, status: 'huerde',
-                    huerdeGrund: splitOffen ? 'split_unbereinigt' : 'keine_kerzen',
+                    huerdeGrund: splitOffen ? 'split_unbereinigt' : zuJung ? 'zu_wenig_kerzen' : 'keine_kerzen',
                     umsatz24h: zahlOderNull(a.roh.umsatz24h),
                     spreadBp: zahlOderNull(a.roh.spreadBp),
                     tiefeUsd: zahlOderNull(a.roh.tiefeUsd),
@@ -517,7 +549,8 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
         quellenStand.staerke = {
             ok: Boolean(tagesdaten.index) && tagesdaten.je.size > 0,
             grund: tagesdaten.grund, index: INDEX.haupt,
-            mit: tagesdaten.je.size, gemerkt: tagesdaten.gemerkt, abgerufen: tagesdaten.abgerufen,
+            // `mit` = Titel mit Tagesdaten im ganzen Universum, `feld` = wie viele davon einen Stärke-Rang tragen
+            mit: tagesdaten.je.size, feld: staerkeFeld, gemerkt: tagesdaten.gemerkt, abgerufen: tagesdaten.abgerufen,
             indexPerf: tagesdaten.index?.[INDEX.haupt] || null, zweit: tagesdaten.index?.[INDEX.zweit] || null,
         }
         quellenStand.zahlen = { mit: zahlenJe.size, grund: zahlenGrund }

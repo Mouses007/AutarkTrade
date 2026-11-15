@@ -60,6 +60,25 @@ ok(!r.je.has('BYDUSDT'), 'BYD (HK): auch die gemerkten Kennzahlen des Falschtref
 ok(!r.je.has('SANUSDT') && !r.je.has('SAMSUNGUSDT'), 'SAN mit keinTreffer und Titel mit Region KR: keine Tagesdaten')
 gleich([r.je.get('ASMLUSDT')?.quelle, r.je.get('NVDAUSDT')?.quelle, r.gemerkt, r.abgerufen], ['gemerkt', 'abruf', 1, 1], 'gültiger Stand wird genutzt, der Rest abgerufen')
 
+// FACH-H-013: Titel unter den Hürden weiten das Feld des Stärke-Rangs — mit gemerktem Stand, nie mit einem Abruf.
+{
+    gefragt.length = 0
+    const feld = [
+        { symbol: 'NVDAUSDT', id: 4, ticker: 'NVDA' },
+        { symbol: 'ASMLUSDT', id: 3, ticker: 'ASML', nurGemerkt: true },
+        { symbol: 'AMDUSDT', id: 5, ticker: 'AMD', nurGemerkt: true },
+    ]
+    const f = await ladeTagesdaten(knex, feld, () => { }, jetzt, abruf)
+    gleich(gefragt.filter((s) => !Object.values(INDEX).includes(s)), ['NVDA'], '`nurGemerkt`: für AMD (kein Stand) geht kein Abruf hinaus')
+    ok(f.je.get('ASMLUSDT')?.quelle === 'gemerkt' && !f.je.has('AMDUSDT') && f.je.get('NVDAUSDT')?.quelle === 'abruf', '`nurGemerkt`: der gemerkte Stand zählt, ohne Stand bleibt der Titel aus dem Feld')
+    // Bremst die Quelle beim ersten Titel, wird nicht weiter gefragt — der gemerkte Stand dahinter zählt trotzdem.
+    const { Gebremst } = await import('../newcomer-radar/kursquelle.js')
+    let fragen = 0
+    const bremse = async (symbol) => { if (Object.values(INDEX).includes(symbol)) return abruf(symbol); fragen++; throw new Gebremst('HTTP 429') }
+    const g = await ladeTagesdaten(knex, [{ symbol: 'NVDAUSDT', id: 4, ticker: 'NVDA' }, { symbol: 'AMDUSDT', id: 5, ticker: 'AMD' }, ...feld.slice(1)], () => { }, jetzt, bremse)
+    ok(g.grund === 'gebremst' && fragen === 1 && g.je.get('ASMLUSDT')?.quelle === 'gemerkt' && !g.je.has('NVDAUSDT'), 'gebremst: ein Versuch, danach kein Abruf mehr, Gemerktes bleibt im Feld')
+}
+
 // Das Universum reicht die Region des Stamms durch.
 const u = universumAus([{ id: 1, ticker: 'BYD', region: 'HK', name: null, unterart: 'aktie', listungen: [{ handelsplatz: 'binance', symbol: 'BYDUSDT', art: 'perp', quote: 'USDT' }] }], 'binance')
 gleich(u.get('BYDUSDT').region, 'HK', 'Region kommt im Universum an')

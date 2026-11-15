@@ -4,7 +4,7 @@
  *   node server/coin-radar/__selftest-aktien-kennzahlen.mjs
  */
 import assert from 'node:assert/strict'
-import { rvolTageszeit, staerkeGegenIndex, raengeImFeld, staerkeImFeld, bewerteAktie, GEWICHTE_AKTIEN, DECKEL_DUENN } from './aktien-kennzahlen.js'
+import { ohneGeschlosseneBoerse, genugKerzen, rvolTageszeit, staerkeGegenIndex, raengeImFeld, staerkeImFeld, bewerteAktie, GEWICHTE_AKTIEN, DECKEL_DUENN } from './aktien-kennzahlen.js'
 import { bewerte, STANDARD_GEWICHTE } from './bewertung.js'
 
 let n = 0
@@ -112,5 +112,48 @@ ok(STANDARD_GEWICHTE.kosten === 15 && bewerte({ fundingJahresRate: 0 }, { '1h': 
     await ohneSplitSpruengeJe(new Map([['NVDAUSDT', mitSprung]]), async () => null, offen)
     ok(offen.get('NVDAUSDT').offen === true, 'Splits unbekannt: offen — der Lauf bewertet den Titel nicht (`split_unbereinigt`)')
 }
+
+// ── ATR/ADX ohne geschlossene Börse (FACH-H-013) ──
+{
+    const { rechneZeiteinheit } = await import('./kennzahlen.js')
+    // 200 Stundenkerzen bis Mo 16.11.2026 07:00 UTC (02:00 New York, Sitzung «nacht»):
+    // werktags unruhig seitwärts, am Wochenende flach, seit Sonntag 20:00 New York ein stetiger Anstieg.
+    const ende = Date.UTC(2026, 10, 16, 7), start = ende - 199 * H
+    const k = []
+    let c = 100
+    for (let i = 0; i < 200; i++) {
+        const t = start + i * H, s = sitzungVon(t)
+        const zu = ['wochenende', 'feiertag'].includes(s)
+        const anlauf = !zu && t >= Date.UTC(2026, 10, 16, 1)
+        const o = c
+        c = zu ? c : anlauf ? c + 0.4 : c + (i % 2 ? 0.6 : -0.6)
+        k.push({ t, o, h: Math.max(o, c) + (zu ? 0.01 : 0.2), l: Math.min(o, c) - (zu ? 0.01 : 0.2), c, v: zu ? 20 : 500 })
+    }
+    const handel = ohneGeschlosseneBoerse(k)
+    ok(handel.length < k.length && handel.every((x) => !['wochenende', 'feiertag'].includes(sitzungVon(x.t))), 'Wochenendkerzen fallen weg')
+    ok(k.length - handel.length >= 48, `mindestens ein ganzes Wochenende (48 h) fehlt (${k.length - handel.length})`)
+    ok(handel.at(-1) === k.at(-1) && handel.some((x) => x.t === Date.UTC(2026, 10, 16, 1)), 'Sonntag 20:00 New York gehört zum Montag und bleibt')
+    const voll = rechneZeiteinheit(k), ohne = rechneZeiteinheit(handel)
+    ok(ohne.adx < voll.adx - 10, `der Wiederanlauf nach dem flachen Wochenende zählt nicht mehr als starker Trend (ADX ${voll.adx.toFixed(1)} → ${ohne.adx.toFixed(1)})`)
+    ok(Number.isFinite(ohne.atrPct) && ohne.preis === voll.preis, 'ATR bleibt messbar, der Preis ist derselbe')
+
+    // Gegenprobe: unter der Woche ändert die Regel nichts
+    const woche = k.filter((x) => x.t < Date.UTC(2026, 10, 13, 20)).slice(-60)
+    ok(ohneGeschlosseneBoerse(woche).length === woche.length, 'Gegenprobe: Kerzen von Handelstagen bleiben alle')
+    // Feiertag: Do 26.11.2026 (Thanksgiving) 12:00 New York fällt weg, der Mittwoch davor nicht
+    const feier = [Date.UTC(2026, 10, 25, 17), Date.UTC(2026, 10, 25, 18), Date.UTC(2026, 10, 26, 17), Date.UTC(2026, 10, 26, 18)].map((t) => ({ t }))
+    ok(ohneGeschlosseneBoerse(feier).length === 2, 'Feiertagskerzen fallen weg')
+    // 4h: eine Kerze, die Sonntag 20:00 New York überdeckt, bleibt; eine ganz im Wochenende fällt
+    const vier = [Date.UTC(2026, 10, 14, 12), Date.UTC(2026, 10, 14, 16), Date.UTC(2026, 10, 15, 20), Date.UTC(2026, 10, 16, 0), Date.UTC(2026, 10, 16, 4)].map((t) => ({ t }))
+    ok(ohneGeschlosseneBoerse(vier).map((x) => x.t).join() === [Date.UTC(2026, 10, 16, 0), Date.UTC(2026, 10, 16, 4)].join(), '4h: nur Kerzen ganz in geschlossener Zeit fallen weg')
+    // Tageskerzen: Regel nicht anwendbar, die Reihe bleibt dieselbe
+    const tage = Array.from({ length: 10 }, (_, i) => ({ t: Date.UTC(2026, 10, 7 + i) }))
+    ok(ohneGeschlosseneBoerse(tage) === tage && ohneGeschlosseneBoerse([]).length === 0 && ohneGeschlosseneBoerse([{ t: 1 }]).length === 1, 'ab 1d und bei leerer Reihe unverändert')
+}
+
+// ── Hürde «Mindestens N Kerzen» (FUN-F-008) ──
+ok(genugKerzen(new Array(30), 30) && !genugKerzen(new Array(29), 30), 'genau N Kerzen reichen, N − 1 nicht')
+ok(!genugKerzen(undefined, 30) && !genugKerzen([], 30), 'ohne Kerzen nicht genug')
+ok(genugKerzen([], 0) && genugKerzen([], undefined) && genugKerzen([], 'abc'), 'ohne gültige Hürde sperrt sie nichts')
 
 console.log(`✓ Aktien-Radar Kennzahlen: ${n} Prüfungen`)
