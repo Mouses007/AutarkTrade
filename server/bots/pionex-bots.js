@@ -103,6 +103,8 @@ export function normalisiereBot(o) {
     const stopWert = (typAngabe, wert) => {
         const t = String(typAngabe || '')
         if (wert === null || wert === undefined || wert === '') return null
+        // Ein Preis-Stop von 0 ist keiner (so meldet Pionex einen entfernten Stop)
+        if (/price/.test(t) && !(zahl(wert) > 0)) return null
         return { art: t || null, wert: /price/.test(t) ? p(wert) : zahl(wert) }
     }
 
@@ -150,7 +152,12 @@ export function normalisiereBot(o) {
         einsatz: {
             // Die eine Basis für Rendite, Simulation und Schritte (Audit FUN-09):
             // Coin-M in der Coin, sonst USDT-Investment, Rückfall auf quoteInvestment
-            basis: coinM ? zahl(d.quoteInvestment) : (zahl(d.usdtInvestment ?? d.initUsdtInvestment) ?? zahl(d.quoteInvestment)),
+            // USDT-Bots: `quoteInvestment` ist die HEUTIGE Investition (Pionex «Tatsächliche Investition»);
+            // `usdtInvestment` blieb am 15.11.2026 nach «Investition erhöhen» (9.2 → 19.2) und «Reduzieren»
+            // (→ 15.36) auf 9.2 stehen — der Gewinn las sich dadurch als +67 % statt −0.4 %.
+            basis: coinM ? zahl(d.quoteInvestment)
+                : (String(d.investCoin || 'USDT').toUpperCase() === 'USDT' ? (zahl(d.quoteInvestment) ?? zahl(d.usdtInvestment ?? d.initUsdtInvestment))
+                    : (zahl(d.usdtInvestment ?? d.initUsdtInvestment) ?? zahl(d.quoteInvestment))),
             aktuell: zahl(d.quoteInvestment),
             start: zahl(d.initQuoteInvestment),
             usdt: zahl(d.usdtInvestment ?? d.initUsdtInvestment),
@@ -183,9 +190,12 @@ export function normalisiereBot(o) {
             oben: liqOben,
         },
         stops: {
-            stopLoss: d.stopLossEnabled === false ? null : stopWert(d.lossStopType, d.lossStop),
+            // `stopLossEnabled`/`stopProfitEnabled` sagen NICHT, ob ein Stop gesetzt ist: am 15.11.2026 standen
+            // beide auf false, während Pionex Voll-SL ≤ 0.6 und Voll-TP ≥ 5 «wartet auf Auslösung» zeigte
+            // (auch in allen gespeicherten Antworten false, mit und ohne Stop). Es zählt der Wert.
+            stopLoss: stopWert(d.lossStopType, d.lossStop),
             stopLossOben: stopWert(d.lossStopType, d.lossStopHigh),
-            takeProfit: d.stopProfitEnabled === false ? null : stopWert(d.profitStopType, d.profitStop),
+            takeProfit: stopWert(d.profitStopType, d.profitStop),
         },
         trigger: preisOderNull(d.condition) ? { preis: p(d.condition), richtung: zahl(d.conditionDirection) } : null,
         trailing: d.movingIndicatorType ? {

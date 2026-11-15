@@ -8737,7 +8737,7 @@
         "beenden": "Closing is final. Today's loss or gain is realised.",
         "neuerBot": "An additional bot with its own capital is created.",
         "gerundet": "Prices are rounded to Pionex's price steps — the \"After\" column is what counts.",
-        "grosserBetrag": "The amount is larger than today's investment — please check for typos.",
+        "grosserBetrag": "The amount is more than three times today's investment. Is the number right?",
         "liqNaeherBand": "The range reaches further in the losing direction: the position can grow there and liquidation moves closer.",
         "spotKauf": "At start Pionex buys the coin at market for every line above the price.",
         "spotBehaelt": "On stopping the coins stay in the account (not sold). You can sell them yourself at Pionex afterwards.",

@@ -121,5 +121,19 @@ let geworfen = false
 try { await holeAlleSeiten(async () => ({ result: false, message: 'APIKEY_EXPIRED' }), 'running') } catch (e) { geworfen = /EXPIRED/.test(e.message) }
 p('Ablehnung von Pionex wird Fehler, keine leere Liste', geworfen)
 
+console.log('Echter XRP-Bot 15.11.2026: nach Erhöhen, Stops und Reduzieren')
+{
+    const x = JSON.parse(readFileSync(path.join(hier, '..', 'fixtures', 'pionex-bot-xrp-2026-11-15.json'), 'utf8'))
+    const b = normalisiereBot({ ...rohSui, buOrderType: 'futures_grid', base: 'XRP.PERP', quote: 'USDT', status: 'running', closeTime: 0, buOrderData: x.buOrderData })
+    p('lineares USDT-Grid, läuft', b && !b.coinM && b.laufend && b.marginCoin === 'USDT', JSON.stringify({ typ: b?.typ, coinM: b?.coinM, mc: b?.marginCoin }))
+    p('Einsatz = heutige Investition 15.36, nicht der Startwert 9.2', b.einsatz.basis === 15.36)
+    p('Stop-Loss 0.6 und Take-Profit 5 erkannt, obwohl …Enabled false ist', b.stops.stopLoss?.wert === 0.6 && b.stops.takeProfit?.wert === 5 && /price/.test(b.stops.stopLoss.art))
+    const k = kennzahlen(b, { kurs: 0.959 })
+    p('Gewinn bei Kurs 0.959 = −0.0596 wie bei Pionex (statt +6.17)', Math.abs(k.gewinn.gesamt - (-0.0596)) < 0.0006, String(k.gewinn?.gesamt))
+    p('kein Hinweis «Hebel ohne Stop-Loss» mehr', !k.hinweise.includes('ohneStop'))
+    const ohne = normalisiereBot({ ...rohSui, buOrderType: 'futures_grid', base: 'XRP.PERP', quote: 'USDT', status: 'running', closeTime: 0, buOrderData: { ...x.buOrderData, lossStop: '0', profitStop: null } })
+    p('Stop 0 oder leer = keiner', ohne.stops.stopLoss === null && ohne.stops.takeProfit === null)
+}
+
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)
 process.exit(fehl ? 1 : 0)

@@ -19,6 +19,8 @@ import { liqRisiko } from './pionex-bots.js'
 
 const PFAD = '/api/v1/bot/orders/futuresGrid'
 const SPOT_PFAD = '/api/v1/bot/orders/spotGrid'
+/** Ab dem Wievielfachen des heutigen Einsatzes ein Betrag als möglicher Tippfehler gilt (100 statt 10). */
+export const GROSS_FAKTOR = 3
 export const AKTIONEN = ['band', 'investieren', 'margeDazu', 'margeWeg', 'stops', 'reduzieren', 'pausieren', 'fortsetzen', 'beenden', 'starten']
 export const STEUERBAR = new Set(['futures_grid', 'coinm_grid', 'spot_grid'])
 /**
@@ -158,7 +160,7 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
         if (openPrice == null) return { fehler: 'kurs' }
         const body = { buOrderId: id, type: 'invest_in', extraMargin: false, openPrice, quoteInvestment: betrag }
         warnungen.push('positionGroesser')
-        if (istZahl(basis) && betrag > basis) warnungen.push('grosserBetrag')
+        if (istZahl(basis) && betrag > GROSS_FAKTOR * basis) warnungen.push('grosserBetrag')
         return { aktion, pruefen: { pfad: `${PFAD}/adjustParamsCheck`, body }, senden: { pfad: `${PFAD}/adjustParams`, body }, nachher: { einsatz: (basis ?? 0) + betrag }, warnungen }
     }
     if (aktion === 'margeDazu' || aktion === 'margeWeg') {
@@ -168,7 +170,7 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
         const extra = bot.einsatz?.extraMarge
         if (!dazu && istZahl(extra) && betrag > extra) return { fehler: 'zuViel' }
         if (!dazu) warnungen.push('liqNaeher')
-        if (dazu && istZahl(basis) && betrag > basis) warnungen.push('grosserBetrag')
+        if (dazu && istZahl(basis) && betrag > GROSS_FAKTOR * basis) warnungen.push('grosserBetrag')
         return {
             aktion,
             pruefen: { pfad: `${PFAD}/${dazu ? 'addMarginCheck' : 'reduceMarginCheck'}`, body: { buOrderId: id, amount: betrag } },

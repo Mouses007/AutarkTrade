@@ -8737,7 +8737,7 @@
         "beenden": "Beenden ist endgültig. Der heutige Verlust oder Gewinn wird realisiert.",
         "neuerBot": "Es entsteht ein zusätzlicher Bot mit eigenem Kapital.",
         "gerundet": "Die Preise werden auf die Preisschritte von Pionex gerundet — massgeblich ist die Spalte «Nachher».",
-        "grosserBetrag": "Der Betrag ist grösser als der heutige Einsatz — bitte auf Tippfehler prüfen.",
+        "grosserBetrag": "Der Betrag ist mehr als das Dreifache des heutigen Einsatzes. Stimmt die Zahl?",
         "liqNaeherBand": "Das Band reicht weiter in die Verlustrichtung: die Position kann dort weiter wachsen, die Liquidation rückt näher.",
         "spotKauf": "Beim Start kauft Pionex zum Marktpreis die Coin für alle Linien über dem Kurs.",
         "spotBehaelt": "Beim Beenden bleiben die Coins im Konto (nicht verkauft). Verkaufen kannst du sie danach selbst bei Pionex.",
