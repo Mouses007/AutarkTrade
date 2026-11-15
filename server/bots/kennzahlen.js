@@ -132,7 +132,8 @@ export function kennzahlen(bot, markt = {}, jetzt = Date.now()) {
     if (liq && liq.abstand < LIQ_NAH) hinweise.push('liqNah')
     if (bot.laufend && bot.hebel > 1 && !bot.stops?.stopLoss) hinweise.push('ohneStop')
     if (istZahl(bot.grid?.nettoJeZyklus) && bot.grid.nettoJeZyklus < ZYKLUS_KNAPP) hinweise.push('gridEng')
-    if (bot.laufend && bot.ergebnis?.trades24h === 0) hinweise.push('keineTrades24h')
+    // erst ab 24 h Laufzeit — ein 13-h-Bot hat nicht „seit 24 Stunden“ nichts gehandelt
+    if (bot.laufend && bot.ergebnis?.trades24h === 0 && !(tage < 1)) hinweise.push('keineTrades24h')
     if (istZahl(g.gesamt) && istZahl(bot.ergebnis?.gridGewinn) && bot.ergebnis.gridGewinn > 0 && g.gesamt < 0) hinweise.push('gridPlusGesamtMinus')
     if (bot.endGrund === 'force_liquidation') hinweise.push('liquidiert')
 

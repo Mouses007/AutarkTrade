@@ -8198,6 +8198,8 @@
       "stand": "As of {datum}",
       "keinApi": "Pionex offers no API for this type."
     },
+    "chartBandOben": "Range top",
+    "chartBandUnten": "Range bottom",
     "chartHinweis": "{tf} candles from the configured market-data source, not from Pionex. Range and liquidation as above.",
     "marktAus": "No price history without a market-data source.",
     "rohAufklappen": "Show raw data",

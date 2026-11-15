@@ -8198,6 +8198,8 @@
       "stand": "Stand {datum}",
       "keinApi": "Für diesen Typ hat Pionex keine API."
     },
+    "chartBandOben": "Band oben",
+    "chartBandUnten": "Band unten",
     "chartHinweis": "Kerzen {tf} der eingestellten Marktdatenquelle, nicht von Pionex. Band und Liquidation wie oben.",
     "marktAus": "Ohne Marktdaten-Quelle kein Kursverlauf.",
     "rohAufklappen": "Rohdaten anzeigen",

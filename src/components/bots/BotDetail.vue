@@ -16,11 +16,12 @@ import Pille from '@/components/basis/Pille.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Symbol from '@/components/basis/Symbol.vue'
-import { palette, mitDeckkraft, tooltipStil, schrift, grundOption, wertAchse } from '@/utils/journal/diagramme/gestaltung.js'
+import { palette, tooltipStil, schrift, grundOption, wertAchse } from '@/utils/journal/diagramme/gestaltung.js'
 import { preis, betrag, prozent, zahl, datum, dauer, ton } from './format.js'
 import BotSimulation from './BotSimulation.vue'
 import BotKi from './BotKi.vue'
 import BotAktionen from './BotAktionen.vue'
+import { kursChartOption } from './kurs-chart.js'
 
 // Typen mit festem Band, die die Simulation rechnen kann (wie SIMULIERBAR im Server)
 const SIMULIERBAR = ['futures_grid', 'coinm_grid', 'spot_grid', 'leveraged_grid']
@@ -89,48 +90,7 @@ function zeichne() {
     if (!chartEl.value || !markt.value?.kerzen?.length) return
     const p = palette()
     if (!chart) chart = echarts.init(chartEl.value)
-    const b = props.bot
-    const kerzen = markt.value.kerzen
-    const x = kerzen.map((kz) => datum(kz[0]))
-    const linien = []
-    const linie = (wert, name, farbe, typ = 'dashed') => {
-        if (wert != null) linien.push({ yAxis: wert, name, lineStyle: { color: farbe, type: typ }, label: { formatter: `${name} ${preis(wert)}`, color: farbe, position: 'insideEndTop' } })
-    }
-    linie(b.liquidation?.unten, 'Liq', p.bad)
-    linie(b.liquidation?.oben, 'Liq', p.bad)
-    linie(b.position?.einstieg, t('bots.feld.einstieg'), p.accent, 'dotted')
-    if (b.stops?.stopLoss && /price/.test(b.stops.stopLoss.art || '')) linie(b.stops.stopLoss.wert, 'SL', p.warn)
-    if (b.stops?.takeProfit && /price/.test(b.stops.takeProfit.art || '')) linie(b.stops.takeProfit.wert, 'TP', p.good)
-    // Achse: Kerzen plus alle Linien; ein Band-Ende nur, wenn es nahe liegt —
-    // ein Band bis 200 bei Kursen um 90 drückte die Kerzen sonst zum Strich.
-    const preise = kerzen.flatMap((kz) => [kz[2], kz[3]])
-    let lo = Math.min(...preise, ...linien.map((l) => l.yAxis))
-    let hi = Math.max(...preise, ...linien.map((l) => l.yAxis))
-    const spanne = hi - lo || hi * 0.05
-    for (const r of [b.grid?.unten, b.grid?.oben]) {
-        if (r != null && r >= lo - 0.3 * spanne && r <= hi + 0.3 * spanne) { lo = Math.min(lo, r); hi = Math.max(hi, r) }
-    }
-    const rand = (hi - lo) * 0.04
-    chart.setOption({
-        ...grundOption(p),
-        grid: { left: 8, right: 70, top: 16, bottom: 28, containLabel: true },
-        tooltip: { trigger: 'axis', ...tooltipStil(p), valueFormatter: (v) => preis(v) },
-        xAxis: { type: 'category', data: x, axisLabel: { ...schrift(p) }, axisLine: { lineStyle: { color: p.line } } },
-        yAxis: { ...wertAchse(p), scale: true, position: 'right', min: lo - rand, max: hi + rand, axisLabel: { ...schrift(p), formatter: (v) => preis(v) } },
-        dataZoom: [{ type: 'inside' }],
-        series: [{
-            type: 'candlestick',
-            // ECharts: [open, close, low, high]
-            data: kerzen.map((kz) => [kz[1], kz[4], kz[3], kz[2]]),
-            itemStyle: { color: p.good, color0: p.bad, borderColor: p.good, borderColor0: p.bad },
-            markArea: b.grid?.unten != null ? {
-                silent: true,
-                itemStyle: { color: mitDeckkraft(p.accent, 0.08), borderColor: mitDeckkraft(p.accent, 0.5), borderWidth: 1 },
-                data: [[{ yAxis: b.grid.unten }, { yAxis: b.grid.oben }]],
-            } : undefined,
-            markLine: { symbol: 'none', silent: true, data: linien },
-        }],
-    }, true)
+    chart.setOption(kursChartOption(props.bot, markt.value.kerzen, t, p), true)
 }
 
 async function ladeVerlauf() {

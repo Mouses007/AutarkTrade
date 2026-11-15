@@ -35,6 +35,10 @@ p('Kurs unter dem Band', k.band.lage === 'darunter' && k.band.abstandUnten < 0)
 p('Liquidation unten, Abstand ≈ 14,8 %', k.liquidation.seite === 'unten' && nahe(k.liquidation.abstand, (kurs - 1 / 0.0141000087195626) / kurs, 1e-6))
 p('Abstand in ATR = USD-Abstand / ATR', nahe(k.liquidation.inAtr, (kurs - 1 / 0.0141000087195626) / 6, 1e-6))
 for (const h of ['unterBand', 'liqNah', 'ohneStop', 'keineTrades24h']) p(`Hinweis ${h}`, k.hinweise.includes(h), k.hinweise.join(','))
+{
+    const jung = { ...lauf, erstellt: 1794375879428 - 13 * 3_600_000, beendet: null }
+    p('keineTrades24h erst ab 24 h Laufzeit', !kennzahlen(jung, { kurs, atrTag: 6 }, 1794375879428).hinweise.includes('keineTrades24h'))
+}
 p('kein Hinweis „über Band" / „liquidiert"', !k.hinweise.includes('ueberBand') && !k.hinweise.includes('liquidiert'))
 p('Laufzeit in Tagen > 0, Zyklen pro Tag gerechnet', k.tage > 0 && nahe(k.zyklenProTag, 2356 / k.tage))
 p('Verlust über −100 % aufs Jahr → keine Hochrechnung', k.tage >= 7 && k.rendite.gesamt / k.tage * 365 < -1 && k.rendite.jahr === null)
