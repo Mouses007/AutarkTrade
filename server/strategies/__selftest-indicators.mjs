@@ -365,5 +365,108 @@ console.log('\nVolumen und Tageseröffnung')
         nah(d[0], 100) && nah(d[1], 100) && nah(d[2], 200), JSON.stringify(d))
 }
 
+// ── Anker «US-Eröffnung» (FACH-H-009) und: der Tagesanker bleibt, was er war ──
+console.log('\nVWAP-Anker US-Eröffnung (Aktien-Futures)')
+{
+    const STD = 3_600_000
+    // Seed-Reihe: Kurs und Volumen wandern, damit Abweichungen nicht zufällig null sind
+    let keim = 42
+    const rnd = () => { keim = (keim * 16807) % 2147483647; return keim / 2147483647 }
+    const reihe = (t0, n, iv) => {
+        let p = 100
+        return Array.from({ length: n }, (_, i) => {
+            const o = p, c = o * (1 + (rnd() - 0.5) * 0.01)
+            p = c
+            return { t: t0 + i * iv, o, h: Math.max(o, c) * 1.001, l: Math.min(o, c) * 0.999, c, v: 5 + Math.round(rnd() * 200) }
+        })
+    }
+    const zeit = (c, i) => (i === null ? 'null' : new Date(c[i].t).toISOString().slice(5, 16))
+    const anfaenge = (c, s) => [...new Set(s)].map((i) => zeit(c, i)).join(' ')
+    /** Von Hand: VWAP ab Kerze `ab` bis `i`, gleiche Summenfolge wie im Indikator. */
+    const hand = (c, ab, i) => {
+        let pv = 0, v = 0
+        for (let j = ab; j <= i; j++) { const w = c[j].v > 0 ? c[j].v : 1; pv += ((c[j].h + c[j].l + c[j].c) / 3) * w; v += w }
+        return pv / v
+    }
+
+    // Winter (New York = UTC−5): Montag 9.11. bis Dienstag 17.11.2026, Stundenkerzen ab 00:00 UTC
+    const wi = reihe(Date.UTC(2026, 10, 9), 24 * 9, STD)
+    const sWi = ankerStarts(wi, { anchor: 'usOpen' })
+    check('1h Winter: neu verankert mit der Kerze, die 09:30 New York enthält (14:00 UTC), nur an Handelstagen',
+        anfaenge(wi, sWi) === 'null 11-09T14:00 11-10T14:00 11-11T14:00 11-12T14:00 11-13T14:00 11-16T14:00 11-17T14:00', anfaenge(wi, sWi))
+    check('vor der ersten Eröffnung im Ausschnitt: keine Linie (kein erfundener Anker)',
+        sWi.slice(0, 14).every((x) => x === null) && vwap(wi, { anchor: 'usOpen' }).slice(0, 14).every((x) => x === null))
+    const vWi = vwap(wi, { anchor: 'usOpen' })
+    const sa = 5 * 24 + 12   // Samstag 14.11., 12:00 UTC
+    check('Wochenende: die Linie läuft vom Freitag weiter, kein Rücksetzen',
+        sWi[sa] === 4 * 24 + 14 && vWi[sa] === hand(wi, 4 * 24 + 14, sa), `${zeit(wi, sWi[sa])}`)
+    check('Wert = VWAP ab der Eröffnungskerze (von Hand nachgerechnet)',
+        vWi[24 + 20] === hand(wi, 24 + 14, 24 + 20) && vWi[24 + 14] === (wi[38].h + wi[38].l + wi[38].c) / 3)
+
+    // Sommer (UTC−4): Mittwoch 12.8.2026 — die Eröffnung liegt eine UTC-Stunde früher
+    const so = reihe(Date.UTC(2026, 7, 12), 48, STD)
+    check('1h Sommer: Eröffnungskerze 13:00 UTC', anfaenge(so, ankerStarts(so, { anchor: 'usOpen' })) === 'null 08-12T13:00 08-13T13:00')
+    const so15 = reihe(Date.UTC(2026, 7, 12), 96 * 2, 900_000)
+    check('15m Sommer: genau die Kerze 13:30 UTC (09:30 New York)', anfaenge(so15, ankerStarts(so15, { anchor: 'usOpen' })) === 'null 08-12T13:30 08-13T13:30')
+    const so4 = reihe(Date.UTC(2026, 7, 12), 12, 4 * STD)
+    check('4h Sommer: die Kerze 12:00–16:00 UTC enthält die Eröffnung', anfaenge(so4, ankerStarts(so4, { anchor: 'usOpen' })) === 'null 08-12T12:00 08-13T12:00')
+
+    // Zeitumstellung 1.11.2026: Freitag 30.10. noch 13:30 UTC, Montag 2.11. schon 14:30 UTC
+    const um = reihe(Date.UTC(2026, 9, 30), 24 * 5, STD)
+    check('Zeitumstellung: Freitag 13:00 UTC, Montag 14:00 UTC', anfaenge(um, ankerStarts(um, { anchor: 'usOpen' })) === 'null 10-30T13:00 11-02T14:00 11-03T14:00', anfaenge(um, ankerStarts(um, { anchor: 'usOpen' })))
+
+    // Feiertag: Thanksgiving, Donnerstag 26.11.2026 — kein Rücksetzen; Freitag (verkürzt) ist Handelstag
+    const th = reihe(Date.UTC(2026, 10, 25), 24 * 3, STD)
+    check('Feiertag: Mittwoch und Freitag verankern, Thanksgiving nicht', anfaenge(th, ankerStarts(th, { anchor: 'usOpen' })) === 'null 11-25T14:00 11-27T14:00')
+
+    // Beginnt die Reihe genau mit der Eröffnungskerze, ist der erste Abschnitt vollständig
+    const genau = reihe(Date.UTC(2026, 10, 10, 14), 30, STD)
+    check('Reihe ab der Eröffnungskerze: von Anfang an eine Linie', ankerStarts(genau, { anchor: 'usOpen' })[0] === 0 && vwap(genau, { anchor: 'usOpen' })[0] !== null)
+    const mitten = reihe(Date.UTC(2026, 10, 10, 16), 30, STD)
+    check('Reihe ab 11:00 New York: bis zur nächsten Eröffnung keine Linie', ankerStarts(mitten, { anchor: 'usOpen' }).slice(0, 22).every((x) => x === null) && ankerStarts(mitten, { anchor: 'usOpen' })[22] === 22)
+
+    // Kein Blick in die Zukunft, und der Ausschnitt rechnet dasselbe wie die ganze Reihe
+    let vorschau = ''
+    for (let n = 20; n <= wi.length && !vorschau; n += 7) {
+        const teil = vwap(wi.slice(0, n), { anchor: 'usOpen' })
+        if (teil[n - 1] !== vWi[n - 1]) vorschau = `Länge ${n}: ${teil[n - 1]} gegen ${vWi[n - 1]}`
+    }
+    check('kein Blick in die Zukunft: der Wert einer Kerze hängt nicht von späteren ab', !vorschau, vorschau)
+    const ab = 24 + 16   // Ausschnitt beginnt Dienstag 11:00 New York
+    const fenster = vwap(wi.slice(ab), { anchor: 'usOpen' })
+    check('Ausschnitt: leer bis zur nächsten Eröffnung, danach bitgleich mit der ganzen Reihe',
+        fenster.slice(0, 22).every((x) => x === null) && fenster.slice(22).every((x, i) => x === vWi[ab + 22 + i]))
+
+    const bOben = vwapBand(wi, { anchor: 'usOpen', mult: 2 }), bUnten = vwapBand(wi, { anchor: 'usOpen', mult: -2 })
+    check('Band: null, wo die Linie null ist; sonst symmetrisch um die Linie',
+        bOben.every((x, i) => (vWi[i] === null ? x === null : x >= vWi[i] && nah(x - vWi[i], vWi[i] - bUnten[i], 1e-9))))
+    check('Sichtbedarf: sechs Tage (längster Abstand zweier Eröffnungen sind vier)',
+        ankerSichtKerzen('usOpen', STD) === 144 && ankerSichtKerzen('usOpen', 900_000) === 576 && ankerSichtKerzen('session', STD) === 48)
+
+    // ── Krypto: der Tagesanker rechnet exakt wie vorher ──
+    // Unabhängige Nachrechnung des UTC-Tages-VWAP (Stand vor FACH-H-009), bitgenau verglichen.
+    const alt = (c) => {
+        const aus = []
+        let tag = null, pv = 0, v = 0, gueltig = c[0].t % 86400000 === 0
+        for (let i = 0; i < c.length; i++) {
+            const d = Math.floor(c[i].t / 86400000)
+            if (d !== tag) { if (tag !== null) gueltig = true; tag = d; pv = 0; v = 0 }
+            const w = c[i].v > 0 ? c[i].v : 1
+            pv += ((c[i].h + c[i].l + c[i].c) / 3) * w; v += w
+            aus.push(gueltig ? pv / v : null)
+        }
+        return aus
+    }
+    const gleichExakt = (a, b) => a.length === b.length && a.every((x, i) => x === b[i])
+    const mittenImTag = reihe(Date.UTC(2026, 10, 9, 7), 24 * 4, STD)
+    check('Krypto: Anker `session` bitgleich mit der Nachrechnung (UTC-Tageswechsel)',
+        gleichExakt(vwap(wi, { anchor: 'session' }), alt(wi)) && gleichExakt(vwap(so15, { anchor: 'session' }), alt(so15))
+        && gleichExakt(vwap(mittenImTag, { anchor: 'session' }), alt(mittenImTag)))
+    check('Krypto: ohne Angabe bleibt der Anker `session`', gleichExakt(vwap(wi), alt(wi)) && gleichExakt(vwapBand(wi, { mult: 2 }), vwapBand(wi, { anchor: 'session', mult: 2 })))
+    check('Krypto: `session` setzt um 00:00 UTC zurück, nicht zur US-Eröffnung',
+        anfaenge(wi, ankerStarts(wi, { anchor: 'session' })).startsWith('11-09T00:00 11-10T00:00 11-11T00:00'))
+    check('die beiden Anker liefern Verschiedenes (sonst prüfte der Test nichts)', vwap(wi, { anchor: 'session' })[24 + 18] !== vWi[24 + 18])
+}
+
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen\n`)
 process.exit(failed ? 1 : 0)

@@ -347,7 +347,9 @@ export async function runBacktest(opts) {
     // die ganze geladene Historie, also kein Ausschnitt. Dieselbe Rechnung wie
     // in der Engine (`sichtFensterKerzen`): Indikatorperioden und das eigene
     // Fenster einer Strategie (`ltfKerzen`) zählen seit 31.10.2026 mit.
-    const sichtBedarf = sichtFensterKerzen(strategie, params, ltfMs)
+    // Aktien-Future: der Tages-VWAP einer Regelstrategie verankert an der
+    // US-Eröffnung und braucht dafür ein längeres Fenster (FACH-H-009).
+    const sichtBedarf = sichtFensterKerzen(strategie, params, ltfMs, { aktie: Boolean(aktie) })
     const volleHistorie = sichtBedarf === Infinity
     const fenster = volleHistorie ? 0 : sichtBedarf
 
@@ -555,6 +557,8 @@ export async function runBacktest(opts) {
             // Links fehlt Historie: ATH/ATL sind dann nicht bestimmbar und
             // bleiben leer, statt das Extrem des Ausschnitts vorzutäuschen.
             historieVerkuerzt: von > 0,
+            // Aktien-Future: Regelstrategien rechnen den Tages-VWAP ab der US-Eröffnung.
+            aktie: Boolean(aktie),
         })
 
         // Ablehnungen nur EINMAL zählen: der Detector sieht denselben Sweep in

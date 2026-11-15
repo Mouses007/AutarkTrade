@@ -94,7 +94,8 @@ async function leeren() {
 
 // Löst jedes wartende Setup auf der jüngsten Kerze aus — mit den Marken des Setups.
 registerStrategy({ id: 'test_aktie', name: 'Test Aktie', supportedTimeframes: ['1h'], params: [], warmupCandles: 50,
-    detect({ candles, openSetups }) {
+    detect({ candles, openSetups, aktie }) {
+        globalThis.__detektorAktie = aktie   // was die Engine dem Detektor über den Markt sagt (FACH-H-009)
         const k = candles[candles.length - 1]
         // `__zurEroeffnung`: Markt-Einstieg zur Eröffnung der Auslösekerze (sonst Limit irgendwo in der Kerze)
         return { setups: [], events: openSetups.map((s) => ({ id: s.id, status: 'triggered', triggeredAt: k.t, candleTime: k.t,
@@ -184,6 +185,14 @@ console.log('\nZahlentermine: Signal im Fenster → reject_risk')
     r = await fall({ D: Date.UTC(2026, 10, 10, 15), symbol: 'BTCUSDT', aktie: null, risk: { nurRegulaereSitzung: true } })
     pruefe('Coin zur selben Zeit: Schalter ohne Wirkung', r.status === 'open' && Boolean(r.position), zeigt(r))
     globalThis.__zurEroeffnung = false
+
+    // FACH-H-009: der Detektor erfährt, ob das Symbol ein Aktien-Future ist (Tages-VWAP ab US-Eröffnung)
+    pruefe('Coin: der Detektor bekommt `aktie: false`', globalThis.__detektorAktie === false, String(globalThis.__detektorAktie))
+    await fall({ D: Date.UTC(2026, 10, 10, 16), risk: {} })
+    pruefe('Aktien-Future: der Detektor bekommt `aktie: true`', globalThis.__detektorAktie === true, String(globalThis.__detektorAktie))
+    const zeile = { ...instanz('NVDAUSDT'), anlageklasse: 'aktien' }
+    pruefe('ladeInstanz trägt den Markt der Instanz (Sichtfenster); ohne Angabe Krypto',
+        engine.ladeInstanz(zeile)?.anlageklasse === 'aktien' && engine.ladeInstanz(instanz('BTCUSDT'))?.anlageklasse === 'krypto')
 }
 
 // ── 2. Tageslimit am New Yorker Handelstag ───────────────────────────────

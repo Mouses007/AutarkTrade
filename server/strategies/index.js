@@ -237,14 +237,16 @@ export function htfBedarf(strategie, params = {}) {
  *     Forget ohne HTF-Filter, FUN-L4-004).
  *
  * @param {object} [opts] `endlich: true` (Engine) lässt ATH/ATL aus, statt
- *                        `Infinity` („ganze geladene Historie") zu melden
+ *                        `Infinity` („ganze geladene Historie") zu melden;
+ *                        `aktie: true` = Aktien-Future (Tages-VWAP ab US-Eröffnung
+ *                        braucht bis zu sechs Tage Sicht, FACH-H-009)
  * @returns {number} Kerzen oder `Infinity`
  */
-export function sichtFensterKerzen(strategie, params = {}, timeframeMs = 0, { endlich = false } = {}) {
+export function sichtFensterKerzen(strategie, params = {}, timeframeMs = 0, { endlich = false, aktie = false } = {}) {
     const grund = (strategie?.warmupCandles || 200)
         + (params.scanWindowCandles || 200)
         + (params.retestMaxCandles || 40) + 10
-    const regel = strategie?.regeln ? sichtBedarfKerzen(strategie.regeln, timeframeMs, params, { endlich }) : 0
+    const regel = strategie?.regeln ? sichtBedarfKerzen(strategie.regeln, timeframeMs, params, { endlich, aktie }) : 0
     if (regel === Infinity) return Infinity
     const f = strategie?.ltfKerzen
     const ltf = typeof f === 'function' ? Number(f(params)) : Number(f)

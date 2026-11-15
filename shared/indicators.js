@@ -9,6 +9,8 @@
  * Alle Funktionen erwarten Kerzen im Format { t, o, h, l, c, v }.
  */
 
+import { nyTeile, istHandelstag } from './aktien-sitzung.js'
+
 export const isBull = (k) => k.c > k.o
 export const isBear = (k) => k.c < k.o
 export const bodyHigh = (k) => Math.max(k.o, k.c)
@@ -322,6 +324,59 @@ export function swingAnker(candles, { seite = 'high', staerke = 20, nth = 1, min
     return out
 }
 
+/* ── Anker «US-Eröffnung» (FACH-H-009) ────────────────────────────── */
+
+/** 09:30 New Yorker Zeit in Minuten seit Mitternacht. */
+const US_EROEFFNUNG_MIN = 9 * 60 + 30
+
+/**
+ * Der US-Handelstag, dessen Eröffnung (09:30 New York) zu diesem Zeitpunkt
+ * schon war — `YYYY-MM-DD`, sonst `null` (vor 09:30, Wochenende, Feiertag).
+ * Sommerzeitfest und mit den US-Börsenfeiertagen (`aktien-sitzung.js`).
+ */
+function eroeffnungsTag(ms) {
+    const t = nyTeile(ms)
+    return t.minuten >= US_EROEFFNUNG_MIN && istHandelstag(t.datum, t.wochentag) ? t.datum : null
+}
+
+/** Kerzenlänge einer Reihe: der kleinste Abstand zweier Nachbarn (Lücken zählen nicht). */
+function kerzenLaenge(candles) {
+    let iv = 0
+    for (let i = 1; i < candles.length; i++) {
+        const d = candles[i].t - candles[i - 1].t
+        if (d > 0 && (iv === 0 || d < iv)) iv = d
+    }
+    return iv
+}
+
+/**
+ * Abschnittsbeginn je Kerze für den Anker `usOpen`: neu verankert wird mit der
+ * Kerze, die 09:30 New Yorker Zeit eines US-Handelstags ENTHÄLT (auf 1h die
+ * Kerze ab 09:00, auf 15m die ab 09:30) — dieselbe Zuordnung wie im Chart, wo
+ * eine Kerze, die die reguläre Sitzung berührt, zu ihr gehört. Danach läuft
+ * die Linie durch Nachbörse, Nacht, Wochenende und Feiertag weiter bis zur
+ * nächsten Eröffnung.
+ *
+ * `null` bis zur ersten Eröffnung im Ausschnitt: was davor liegt, gehört zu
+ * einem Abschnitt, dessen Anfang nicht zu sehen ist (wie bei Woche/Monat).
+ */
+function usEroeffnungStarts(candles) {
+    const n = candles.length
+    const out = new Array(n).fill(null)
+    const iv = kerzenLaenge(candles)
+    const ende = (i) => candles[i].t + Math.max(0, iv - 1)
+    let start = null
+    // Der Tag, dessen Eröffnung unmittelbar VOR der ersten Kerze schon war:
+    // deren Abschnitt läuft noch, sein Anfang liegt aber ausserhalb.
+    let letzter = eroeffnungsTag(candles[0].t - 1)
+    for (let i = 0; i < n; i++) {
+        const tag = eroeffnungsTag(ende(i))
+        if (tag !== null && tag !== letzter) { start = i; letzter = tag }
+        out[i] = start
+    }
+    return out
+}
+
 /** Beginnt genau an diesem Zeitstempel ein neuer Tag/eine Woche/ein Monat (UTC)? */
 function istPeriodenanfang(t, anchor) {
     if (t % 86400000 !== 0) return false          // nicht einmal ein Tagesanfang
@@ -362,6 +417,8 @@ export function ankerStarts(candles, { anchor = 'session', pivot = 20, nth = 1, 
             staerke: pivot, nth, minSepAtr,
         })
     }
+
+    if (anchor === 'usOpen') return usEroeffnungStarts(candles)
 
     const out = new Array(n).fill(0)
     if (anchor === 'ath' || anchor === 'atl') {
@@ -407,7 +464,10 @@ export function ankerSichtKerzen(anchor, timeframeMs) {
     if (anchor === 'ath' || anchor === 'atl') return Infinity
     // Grosszügig eine Periode plus Reserve, damit auch ein Fenster, das mitten
     // in der Periode endet, den Anfang noch enthält.
-    const tage = anchor === 'month' ? 32 : anchor === 'week' ? 8 : anchor === 'session' ? 2 : 0
+    // US-Eröffnung: der längste Abstand zweier Eröffnungen sind vier Tage
+    // (Donnerstag → Montag über Karfreitag, Freitag → Dienstag über einen
+    // Montags-Feiertag); mit Reserve sechs.
+    const tage = anchor === 'month' ? 32 : anchor === 'week' ? 8 : anchor === 'session' ? 2 : anchor === 'usOpen' ? 6 : 0
     return tage ? Math.ceil((tage * 86400000) / timeframeMs) : 0
 }
 
@@ -419,6 +479,11 @@ export function ankerSichtKerzen(anchor, timeframeMs) {
  *   'session'    UTC-Tageswechsel — der VWAP, den Trader meinen, wenn sie
  *                „die VWAP" sagen: startet am Tagesanfang beim Preis und wird
  *                im Tagesverlauf träger.
+ *   'usOpen'     US-Eröffnung: 09:30 New Yorker Zeit an US-Handelstagen
+ *                (sommerzeitfest, mit Börsenfeiertagen). Der Tages-VWAP eines
+ *                Aktien-Futures — dort entsteht der Kurs, und Mitternacht UTC
+ *                (19/20 Uhr New York) ist mitten im dünnen Nachthandel. Die
+ *                Linie läuft bis zur nächsten Eröffnung weiter.
  *   'week'       Wochenwechsel (Montag, UTC)
  *   'month'      Monatswechsel (UTC)
  *   'ath'/'atl'  Neuverankerung bei jedem neuen Hoch bzw. Tief

@@ -146,6 +146,9 @@ export function ladeInstanz(row) {
         paramsVersion: Number(row.paramsVersion) || 1,
         // Start der Instanz — aussortierte Signale davor hat sie nie gesehen
         seit: zeitpunkt(row.createdAt) || 0,
+        // Markt der Instanz (alle Symbole Aktien-Futures oder keines) — bemisst
+        // das Sichtfenster des Tages-VWAP (FACH-H-009).
+        anlageklasse: row.anlageklasse === 'aktien' ? 'aktien' : 'krypto',
         symbols, params, risk, agents, strategie,
     }
 }
@@ -571,7 +574,10 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     // nicht halten; dort bleibt die Linie bewusst leer, der Interpreter erfährt
     // das über `historieVerkuerzt`. Dieselbe Rechnung wie im Backtest
     // (`sichtFensterKerzen`), samt Indikatorperioden und `ltfKerzen`.
-    const bedarf = sichtFensterKerzen(instance.strategie, p, timeframeMs(timeframe), { endlich: true })
+    // Aktien-Instanz: der Tages-VWAP einer Regelstrategie verankert an der
+    // US-Eröffnung und braucht bis zu sechs Tage Sicht (FACH-H-009).
+    const bedarf = sichtFensterKerzen(instance.strategie, p, timeframeMs(timeframe),
+        { endlich: true, aktie: instance.anlageklasse === 'aktien' })
 
     let { kerzen: candles, bericht: splitBericht, aktie, verdacht: splitVerdacht } = await mitSplits(symbol,
         await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }))
@@ -698,6 +704,8 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         htfCandles,
         // Die Engine hält immer nur ein Fenster, nie die ganze Historie.
         historieVerkuerzt: true,
+        // Aktien-Future: Regelstrategien rechnen den Tages-VWAP ab der US-Eröffnung (wie der Backtest).
+        aktie: Boolean(aktie),
     })
 
     // Zwischen Taktbeginn und hier liegen Netzabrufe. Wurde die Instanz in

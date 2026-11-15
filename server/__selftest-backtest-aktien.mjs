@@ -254,4 +254,68 @@ ok(coinMitSperre.trades.length === coin.trades.length, 'Coin: die Zahlen-Sperre 
         'Coin mit gesetztem Aufschlag: jeder Trade bitgleich')
 }
 
+// ── Tages-VWAP in Regelstrategien: bei Aktien ab der US-Eröffnung (FACH-H-009) ──
+{
+    const { VORLAGEN } = await import('./strategies/rule-templates.js')
+    const { alsManifest, wirksamerAnker, sichtBedarfKerzen } = await import('./strategies/rule-engine.js')
+    const { pruefeRegeln } = await import('./strategies/rule-validate.js')
+    const { sichtFensterKerzen } = await import('./strategies/index.js')
+
+    ok(wirksamerAnker('session', true) === 'usOpen' && wirksamerAnker(undefined, true) === 'usOpen', 'Aktie: Tages-VWAP → Anker US-Eröffnung')
+    ok(wirksamerAnker('session', false) === 'session' && wirksamerAnker(undefined) === 'session' && wirksamerAnker('session') === 'session', 'Coin: Tages-VWAP bleibt am UTC-Tageswechsel')
+    ok(['week', 'month', 'ath', 'atl', 'swingHigh', 'swingLow', 'rolling', 'usOpen'].every((a) => wirksamerAnker(a, true) === a && wirksamerAnker(a, false) === a), 'jeder andere Anker bleibt in beiden Märkten, was er ist')
+
+    const vorlage = VORLAGEN.find((v) => v.key === 'vwap_ruecklauf')
+    const bau = (anker) => {
+        const roh = structuredClone(vorlage.rules)
+        for (const i of roh.indicators) if (i.type === 'vwap' || i.type === 'vwapBand') i.anchor = anker
+        const g = pruefeRegeln({ ...roh, id: 'vwap_test_' + anker, name: 'VWAP ' + anker })
+        assert.ok(g.ok, g.fehler?.join('; '))
+        return alsManifest(g.regeln)
+    }
+    const mTag = bau('session'), mUs = bau('usOpen')
+    const M15 = 900_000
+    ok(sichtBedarfKerzen(mTag.regeln, M15, {}, { aktie: true }) === sichtBedarfKerzen(mUs.regeln, M15) && sichtBedarfKerzen(mTag.regeln, M15, {}, { aktie: true }) >= 576,
+        'Sichtbedarf: bei Aktien sechs Tage für den Tages-VWAP')
+    ok(sichtBedarfKerzen(mTag.regeln, M15) === sichtBedarfKerzen(mTag.regeln, M15, {}, { aktie: false })
+        && sichtFensterKerzen(mTag, {}, M15) === sichtFensterKerzen(mTag, {}, M15, { aktie: false })
+        && sichtFensterKerzen(mTag, {}, M15, { aktie: true }) > sichtFensterKerzen(mTag, {}, M15), 'Sichtbedarf: beim Coin unverändert')
+
+    // 15-Minuten-Kerzen über sechs Wochen, Volumen schwankt
+    let k2 = 99
+    const z = () => { k2 = (k2 * 16807) % 2147483647; return k2 / 2147483647 }
+    let preis = 200, zug = 0
+    const k15 = Array.from({ length: 4000 }, (_, i) => {
+        if (i % 60 === 0) zug = (z() - 0.45) * 0.003
+        const o = preis, c = o * (1 + zug + (z() - 0.5) * 0.008)
+        preis = c
+        return { t: T0 + i * M15, o, h: Math.max(o, c) * (1 + z() * 0.003), l: Math.min(o, c) * (1 - z() * 0.003), c, v: 20 + z() * 300 }
+    })
+    // Mitschneiden, was der Detektor als Markt gesagt bekommt
+    const gesehen = new Set()
+    const mit = (m) => ({ ...m, detect: (e) => { gesehen.add(e.aktie); return m.detect(e) } })
+    const rechne = (m, aktieKontext) => runBacktest({ strategyId: m.id, strategie: mit(m), symbol: 'TESTUSDT', timeframe: '15m', market: 'futures',
+        risk: { riskPerTradePct: 1, maxNotionalUsdt: 1e6, leverage: 5, minRR: 1, maintenanceMarginPct: 0.5, cooldownMinutes: 0, maxDailyLossPct: 25 },
+        startEquity: 10000, candles: k15, marketMeta: {}, fundingVerlauf: [], fromTs: k15[0].t, toTs: k15.at(-1).t + M15, aktie: aktieKontext })
+    const kern = (e) => JSON.stringify(e.trades.map((t) => [t.entryTime, t.exitTime, t.entryPrice, t.exitPrice, t.qty, t.netPnl]))
+
+    gesehen.clear()
+    const aktieTag = await rechne(mTag, AKTIE)
+    ok(gesehen.size === 1 && gesehen.has(true), 'Backtest sagt dem Detektor: Aktien-Future')
+    const aktieUs = await rechne(mUs, AKTIE)
+    ok(aktieTag.trades.length > 5 && kern(aktieTag) === kern(aktieUs), `Aktie: «Tages-VWAP» rechnet wie der Anker US-Eröffnung (${aktieTag.trades.length} Trades)`)
+
+    gesehen.clear()
+    const coinTag = await rechne(mTag, null)
+    ok(gesehen.size === 1 && gesehen.has(false), 'Coin: der Detektor bekommt keinen Aktien-Kontext')
+    const coinUs = await rechne(mUs, null)
+    ok(coinTag.trades.length > 5 && kern(coinTag) !== kern(coinUs), 'Coin: «Tages-VWAP» bleibt der UTC-Tag — der Anker US-Eröffnung ergäbe andere Trades')
+    // Der Coin-Lauf darf vom Aktien-Fenster nichts merken: ein Detektor, dem `aktie` fehlt (Stand vor dem Fix), rechnet dasselbe
+    const ohneFeld = { ...mTag, detect: (e) => { const { aktie: _weg, ...rest } = e; return mTag.detect(rest) } }
+    const coinAlt = await runBacktest({ strategyId: mTag.id, strategie: ohneFeld, symbol: 'TESTUSDT', timeframe: '15m', market: 'futures',
+        risk: { riskPerTradePct: 1, maxNotionalUsdt: 1e6, leverage: 5, minRR: 1, maintenanceMarginPct: 0.5, cooldownMinutes: 0, maxDailyLossPct: 25 },
+        startEquity: 10000, candles: k15, marketMeta: {}, fundingVerlauf: [], fromTs: k15[0].t, toTs: k15.at(-1).t + M15, aktie: null })
+    ok(JSON.stringify(coinAlt.trades) === JSON.stringify(coinTag.trades) && JSON.stringify(coinAlt.funnel) === JSON.stringify(coinTag.funnel), 'Coin: Trades und Trichter bitgleich mit dem Detektor ohne Aktien-Feld')
+}
+
 console.log(`✓ Backtest Aktien: ${n} Prüfungen`)

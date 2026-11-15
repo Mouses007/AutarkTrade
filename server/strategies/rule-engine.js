@@ -57,7 +57,7 @@ export const BAUSTEINE = {
         'bollUpper', 'bollMiddle', 'bollLower', 'adx', 'plusDI', 'minusDI',
         'stochK', 'stochD', 'volSma', 'dayOpen'],
     bollBasis: ['sma', 'ema'],
-    vwapAnker: ['session', 'week', 'month', 'ath', 'atl', 'swingHigh', 'swingLow', 'rolling'],
+    vwapAnker: ['session', 'usOpen', 'week', 'month', 'ath', 'atl', 'swingHigh', 'swingLow', 'rolling'],
     signale: ['pivotHigh', 'pivotLow', 'crossUp', 'crossDown', 'pattern', 'levelTouch'],
     muster: ['bullishEngulfing', 'bearishEngulfing', 'hammer', 'shootingStar'],
     einstieg: ['touch', 'immediate'],
@@ -308,7 +308,22 @@ const alleErfuellt = (liste, ctx, i) => (liste || []).every((b) => pruefe(b, ctx
 
 // ── Indikatoren ──────────────────────────────────────────────────────────
 
-function baueIndikatoren(regeln, candles, params, verkuerzt = false) {
+/**
+ * Der Anker, mit dem eine VWAP-Linie wirklich gerechnet wird.
+ *
+ * `session` ist «der Tages-VWAP». Bei einem Coin beginnt der Tag um
+ * Mitternacht UTC; bei einem Aktien-Future entsteht der Kurs an der US-Börse,
+ * und Mitternacht UTC liegt mitten im dünnen Nachthandel — die Linie bestand
+ * mittags New York im Median zu 44 % aus Volumen von vor der Eröffnung
+ * (FACH-H-009). Dort heisst «Tag» deshalb: ab 09:30 New Yorker Zeit (`usOpen`).
+ * Jeder andere Anker bleibt, was er ist; ohne Aktien-Kontext ändert sich nichts.
+ */
+export function wirksamerAnker(anchor, aktie = false) {
+    const a = anchor || 'session'
+    return aktie && a === 'session' ? 'usOpen' : a
+}
+
+function baueIndikatoren(regeln, candles, params, verkuerzt = false, aktie = false) {
     const out = {}
     for (const def of regeln.indicators || []) {
         const periode = Math.max(1, Math.round(zahl(def.period, params, 14)))
@@ -324,7 +339,7 @@ function baueIndikatoren(regeln, candles, params, verkuerzt = false) {
             case 'vwap':
             case 'vwapBand': {
                 const opts = {
-                    anchor: def.anchor || 'session', period: periode,
+                    anchor: wirksamerAnker(def.anchor, aktie), period: periode,
                     pivot: Math.max(1, Math.round(zahl(def.pivot, params, 20))),
                     nth: Math.min(3, Math.max(1, Math.round(zahl(def.nth, params, 1)))),
                     minSepAtr: Math.max(0, zahl(def.minSepAtr, params, 1)),
@@ -594,15 +609,17 @@ function indikatorVorlauf(def, params) {
  * @param {number} timeframeMs
  * @param {object} [params]   aufgelöste Parameterwerte (für `{param}`-Perioden)
  * @param {object} [opts]     `endlich: true` lässt ATH/ATL aus — für die
- *                            Engine, die keine ganze Historie halten kann
+ *                            Engine, die keine ganze Historie halten kann;
+ *                            `aktie: true` rechnet den Tages-VWAP mit dem Anker
+ *                            US-Eröffnung (`wirksamerAnker`, längeres Fenster)
  * @returns {number} Kerzen; `Infinity` heisst „die ganze geladene Historie"
  */
-export function sichtBedarfKerzen(regeln, timeframeMs, params = {}, { endlich = false } = {}) {
+export function sichtBedarfKerzen(regeln, timeframeMs, params = {}, { endlich = false, aktie = false } = {}) {
     let bedarf = 0
     let vorlauf = 0
     for (const def of regeln?.indicators || []) {
         if (def.type === 'vwap' || def.type === 'vwapBand') {
-            const n = ankerSichtKerzen(def.anchor || 'session', timeframeMs)
+            const n = ankerSichtKerzen(wirksamerAnker(def.anchor, aktie), timeframeMs)
             if (n === Infinity && endlich) continue
             if (n > bedarf) bedarf = n
         }
@@ -679,7 +696,9 @@ export function detectMitRegeln(regeln, eingabe) {
         }
     }
 
-    const { candles, params, openSetups = [], knownSetupKeys = [], historieVerkuerzt = false } = eingabe
+    // `aktie`: das Symbol ist ein Aktien-Future — der Tages-VWAP verankert dann
+    // an der US-Eröffnung (`wirksamerAnker`). Backtest und Engine reichen es mit.
+    const { candles, params, openSetups = [], knownSetupKeys = [], historieVerkuerzt = false, aktie = false } = eingabe
     const setups = []
     const events = []
     // `rejected` ohne Prototyp — die Gründe sind Codes aus dem Regelwerk
@@ -696,7 +715,7 @@ export function detectMitRegeln(regeln, eingabe) {
         return { setups, events, diagnostics }
     }
 
-    const indikatoren = baueIndikatoren(regeln, candles, params, historieVerkuerzt)
+    const indikatoren = baueIndikatoren(regeln, candles, params, historieVerkuerzt, aktie === true)
     const ctx = { candles, params, indikatoren, setup: null, laufend: null,
         richtung: regeln.direction || 'long',
         // Für `lastSwingLow`/`lastSwingHigh`: dieselbe Pivot-Definition wie

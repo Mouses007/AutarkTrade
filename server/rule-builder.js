@@ -58,7 +58,9 @@ Halte dich exakt an dieses Vokabular. Alles andere wird abgelehnt:
 Indikatoren (Feld "type"): ${BAUSTEINE.indikatoren.join(', ')}
   - ema, sma, rsi, atr brauchen "period" (Zahl oder {"param":"name"})
   - vwap und vwapBand brauchen "anchor": ${BAUSTEINE.vwapAnker.join(' oder ')}
-    ("session" = Rücksetzen zum UTC-Tageswechsel, "week"/"month" = Wochen-/
+    ("session" = Tages-VWAP: Rücksetzen zum UTC-Tageswechsel, bei Aktien-
+    Futures automatisch zur US-Eröffnung; "usOpen" = immer zur US-Eröffnung
+    09:30 New Yorker Zeit an US-Handelstagen; "week"/"month" = Wochen-/
     Monatswechsel, "ath"/"atl" = Neuverankerung bei jedem neuen Hoch/Tief der
     geladenen Historie, "swingHigh"/"swingLow" = verankert am letzten
     bestätigten markanten Pivot, "rolling" = gleitendes Fenster über "period").

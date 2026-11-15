@@ -81,6 +81,23 @@ for (const typ of Object.keys(INDIKATOREN)) {
     const i = kerzen.length - 1
     check('VWAP-Band liegt um die Linie (oben > Linie > unten)', mitBand.oben[i] > mitBand.wert[i] && mitBand.wert[i] > mitBand.unten[i])
 }
+{
+    // Anker US-Eröffnung (FACH-H-009): wählbar, bei Aktien-Futures vorbelegt, bei Coins bleibt alles
+    const { vwap } = await import('../../shared/indicators.js')
+    const std = Array.from({ length: 24 * 6 }, (_, j) => ({ t: Date.UTC(2026, 10, 9) + j * 3_600_000, o: 100 + j % 7, h: 102 + j % 7, l: 99 + j % 5, c: 100 + j % 6, v: 10 + j % 9 }))
+    const us = rechneIndikator('vwap', std, { anker: 'usOpen', band: 0 }).wert
+    const ref = vwap(std, { anchor: 'usOpen' })
+    check('VWAP mit Anker US-Eröffnung == gemeinsamer Indikator', us.every((x, j) => x === ref[j]) && us.some((x) => x !== null) && us[0] === null)
+    check('Anker US-Eröffnung übersteht das Säubern; Unbekanntes fällt auf den Tag zurück',
+        saubereParams('vwap', { anker: 'usOpen' }).anker === 'usOpen' && saubereParams('vwap', { anker: 'quatsch' }).anker === 'session')
+    check('neuer VWAP im Coin-Chart: Anker Tag (UTC) wie bisher',
+        neueInstanz('vwap').params.anker === 'session' && neueInstanz('vwap', null, { aktie: false }).params.anker === 'session' && vorgaben('vwap').anker === 'session')
+    check('neuer VWAP im Chart eines Aktien-Futures: Anker US-Eröffnung vorbelegt', neueInstanz('vwap', null, { aktie: true }).params.anker === 'usOpen')
+    check('der eigene Standard geht vor', neueInstanz('vwap', { params: { anker: 'week' } }, { aktie: true }).params.anker === 'week')
+    check('andere Indikatoren kennen keine Aktien-Vorgabe', JSON.stringify(neueInstanz('ema', null, { aktie: true }).params) === JSON.stringify(neueInstanz('ema').params))
+    const tag = rechneIndikator('vwap', std, { anker: 'session', band: 0 }).wert
+    check('Anker Tag (UTC) rechnet weiter den UTC-Tag', tag.every((x, j) => x === vwap(std, { anchor: 'session' })[j]) && tag[30] !== us[30])
+}
 
 console.log('\nDatenfenster: fremde Reihen auf Kerzen\n')
 {

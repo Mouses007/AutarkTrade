@@ -470,8 +470,11 @@ export const INDIKATOREN = {
     },
     vwap: {
         ort: 'preis',
+        // Aktien-Future: neu angelegt beginnt der VWAP an der US-Eröffnung (09:30 New York) —
+        // Mitternacht UTC liegt dort mitten im dünnen Nachthandel (FACH-H-009).
+        neuAktie: { anker: 'usOpen' },
         params: [
-            { key: 'anker', typ: 'wahl', vorgabe: 'session', optionen: ['session', 'week', 'month', 'swingHigh', 'swingLow', 'ath', 'atl'] },
+            { key: 'anker', typ: 'wahl', vorgabe: 'session', optionen: ['session', 'usOpen', 'week', 'month', 'swingHigh', 'swingLow', 'ath', 'atl'] },
             { key: 'band', typ: 'zahl', vorgabe: 0, min: 0, max: 5, schritt: 0.5 },
         ],
         ausgaben: [
@@ -1029,10 +1032,13 @@ let laufNr = 0
  * `eigen` = der gespeicherte Standard des Nutzers für diesen Typ
  * ({params, farben}, `settings.chartIndikatorStandard[typ]`) — er geht vor
  * den Werksvorgaben, wird aber gesäubert (er kann von einem älteren Stand sein).
+ * `kontext.aktie`: das Panel zeigt einen Aktien-Future — dann gelten zusätzlich
+ * die Vorgaben `neuAktie` der Definition (VWAP: Anker US-Eröffnung); der eigene
+ * Standard geht auch ihnen vor. Ohne Kontext bleibt alles wie bisher.
  */
-export function neueInstanz(typ, eigen = null) {
+export function neueInstanz(typ, eigen = null, kontext = null) {
     // `neu`: Vorgaben nur für neu angelegte Instanzen (gespeicherte behalten ihr Bild)
-    const werk = { ...vorgaben(typ), ...(INDIKATOREN[typ]?.neu || {}) }
+    const werk = { ...vorgaben(typ), ...(INDIKATOREN[typ]?.neu || {}), ...(kontext?.aktie ? INDIKATOREN[typ]?.neuAktie || {} : {}) }
     const params = eigen?.params ? saubereParams(typ, { ...werk, ...eigen.params }) : werk
     return { id: `${typ}-${Date.now().toString(36)}-${(laufNr++).toString(36)}`, typ, params, farben: { ...(eigen?.farben || {}) }, sichtbar: true }
 }

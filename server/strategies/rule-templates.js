@@ -63,7 +63,8 @@ export const VORLAGEN = [
         markt: 'Trend (intraday) — braucht klare Tagesrichtung',
         beschreibung: 'Der Kurs steht über der Tages-VWAP (Käufer im Vorteil), läuft nach einem '
             + 'Zwischenhoch dorthin zurück und wird an der Linie aufgenommen. Klassischer '
-            + 'Intraday-Ansatz — die VWAP setzt zu jedem UTC-Tageswechsel zurück.',
+            + 'Intraday-Ansatz — die VWAP setzt zu jedem UTC-Tageswechsel zurück, '
+            + 'bei Aktien-Futures zur US-Eröffnung (09:30 New Yorker Zeit).',
         rules: {
             timeframes: ['5m', '15m', '30m', '1h'],
             direction: 'long',

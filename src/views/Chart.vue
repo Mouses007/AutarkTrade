@@ -972,7 +972,8 @@ function setzeKerzenArt(art) {
 
 function indikatorHinzu(typ) {
     const p = daten.value.panels[dialog.value.panel]
-    p.indikatoren = [...(p.indikatoren || []), neueInstanz(typ, appEinstellungen.value?.chartIndikatorStandard?.[typ])]
+    // Aktien-Future: Vorgaben für Aktien (VWAP ab US-Eröffnung, FACH-H-009)
+    p.indikatoren = [...(p.indikatoren || []), neueInstanz(typ, appEinstellungen.value?.chartIndikatorStandard?.[typ], { aktie: Boolean(aktieVon(p)) })]
     dialog.value = null
 }
 
