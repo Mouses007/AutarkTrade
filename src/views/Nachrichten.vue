@@ -34,6 +34,7 @@ import Quellenhinweis from '@/components/basis/Quellenhinweis.vue'
 import PageInfo from '../components/PageInfo.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import { ladeFreigabe, freigabeAn } from '@/utils/quellenFreigabe.js'
+import { leseTage } from '../../shared/news-tage.js'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -430,6 +431,7 @@ function klappeUm(id) {
 // gleiche Vorsicht wie `radarSpeichern` in den Einstellungen) — sie gelten
 // für den NÄCHSTEN Bericht, der bestehende bleibt stehen.
 const nRhythmus = ref('taeglich')
+const nTage = ref([])
 /* Nur zur Anzeige: wie viele Aktualisierungen der Takt fährt. Eingestellt wird
    das in den Einstellungen — es ist ein Zeitplan, keine Form des Berichts. */
 const nUpdates = ref(0)
@@ -443,7 +445,8 @@ const nMeldungsTiefe = ref('normal')
 
 function ladeBerichtOptionen() {
     const s = appEinstellungen.value || {}
-    nRhythmus.value = ['woechentlich', 'manuell'].includes(s.radarNewsRhythmus)
+    nTage.value = leseTage(s.radarNewsTage)
+    nRhythmus.value = ['woechentlich', 'manuell', 'tage'].includes(s.radarNewsRhythmus)
         ? s.radarNewsRhythmus : 'taeglich'
     nUpdates.value = Math.max(0, Math.min(2, Number(s.radarNewsUpdates) || 0))
     nThemen.value = String(s.radarNewsThemen || 'crypto').split(',')
@@ -504,6 +507,11 @@ const RHYTHMUS_NAME = {
     taeglich: () => t('news.daily'),
     woechentlich: () => t('news.weekly'),
     manuell: () => t('news.manual'),
+    // „an bestimmten Tagen" nennt die Tage gleich mit: „Mo, Mi, Fr"
+    tage: () => {
+        const namen = t('kiUebersicht.wochentage').split(',')
+        return nTage.value.map(n => namen[n - 1]).join(', ') || t('news.days')
+    },
 }
 
 // ── News-Profile ─────────────────────────────────────────────────────────

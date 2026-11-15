@@ -157,6 +157,7 @@ import Kreisel from '../basis/Kreisel.vue'
 import Hinweis from '../basis/Hinweis.vue'
 import Pille from '../basis/Pille.vue'
 import Symbol from '../basis/Symbol.vue'
+import { leseTage } from '../../../shared/news-tage.js'
 
 const { t, te, locale } = useI18n()
 defineEmits(['gehe-zu'])
@@ -205,6 +206,11 @@ function zeitplanText(z) {
     const stunde = String(z.stunde).padStart(2, '0')
     // „nur manuell": ein Uhrzeittext wäre hier schlicht falsch — es läuft nichts.
     if (z.rhythmus === 'manuell') return t('kiUebersicht.zeitplanManuell')
+    if (z.rhythmus === 'tage') {
+        const namen = t('kiUebersicht.wochentage').split(',')
+        const tage = leseTage(z.tage).map(n => namen[n - 1]).join(', ')
+        return t('kiUebersicht.zeitplanTage', { tage, stunde })
+    }
     if (z.rhythmus === 'woechentlich') {
         const tage = t('kiUebersicht.wochentage').split(',')
         return t('kiUebersicht.zeitplanWoche', { tag: tage[(z.wochentag - 1) % 7] || '', stunde })

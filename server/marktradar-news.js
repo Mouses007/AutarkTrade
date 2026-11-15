@@ -34,6 +34,7 @@ import {
 import { ladeLlmConfig, ladeLlmConfigFuerAufgabe, callLLMJson, istGuthabenFehler, merkeKiGuthaben, schaetzeKosten } from './llm.js'
 import { aufgabenWahl, feldWahl } from './ai-task-config.js'
 import { zeitzoneAus } from '../shared/zeitzone.js'
+import { leseTage, wochentagNr, tageSeitVorigem } from '../shared/news-tage.js'
 /*
  * Die beiden KI-Kacheln. Der Bericht laesst sie neu rechnen statt einen
  * Knopfdruck von gestern zu uebernehmen — Einzelheiten in `holeLagenBlock`.
@@ -1592,10 +1593,12 @@ async function holeLagenBlock(symbol = 'BTCUSDT') {
  *
  * Rein und ohne Netz, damit der Selbsttest sie prüfen kann.
  */
-export function aktualitaetFuer({ thema, rhythmus = 'taeglich', istUpdate = false, chartFrische = '' } = {}) {
+export function aktualitaetFuer({ thema, rhythmus = 'taeglich', istUpdate = false, chartFrische = '', luecke = 1 } = {}) {
     if (thema === 'chartanalyse') return CHART_FRISCHE[chartFrische]?.filter || CHART_FRISCHE.woche.filter
     if (istUpdate) return 'day'
-    return leseRhythmus(rhythmus) === 'woechentlich' ? 'week' : 'day'
+    // „An bestimmten Tagen" mit mehr als einem Tag Lücke (Montag nach dem
+    // Wochenende): „day" verlöre den Samstag, also eine Woche.
+    return leseRhythmus(rhythmus) === 'woechentlich' || Number(luecke) > 1 ? 'week' : 'day'
 }
 
 /**
@@ -2071,15 +2074,22 @@ export function videoFensterAb(jetzt = Date.now(), zeitzone = '', letzterBericht
  *
  * Rein und ohne Datenbank, damit der Selbsttest sie prüfen kann.
  *
- * @param {{jetztLokal: Date, stunde: number, rhythmus?: string, wochentag?: number}} opt
+ * Rhythmus „tage" (an bestimmten Tagen): läuft nur, wenn der heutige
+ * Wochentag in `tage` steht (CSV oder Liste, 1 = Mo … 7 = So). Ohne gültigen
+ * Tag läuft nichts — der Server lässt diese Lage gar nicht erst speichern.
+ *
+ * @param {{jetztLokal: Date, stunde: number, rhythmus?: string, wochentag?: number, tage?: string|number[]}} opt
  */
-export function sollBerichtLaufen({ jetztLokal, stunde, rhythmus = 'taeglich', wochentag = 1 }) {
+export function sollBerichtLaufen({ jetztLokal, stunde, rhythmus = 'taeglich', wochentag = 1, tage = '' }) {
     // „nur manuell" heisst wörtlich das: der Takt erzeugt nichts, auch nicht
     // versehentlich um Mitternacht. Der Knopf auf der Nachrichtenseite bleibt
     // davon unberührt — er geht gar nicht erst durch diese Prüfung.
     if (leseRhythmus(rhythmus) === 'manuell') return false
     const soll = Math.max(0, Math.min(23, Number(stunde) || 0))
     if (jetztLokal.getHours() < soll) return false
+    if (leseRhythmus(rhythmus) === 'tage') {
+        return leseTage(Array.isArray(tage) ? tage.join(',') : tage).includes(wochentagNr(jetztLokal))
+    }
     if (rhythmus !== 'woechentlich') return true
     // 1 = Montag … 7 = Sonntag, wie die Auswahl in den Einstellungen
     const heute = ((jetztLokal.getDay() + 6) % 7) + 1
@@ -2089,7 +2099,24 @@ export function sollBerichtLaufen({ jetztLokal, stunde, rhythmus = 'taeglich', w
 /** Gültige Rhythmen des Berichts. Alles Unbekannte ist „täglich". */
 export function leseRhythmus(wert) {
     const r = String(wert || '').trim()
-    return r === 'woechentlich' || r === 'manuell' ? r : 'taeglich'
+    return r === 'woechentlich' || r === 'manuell' || r === 'tage' ? r : 'taeglich'
+}
+
+/**
+ * Wie viele Tage muss ein Vollbericht zurückblicken?
+ *
+ * Wöchentlich sieben, täglich einen. „An bestimmten Tagen" die Lücke bis zum
+ * vorigen gewählten Tag: Bei Mo–Fr deckt der Montag das Wochenende mit ab,
+ * bei Mo/Mi/Fr der Mittwoch zwei Tage — sonst fiele, was am Samstag geschah,
+ * aus jedem Bericht heraus.
+ *
+ * Rein und ohne Datenbank, damit der Selbsttest sie prüfen kann.
+ */
+export function berichtLueckeTage({ rhythmus = 'taeglich', tage = '', jetztLokal = new Date() } = {}) {
+    const r = leseRhythmus(rhythmus)
+    if (r === 'woechentlich') return 7
+    if (r === 'tage') return tageSeitVorigem(tage, wochentagNr(jetztLokal))
+    return 1
 }
 
 /**
@@ -2280,7 +2307,14 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
     const tiefe = ['knapp', 'normal', 'ausfuehrlich'].includes(s?.radarNewsMeldungsTiefe)
         ? s.radarNewsMeldungsTiefe : 'knapp'
     const themenEingestellt = leseThemen(s?.radarNewsThemen)
-    const fensterMs = rhythmus === 'woechentlich' ? 7 * TAG : 36 * 60 * 60 * 1000
+    // Lücke seit dem vorigen Berichtstag in der Journal-Zeitzone (1 = täglich,
+    // 7 = wöchentlich, bei „an bestimmten Tagen" je nach Wochentag).
+    const luecke = berichtLueckeTage({
+        rhythmus, tage: s?.radarNewsTage,
+        jetztLokal: new Date(new Date().toLocaleString('en-US', { timeZone: zeitzoneAus(s?.timeZone) })),
+    })
+    const fensterMs = rhythmus === 'woechentlich' ? 7 * TAG
+        : (luecke > 1 ? luecke * TAG + 12 * 60 * 60 * 1000 : 36 * 60 * 60 * 1000)
     /*
      * Bei einer Aktualisierung beginnt das Fenster am bisherigen Bericht.
      *
@@ -2292,7 +2326,7 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
     const seit = istUpdate ? Number(basis.erstelltAm) : Date.now() - fensterMs
     const zeitraumText = istUpdate
         ? `seit ${new Date(seit).toISOString().slice(11, 16)} UTC`
-        : (rhythmus === 'woechentlich' ? '7 Tage' : '36 Stunden')
+        : (rhythmus === 'woechentlich' ? '7 Tage' : (luecke > 1 ? `${luecke} Tage` : '36 Stunden'))
     // Eine Zwischenmeldung ist kürzer als der Tagesbericht — und lässt die
     // Chartanalyse weg: Ein Kapitel, das Unterstützungen und Widerstände
     // referiert, hat sich fünf Stunden später nicht bewegt und würde nur den
@@ -2314,7 +2348,7 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
      * bei, verteilt ihn aber über das Fenster; die 400 hier sind nur die
      * Obergrenze dessen, was zur Auswahl steht.
      */
-    const deckel = istUpdate ? 60 : (rhythmus === 'woechentlich' ? 80 : 60)
+    const deckel = istUpdate ? 60 : (rhythmus === 'woechentlich' || luecke >= 3 ? 80 : 60)
     let beitraege = await knex('news_items')
         .whereIn('sourceId', erlaubt.map(q => q.id))
         .where('publishedAt', '>=', seit)
@@ -2693,7 +2727,7 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
                             }
                         }
                     }
-                    const aktualitaet = aktualitaetFuer({ thema, rhythmus, istUpdate, chartFrische })
+                    const aktualitaet = aktualitaetFuer({ thema, rhythmus, istUpdate, chartFrische, luecke })
                     const r = ueberDs
                         ? await rechercheDeepseek({
                             thema, zeitraumText, aktualitaet, frage: extra.frage || '',
@@ -3671,6 +3705,7 @@ export function startNewsTakt() {
                 stunde: Number(s?.radarNewsStunde ?? 10),
                 rhythmus: s?.radarNewsRhythmus,
                 wochentag: Number(s?.radarNewsWochentag ?? 1),
+                tage: s?.radarNewsTage,
             })) {
                 const lauf = await erzeugeLagebericht().catch(() => null)   // Fehler steht im Vermerk
                 /*

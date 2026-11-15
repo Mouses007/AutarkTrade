@@ -11,6 +11,7 @@ import { istLokalesZiel } from './ollama-url.js'
 import { anzeigeWaehrung, normWaehrung } from './waehrung.js'
 import { ohneSeitenZeilen } from './ai-task-config.js'
 import { felderBeimAnlegen, felderBeimSchliessen, baselineBeimEinschalten, setzeBoersenAnker } from './trade-popups.js'
+import { leseTage, tageText } from '../shared/news-tage.js'
 
 const VALID_TABLES = [
     'trades', 'diaries', 'screenshots', 'satisfactions', 'tags', 'notes', 'excursions',
@@ -89,7 +90,7 @@ export const VALID_SETTINGS_KEYS = [
     'strategyKillSwitch', 'strategyMaxLeverage', 'strategyHiddenTemplates',
     'strategyLlmBudgetUsd', 'aiTaskProviders',
     'radarRsiSymbols', 'radarKalenderLaender', 'radarKalenderImpact', 'radarNewsQuellenAusschluss', 'radarNewsAuto', 'radarNewsStunde', 'radarNewsVideos', 'radarNewsModel', 'radarNewsAufloesung', 'radarNewsBerichtProvider', 'radarNewsBerichtModell', 'radarPicycleSchwelle', 'radarFundingDivergenz', 'radarDivergenzSymbole', 'boersenLinks',
-    'radarNewsRhythmus', 'radarNewsWochentag', 'radarNewsThemen', 'radarNewsLaenge', 'radarNewsRuheAn', 'radarNewsRuheWoerter', 'radarNewsXModell',
+    'radarNewsRhythmus', 'radarNewsWochentag', 'radarNewsTage', 'radarNewsThemen', 'radarNewsLaenge', 'radarNewsRuheAn', 'radarNewsRuheWoerter', 'radarNewsXModell',
     'radarNewsUpdates', 'radarNewsUpdateStunden', 'radarNewsMailInhalt', 'radarNewsMailAktiv', 'radarNewsMailAn',
     'radarNewsBerichtAufbewahrung', 'radarNewsChartFrische',
     'radarNewsRechercheModell', 'radarNewsRechercheDeepseek',
@@ -318,6 +319,18 @@ export function registriereApiRouten(app) {
             // Reiter mit dem Stand vor der Neuordnung): Der nächste Start schöbe
             // sie sonst über das, was auf der Seite eingestellt ist.
             if (updateData.aiTaskProviders !== undefined) updateData.aiTaskProviders = ohneSeitenZeilen(updateData.aiTaskProviders)
+            // Rhythmus „an bestimmten Tagen": Tage normalisieren und mindestens
+            // einen verlangen — sonst liefe die Automatik still nie, obwohl der
+            // Schalter an ist und eine Uhrzeit dasteht.
+            if (updateData.radarNewsTage !== undefined) updateData.radarNewsTage = tageText(leseTage(updateData.radarNewsTage))
+            if (updateData.radarNewsRhythmus !== undefined || updateData.radarNewsTage !== undefined) {
+                const alt = await knex('settings').select('radarNewsRhythmus', 'radarNewsTage').where('id', 1).first()
+                const rhythmus = updateData.radarNewsRhythmus ?? alt?.radarNewsRhythmus
+                const tage = updateData.radarNewsTage ?? alt?.radarNewsTage
+                if (rhythmus === 'tage' && !leseTage(tage).length) {
+                    return res.status(400).json({ error: 'Mindestens ein Wochentag muss gewählt sein', code: 'newsTageLeer' })
+                }
+            }
             if (Object.keys(updateData).length === 0) return res.json({ ok: true })
             // Bewertungs-Popups wieder an: nur Trades ab jetzt melden, kein Rückstau
             // (`server/trade-popups.js`). Hier statt im Browser, damit es jeder Weg tut.

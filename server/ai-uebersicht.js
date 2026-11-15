@@ -47,7 +47,7 @@ const AUTOMATIKEN = [
         id: 'lagebericht', titelKey: 'kiUebersicht.auto.lagebericht',
         anspruch: 'news_lagebericht', taktKey: 'kiUebersicht.takt.taeglich', kostet: true,
         schalter: 'radarNewsAuto', bereich: 'nachrichten',
-        zeitFelder: { stunde: 'radarNewsStunde', rhythmus: 'radarNewsRhythmus', wochentag: 'radarNewsWochentag' },
+        zeitFelder: { stunde: 'radarNewsStunde', rhythmus: 'radarNewsRhythmus', wochentag: 'radarNewsWochentag', tage: 'radarNewsTage' },
     },
     /*
      * Die beiden Aktualisierungs-Plätze des Lageberichts.
@@ -112,6 +112,7 @@ function zeitplanVon(a, s) {
         stunde: Number(s?.[a.zeitFelder.stunde] ?? 12),
         rhythmus: String(s?.[a.zeitFelder.rhythmus] || 'taeglich'),
         wochentag: Number(s?.[a.zeitFelder.wochentag] ?? 1),
+        ...(a.zeitFelder.tage ? { tage: String(s?.[a.zeitFelder.tage] ?? '') } : {}),
     }
 }
 

@@ -10,6 +10,7 @@
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { leseTage, tageText, TAGE_VORGABE } from '../../../../shared/news-tage.js'
 import axios from 'axios'
 import { dbUpdateSettings } from '@/utils/db.js'
 import { appEinstellungen } from '@/stores/settings.js'
@@ -49,6 +50,10 @@ export let radarNewsPruefModell = ref('')
    als Kapitel und Länge. Themen als Array — gespeichert wird CSV. */
 export let radarNewsRhythmus = ref('taeglich')
 export let radarNewsWochentag = ref(1)
+/* Rhythmus „tage" (an bestimmten Tagen): gewählte Wochentage, 1 = Mo … 7 = So.
+   Als Zahlenliste — gespeichert wird CSV. Nie leer: die Pillen lassen den
+   letzten Tag nicht abwählen, der Server lehnt eine leere Liste ab. */
+export let radarNewsTage = ref(leseTage(TAGE_VORGABE))
 /* Aktualisierungen im Tagesverlauf: keine, eine oder zwei. Gespeichert wird
    die Zahl plus die Stunden als CSV; hier stehen sie als zwei getrennte Felder,
    weil man sie einzeln auswählt. */
@@ -168,9 +173,13 @@ export function useRadarEinstellungen() {
         radarNewsUpdateModell.value = s.radarNewsUpdateModell || ''
         radarNewsPruefProvider.value = s.radarNewsPruefProvider || ''
         radarNewsPruefModell.value = s.radarNewsPruefModell || ''
-        radarNewsRhythmus.value = ['woechentlich', 'manuell'].includes(s.radarNewsRhythmus)
+        radarNewsRhythmus.value = ['woechentlich', 'manuell', 'tage'].includes(s.radarNewsRhythmus)
             ? s.radarNewsRhythmus : 'taeglich'
         radarNewsWochentag.value = Math.max(1, Math.min(7, Number(s.radarNewsWochentag ?? 1)))
+        {
+            const tage = leseTage(s.radarNewsTage)
+            radarNewsTage.value = tage.length ? tage : leseTage(TAGE_VORGABE)
+        }
         radarNewsUpdates.value = Math.max(0, Math.min(2, Number(s.radarNewsUpdates) || 0))
         radarNewsMailInhalt.value = ['kurz', 'mittel', 'voll'].includes(s.radarNewsMailInhalt) ? s.radarNewsMailInhalt : 'kurz'
         radarNewsMailAktiv.value = Number(s.radarNewsMailAktiv ?? 0) === 1
@@ -263,6 +272,7 @@ export function useRadarEinstellungen() {
             radarNewsLagenSymbol: String(radarNewsLagenSymbol.value || '').trim().toUpperCase() || 'BTCUSDT',
             radarNewsRhythmus: radarNewsRhythmus.value,
             radarNewsWochentag: Math.max(1, Math.min(7, Number(radarNewsWochentag.value) || 1)),
+            radarNewsTage: tageText(radarNewsTage.value) || TAGE_VORGABE,
             radarNewsUpdates: Math.max(0, Math.min(2, Number(radarNewsUpdates.value) || 0)),
             radarNewsMailInhalt: radarNewsMailInhalt.value,
             radarNewsMailAktiv: radarNewsMailAktiv.value ? 1 : 0,

@@ -14,7 +14,7 @@ import { zeitzoneAus } from '../../../../shared/zeitzone.js'
 import { dbGetSettings } from '@/utils/db.js'
 import {
     newsProfile, radarNewsQuellenAusschluss, radarNewsRuheAn, radarNewsRuheWoerter, radarNewsFokusAn,
-    radarNewsFokusWoerter, radarNewsAuto, radarNewsStunde, radarNewsRhythmus, radarNewsWochentag,
+    radarNewsFokusWoerter, radarNewsAuto, radarNewsStunde, radarNewsRhythmus, radarNewsWochentag, radarNewsTage,
     radarNewsUpdates, radarNewsUpdateStunde1, radarNewsUpdateStunde2, useRadarEinstellungen,
 } from '../gemeinsam/useRadarEinstellungen.js'
 
@@ -24,6 +24,33 @@ const { loadRadarSettings, ladeNewsProfile, radarSpeichern } = useRadarEinstellu
 /* Wochentage aus der Übersetzung — als computed, damit ein Sprachwechsel sie
    sofort mitzieht. */
 const wochentagNamen = computed(() => [1, 2, 3, 4, 5, 6, 7].map(i => t('settings.ki.news.wd' + i)))
+const wochentagKurz = computed(() => [1, 2, 3, 4, 5, 6, 7].map(i => t('settings.ki.news.wdKurz' + i)))
+
+/* Rhythmus „an bestimmten Tagen": Beim Wechsel dorthin zuerst die Tage
+   schreiben, dann den Rhythmus — der Server lehnt „tage" ohne Tage ab. */
+async function rhythmusGewaehlt() {
+    if (radarNewsRhythmus.value === 'tage') await radarSpeichern('radarNewsTage')
+    await radarSpeichern('radarNewsRhythmus')
+}
+
+/* Eine Pille an- oder abwählen. Der letzte Tag bleibt stehen: ohne Tag liefe
+   die Automatik still nie, obwohl Schalter und Uhrzeit etwas anderes sagen. */
+const tageHinweis = ref('')
+function tagUmschalten(tag) {
+    const tage = radarNewsTage.value
+    if (tage.includes(tag)) {
+        if (tage.length === 1) {
+            tageHinweis.value = t('settings.ki.news.daysMinOne')
+            setTimeout(() => { tageHinweis.value = '' }, 3000)
+            return
+        }
+        radarNewsTage.value = tage.filter(x => x !== tag)
+    } else {
+        radarNewsTage.value = [...tage, tag].sort((a, b) => a - b)
+    }
+    tageHinweis.value = ''
+    radarSpeichern('radarNewsTage')
+}
 
 /* Erzwingt einen Remount von <SchrittNewsQuellen>, wenn ein Profil die
    Quellen serverseitig ändert — siehe profilAnwenden(). */
@@ -254,9 +281,10 @@ async function profilLoeschen(p) {
                 <div class="reihe">
                     <Schalter v-model="radarNewsAuto" @change="radarSpeichern('radarNewsAuto')" />
                     <select v-model="radarNewsRhythmus" :disabled="!radarNewsAuto"
-                        :aria-label="t('settings.ki.news.autoLabel')" @change="radarSpeichern('radarNewsRhythmus')">
+                        :aria-label="t('settings.ki.news.autoLabel')" @change="rhythmusGewaehlt">
                         <option value="taeglich">{{ t('settings.ki.news.daily') }}</option>
                         <option value="woechentlich">{{ t('settings.ki.news.weekly') }}</option>
+                        <option value="tage">{{ t('settings.ki.news.days') }}</option>
                         <option value="manuell">{{ t('settings.ki.news.manual') }}</option>
                     </select>
                     <InfoTipp schluessel="settings.info.newsRhythmus" />
@@ -277,6 +305,14 @@ async function profilLoeschen(p) {
                         {{ zeitzoneAus(appEinstellungen?.timeZone) }}
                     </span>
                     <span v-else class="leise">{{ t('settings.ki.news.manualHint') }}</span>
+                </div>
+                <div v-if="radarNewsRhythmus === 'tage'" class="tage-wahl" role="group"
+                    :aria-label="t('settings.ki.news.daysLabel')">
+                    <button v-for="(kurz, i) in wochentagKurz" :key="i" type="button"
+                        :class="['tag-pille', { gewaehlt: radarNewsTage.includes(i + 1) }]"
+                        :aria-pressed="radarNewsTage.includes(i + 1)" :title="wochentagNamen[i]"
+                        :disabled="!radarNewsAuto" @click="tagUmschalten(i + 1)">{{ kurz }}</button>
+                    <span v-if="tageHinweis" class="leise warn" role="status">{{ tageHinweis }}</span>
                 </div>
             </Feld>
 
@@ -325,4 +361,30 @@ async function profilLoeschen(p) {
 .profile { margin-bottom: var(--abstand-3); background: var(--panel); }
 .profil-name { flex-basis: 14rem; }
 .neu { margin-top: var(--abstand-2); }
+.tage-wahl {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: var(--abstand-2);
+}
+.tag-pille {
+    min-width: 2.6rem;
+    padding: 0.25rem 0.7rem;
+    background: transparent;
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-pille);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.tag-pille:hover:not(:disabled) { color: var(--text); }
+.tag-pille.gewaehlt {
+    background: var(--accent-flaeche);
+    border-color: var(--accent-rand);
+    color: var(--accent);
+}
+.tag-pille:disabled { opacity: 0.5; cursor: not-allowed; }
+.tag-pille:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
