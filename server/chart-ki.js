@@ -751,6 +751,22 @@ export function fensterAus(fenster, ivMs, jetzt = Date.now()) {
     return { anzahl, bisT: bisT < jetzt - ivMs ? bisT : null }
 }
 
+/**
+ * Kerzen eines Zeitrahmens, die bis `randT` GESCHLOSSEN sind (FUN-R-203).
+ *
+ * `k.t` ist die Öffnungszeit. Bis 15.11.2026 galt `k.t <= bisT` — eine Wochenkerze,
+ * die am Tag vor dem rechten Rand öffnete, zählte mit ihrem Schluss sechs Tage
+ * NACH dem Rand mit: die Lage der höheren Zeitrahmen kannte die Zukunft.
+ * @param {Array<{t: number}>} reihe
+ * @param {string} tf     Zeitrahmen der Reihe
+ * @param {number} randT  Ende der letzten sichtbaren Chart-Kerze (Öffnung + Länge)
+ */
+export function nurGeschlossenBis(reihe, tf, randT) {
+    const laenge = TIMEFRAME_MS[tf]
+    if (!(laenge > 0)) return []
+    return reihe.filter((k) => k.t + laenge <= randT)
+}
+
 export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures', modus: modusRoh = 'setzen', htf: htfRoh = false, fenster = null, bild = null }) {
     const wahl = normModus({ modus: modusRoh, htf: htfRoh })
     const fen = fensterAus(fenster, TIMEFRAME_MS[interval])
@@ -803,8 +819,9 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
                 leseMomentumGrenze().catch(() => undefined),
                 ...tfs.map((tf) => getClosedCandles(symbol, tf, ZEITRAHMEN_KERZEN, { market: markt }).catch(() => null)),
             ])
-            // Zurückgescrollter Chart: nur, was damals schon geschlossen war
-            const serien = Object.fromEntries(tfs.map((tf, i) => [tf, fen.bisT && reihen[i] ? reihen[i].filter((k) => k.t <= fen.bisT) : reihen[i]]))
+            // Zurückgescrollter Chart: nur, was am rechten Rand schon geschlossen war (FUN-R-203)
+            const randT = bisT + TIMEFRAME_MS[interval]
+            const serien = Object.fromEntries(tfs.map((tf, i) => [tf, fen.bisT && reihen[i] ? nurGeschlossenBis(reihen[i], tf, randT) : reihen[i]]))
             zeitrahmen = baueZeitrahmen({ serien, interval, kurs: paket.kurs, atrChart: paket.atr, eigene: paket.beziehungen?.marken || [], grenze })
         }
 

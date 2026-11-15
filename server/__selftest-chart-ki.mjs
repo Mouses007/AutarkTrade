@@ -10,7 +10,7 @@
  * jede Ablehnung steht deshalb eine Gegenprobe daneben, die durchgehen MUSS.
  */
 import fs from 'node:fs'
-import { baueChartEingabe, pruefeChartAuswahl, systemText, normModus, pruefeBild, sperrtNachFehler, MAX_ZEICHNUNGEN } from './chart-ki.js'
+import { nurGeschlossenBis, baueChartEingabe, pruefeChartAuswahl, systemText, normModus, pruefeBild, sperrtNachFehler, MAX_ZEICHNUNGEN } from './chart-ki.js'
 import { zeitText, baueKandidaten, PROFIL_ARTEN_ALLE, messeNutzerZeichnungen, zaehleAnLinie, nutzerBeziehungen, kandidatenText, zonenUrsprung, waehleNutzer, sichtbarAufTf, NUTZER_MAX, fensterUeberblick } from './chart-kandidaten.js'
 import { parseJsonOhneUnsichtbare, parseJsonAntwort, istGrok } from './llm.js'
 import { MarktdatenAus } from './marktdaten/index.js'
@@ -498,6 +498,27 @@ console.log('\nWächter\n')
     const sys = systemText(false)
     check('Prompt verlangt die übergeordnete Struktur, nicht nur Marken am Kurs', sys.includes('Übergeordnete Struktur') && sys.includes('rechten Rand') && !sys.includes('NUR was für ein mögliches Setup JETZT'))
     check('fensterUeberblick ohne Kerzen → null', fensterUeberblick([]) === null)
+}
+
+console.log('\nZurückgescrollter Chart: höhere Zeitrahmen ohne Vorausblick (FUN-R-203)')
+{
+    const TAG = 86400000, STD = 3600000
+    const mo = Date.UTC(2026, 2, 2)                       // Montag 02.03.2026, Wochenöffnung
+    const randKerze = Date.UTC(2026, 2, 3, 10)            // letzte sichtbare 1h-Kerze: Di 10:00
+    const randT = randKerze + STD
+    const wochen = [mo - 14 * TAG, mo - 7 * TAG, mo].map((t) => ({ t }))
+    const w = nurGeschlossenBis(wochen, '1w', randT)
+    check('Wochenkerze, die erst nach dem rechten Rand schliesst, fällt weg', w.length === 2 && w[1].t === mo - 7 * TAG, JSON.stringify(w))
+    const tage = [mo - TAG, mo, mo + TAG].map((t) => ({ t }))
+    const d = nurGeschlossenBis(tage, '1d', randT)
+    check('Tageskerze des Randtages (noch offen) fällt weg, der Vortag bleibt', d.length === 2 && d[1].t === mo, JSON.stringify(d))
+    const std = [randKerze - STD, randKerze, randKerze + STD].map((t) => ({ t }))
+    const h = nurGeschlossenBis(std, '1h', randT)
+    check('Chart-Zeitrahmen: die Kerze am rechten Rand zählt, die danach nicht', h.length === 2 && h[1].t === randKerze, JSON.stringify(h))
+    const vier = [Date.UTC(2026, 2, 3, 4), Date.UTC(2026, 2, 3, 8)].map((t) => ({ t }))
+    check('4h-Kerze 08:00–12:00 ist um 11:00 noch offen', nurGeschlossenBis(vier, '4h', randT).length === 1)
+    check('Kerze, die genau am Rand schliesst, zählt', nurGeschlossenBis([{ t: randT - 4 * STD }], '4h', randT).length === 1)
+    check('Unbekannter Zeitrahmen → nichts (lieber «unbekannt» als Vorausblick)', nurGeschlossenBis(wochen, 'xx', randT).length === 0)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
