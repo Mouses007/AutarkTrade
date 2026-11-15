@@ -32,7 +32,7 @@
 import {
     sma, ema, bollinger, vwap, vwapBand, rsi, macd, stochastic, stochRsi, atr, adx, obv, mfi, volumeSma, smaSerie,
 } from '../../../shared/indicators.js'
-import { rechneVwapVector, emaHoehereTf, TF_MS } from './vwapVector.js'
+import { rechneVwapVector, emaHoehereTf, TF_MS, POC_FEIN } from './vwapVector.js'
 import { lsobCv } from '../../../shared/lsobCv.js'
 import { gussCv } from '../../../shared/gussCv.js'
 import {
@@ -294,7 +294,11 @@ export function intrabarTf(wahl, ivMs, tfMs, anzahlKerzen = INTRA_ZIEL_KERZEN) {
     return kleiner.find((tf) => (ivMs / tfMs[tf]) * ziel <= INTRA_BUDGET) || kleiner[kleiner.length - 1]
 }
 
-/** Welche Zeiteinheiten der VWAP Vector nachladen muss (höhere + Intrabar). */
+/**
+ * Welche Zeiteinheiten der VWAP Vector nachladen muss (höhere + Intrabar +
+ * feine Kerzen des Perioden-POC). Ist die feine Zeiteinheit die des Charts,
+ * rechnet er aus den Chartkerzen (`pocFein: null`).
+ */
 export function vwapVectorQuellen(p, ivMs, tfMs, anzahlKerzen) {
     const htf = new Set()
     for (const x of [1, 2, 3]) if (p[`showMtfE${x}`]) htf.add(p[`tfMtfE${x}`])
@@ -302,7 +306,9 @@ export function vwapVectorQuellen(p, ivMs, tfMs, anzahlKerzen) {
     // Eine „höhere" Zeiteinheit, die gar nicht höher ist, rechnet der Chart selbst.
     const hoeher = [...htf].filter((tf) => tfMs[tf] > ivMs)
     const intra = p.showPocC ? intrabarTf(p.pocCTf, ivMs, tfMs, anzahlKerzen) : null
-    return { htf: hoeher, intra }
+    const fein = p.showPocPer ? POC_FEIN[p.pocPerTf] : null
+    const pocFein = fein && tfMs[fein] && tfMs[fein] !== ivMs ? fein : null
+    return { htf: hoeher, intra, pocFein }
 }
 
 

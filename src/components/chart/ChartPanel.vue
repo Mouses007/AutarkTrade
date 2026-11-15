@@ -49,6 +49,7 @@ import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { InstanzEbene } from '../../utils/chart/overlays/InstanzEbene.js'
 import { MarktEbene, waendeAusBuch } from '../../utils/chart/overlays/MarktEbene.js'
 import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
+import { POC_FEIN_PERIODEN, TF_MS as VV_TF_MS } from '../../utils/chart/vwapVector.js'
 import { benoetigteQuellen, vwapVectorQuellen, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
 import { positionsTitel as positionsTitelFuer } from '../../utils/chart/overlays/positionsTitel.js'
@@ -773,7 +774,24 @@ function pruefeOrderflow() {
  * INTRA_BUDGET Kerzen (Seiten à 1500); ältere Chartkerzen bekommen keinen
  * Candle-POC. „auto" wählt die Auflösung so, dass das Budget reicht.
  */
-const vvCache = { schluessel: '', htf: {}, intra: [] }
+const vvCache = { schluessel: '', htf: {}, intra: [], fein: [] }
+/*
+ * Feine Kerzen des Perioden-POC (POC_FEIN): von der Börse des CHARTS — sein
+ * Volumen soll das sein, das der Chart zeigt —, POC_FEIN_PERIODEN Perioden
+ * zurück, höchstens so weit wie die Chartkerzen. Seitenweise in der Grösse,
+ * die die Börse hergibt (Bitunix 200), danach nur die jüngsten nachziehen.
+ */
+async function ladePocFein(tf, periodeMs, { symbol, markt, boerse, ab }) {
+    const proSeite = QUELLEN_MAX[boerse] || 1000
+    const bis = Math.max(ab, Date.now() - (POC_FEIN_PERIODEN + 1) * periodeMs)
+    let liste = await ladeKerzen({ symbol, markt, interval: tf, limit: proSeite, boerse })
+    for (let s = 1; s < 40 && liste.length && liste[0].t > bis; s++) {
+        const alt = await ladeKerzen({ symbol, markt, interval: tf, limit: proSeite, boerse, endTime: liste[0].t - 1 })
+        if (!alt.length) break
+        liste = fuegeZusammen(alt, liste)
+    }
+    return liste
+}
 /*
  * Kerzen der höheren Zeiteinheiten für die MTF-Linien des EMA-Indikators
  * (je Zeiteinheit 1000 Kerzen, gemerkt je Symbol/Markt/Zeiteinheit des Charts).
@@ -807,13 +825,18 @@ async function ladeVwapVector() {
     const instanzen = (props.panel.indikatoren || []).filter((i) => i.typ === 'vwapVector' && i.sichtbar !== false)
     const htf = new Set()
     let intra = null
+    let pocFein = null, pocPeriode = null
     for (const i of instanzen) {
-        const q = vwapVectorQuellen(saubereParams('vwapVector', i.params), ivMs, INTERVALL_MS, kerzen.value.length)
+        const pp = saubereParams('vwapVector', i.params)
+        const q = vwapVectorQuellen(pp, ivMs, INTERVALL_MS, kerzen.value.length)
         q.htf.forEach((tf) => htf.add(tf))
         if (q.intra && (!intra || INTERVALL_MS[q.intra] < INTERVALL_MS[intra])) intra = q.intra
+        // Zwei Instanzen mit verschiedener Periode: die erste zählt (selten; die zweite rechnet dann aus den Chartkerzen)
+        if (q.pocFein && !pocFein) { pocFein = q.pocFein; pocPeriode = pp.pocPerTf }
     }
-    const schluessel = `${symbol}|${markt}|${interval}|${intra}`
-    if (vvCache.schluessel !== schluessel) { vvCache.schluessel = schluessel; vvCache.htf = {}; vvCache.intra = [] }
+    const boerse = boerseVon()
+    const schluessel = `${symbol}|${markt}|${interval}|${intra}|${pocFein}|${boerse}`
+    if (vvCache.schluessel !== schluessel) { vvCache.schluessel = schluessel; vvCache.htf = {}; vvCache.intra = []; vvCache.fein = [] }
     // Nur schreiben, solange der Speicher noch zu DIESEM Abruf gehört — ein späte
     // Antwort für das alte Symbol mischte sonst dessen Kerzen in den neuen Bestand.
     const nochMeins = () => vvCache.schluessel === schluessel
@@ -842,8 +865,19 @@ async function ladeVwapVector() {
             }
         } catch { /* ohne Intrabar-Daten kein Candle-POC */ }
     }
+    if (pocFein) {
+        try {
+            if (!vvCache.fein.length) {
+                const liste = await ladePocFein(pocFein, VV_TF_MS[pocPeriode] || 86_400_000, { symbol, markt: m, boerse, ab: kerzen.value[0]?.t ?? 0 })
+                if (nochMeins()) vvCache.fein = liste
+            } else {
+                const neu = await ladeKerzen({ symbol, markt: m, interval: pocFein, limit: Math.min(200, QUELLEN_MAX[boerse] || 200), boerse })
+                if (nochMeins()) vvCache.fein = fuegeZusammen(vvCache.fein, neu)
+            }
+        } catch { /* ohne feine Kerzen rechnet der Perioden-POC aus den Chartkerzen */ }
+    }
     if (!nochMeins() || symbol !== props.panel.symbol || interval !== props.panel.interval) return
-    zeichner.setzeExtern('vwapVector', { htf: { ...vvCache.htf }, intra: intra ? vvCache.intra : [], ivMs })
+    zeichner.setzeExtern('vwapVector', { htf: { ...vvCache.htf }, intra: intra ? vvCache.intra : [], pocFein: pocFein ? vvCache.fein : null, pocPeriode, ivMs })
 }
 
 /** Ein Takt, verschiedene Abstände: Wände 10 s, Liquidationen 30 s, Momentum 60 s, Hebel 2 min, OI 5 min, Funding 10 min. */

@@ -204,12 +204,45 @@ function pocAus(kerzen, von, bis, bins) {
     return tief + (mb + 0.5) * b
 }
 
+/*
+ * Feine Kerzen je Periode: der POC soll auf jeder Chart-Zeiteinheit an DERSELBEN
+ * Stelle liegen. Aus den Chartkerzen gerechnet hing er davon ab, wie breit eine
+ * Kerze ihr Volumen verschmiert — VIRTUALUSDT 14.11.2026: 0.4531 auf 15m,
+ * 0.4960 auf 1h (drei Preisbereiche lagen fast gleichauf, die groben
+ * Abverkaufskerzen kippten die Wahl), und auf 1h fiel die Linie damit aus dem
+ * Abstandsfilter.
+ */
+export const POC_FEIN = { '4h': '5m', '12h': '15m', '1d': '15m', '1w': '1h', '1M': '4h' }
+/** So viele Perioden zurück decken die feinen Kerzen ab; ältere rechnen aus den Chartkerzen. */
+export const POC_FEIN_PERIODEN = 20
+
+/** Feine Kerzen nach Periode: key → [von, bis] (Indizes, aufsteigend sortiert vorausgesetzt). */
+function feinNachPeriode(fein, tf) {
+    const m = new Map()
+    for (let j = 0; j < fein.length; j++) {
+        const key = periodeVon(fein[j].t, tf)
+        const e = m.get(key)
+        if (e) e[1] = j
+        else m.set(key, [j, j])
+    }
+    return m
+}
+
 /**
  * Am Ende jeder Periode deren POC; er bleibt stehen, bis eine spätere Kerze
  * ihn durchläuft. Höchstens `max` gleichzeitig, die älteste fliegt.
- * @returns [{ preis, von (erste Kerze der Periode), ab (Kerze der Entstehung) }]
+ *
+ * `fein` (optional, mit `feinMs`): feinere Kerzen derselben Börse. Eine
+ * Periode, die sie VOLLSTÄNDIG abdecken (erste feine Kerze am Periodenbeginn
+ * oder früher, letzte reicht bis zum Periodenende), rechnet ihr Profil daraus;
+ * sonst aus den Chartkerzen wie bisher. Berührt („abgeholt") wird immer an den
+ * Chartkerzen — Hoch und Tief sind auf jeder Zeiteinheit dieselben.
+ * @returns [{ preis, von (erste Kerze der Periode), ab (Kerze der Entstehung), fein }]
  */
-export function periodenPoc(kerzen, { tf = '1d', bins = 50, max = 20 }) {
+export function periodenPoc(kerzen, { tf = '1d', bins = 50, max = 20, fein = null, feinMs = 0 }) {
+    const feinMap = fein?.length && feinMs > 0 ? feinNachPeriode(fein, tf) : null
+    const feinAb = feinMap ? periodeVon(fein[0].t, tf) : Infinity
+    const feinErstePeriodeVoll = feinMap ? periodeVon(fein[0].t - 1, tf) !== feinAb : false
     let offen = []
     let start = 0
     for (let i = 0; i < kerzen.length; i++) {
@@ -220,8 +253,14 @@ export function periodenPoc(kerzen, { tf = '1d', bins = 50, max = 20 }) {
             // Die erste Periode ist nur vollständig, wenn die Reihe an ihrem Anfang beginnt.
             const vollstaendig = start > 0 || periodeVon(kerzen[0].t - 1, tf) !== periodeVon(kerzen[0].t, tf)
             const von = Math.max(start, i - 500)
-            const pp = vollstaendig ? pocAus(kerzen, von, i - 1, bins) : null
-            if (pp != null && !(k.h >= pp && k.l <= pp)) offen.push({ preis: pp, von: start, ab: i })
+            const key = periodeVon(kerzen[i - 1].t, tf)
+            const bereich = feinMap?.get(key)
+            const feinVoll = bereich && (key > feinAb || feinErstePeriodeVoll)
+                && fein[bereich[1]].t + feinMs >= k.t
+            let pp = null, ausFein = false
+            if (feinVoll) { pp = pocAus(fein, bereich[0], bereich[1], bins); ausFein = pp != null }
+            if (pp == null && vollstaendig) pp = pocAus(kerzen, von, i - 1, bins)
+            if (pp != null && !(k.h >= pp && k.l <= pp)) offen.push({ preis: pp, von: start, ab: i, fein: ausFein })
             if (offen.length > max) offen = offen.slice(offen.length - max)
             start = i
         }
@@ -332,9 +371,9 @@ export function dailyOpen(kerzen) {
 
 // ── Gesamt ───────────────────────────────────────────────────────────────
 /**
- * Alles auf einmal. `ext` = { htf: { [tf]: kerzen }, intra: kerzen } —
+ * Alles auf einmal. `ext` = { htf: { [tf]: kerzen }, intra: kerzen, pocFein: kerzen } —
  * höhere Zeiteinheiten für MTF-EMA und Fibonacci, Intrabar-Kerzen für den
- * Candle-POC. Fehlt etwas, bleibt nur das betroffene Modul leer.
+ * Candle-POC, feine Kerzen (POC_FEIN) für den Perioden-POC. Fehlt etwas, bleibt nur das betroffene Modul leer.
  */
 export function rechneVwapVector(kerzen, p, ext = {}, ivMs = 3_600_000) {
     const n = kerzen.length
@@ -374,7 +413,7 @@ export function rechneVwapVector(kerzen, p, ext = {}, ivMs = 3_600_000) {
         faecher,
         fib: p.showFib ? fibLevel(kerzen, ext.htf?.[p.fibTf], p.fibAtrMult, [p.fL0, p.fL236, p.fL382, p.fL5, p.fL618, p.fL786, p.fL1]) : null,
         engulfing: p.showEng ? engulfing(kerzen, { minKoerperAtr: p.engMinBody, nurVolumen: p.engVolConf, stufen, a }) : [],
-        periodenPoc: p.showPocPer ? periodenPoc(kerzen, { tf: p.pocPerTf, bins: p.pocPerBins, max: p.pocPerMax }) : [],
+        periodenPoc: p.showPocPer ? periodenPoc(kerzen, { tf: p.pocPerTf, bins: p.pocPerBins, max: p.pocPerMax, fein: ext.pocPeriode === p.pocPerTf ? ext.pocFein : null, feinMs: TF_MS[POC_FEIN[p.pocPerTf]] }) : [],
         candlePoc: p.showPocC && p.pocCAll ? pocs : null,
         dochtLevel: p.showPocC && pocs ? dochtLevel(kerzen, pocs, { staerke: p.pocCPiv, max: p.pocCMax }) : [],
         zonen: p.showVliq ? vektorZonen(kerzen, stufen, { nurClimax: p.vliqClimax, nurKoerper: p.vliqBody, max: p.vliqMax }) : [],

@@ -80,6 +80,36 @@ console.log('\nPerioden-POC (naked)\n')
     for (let i = 0; i < 24; i++) beruehrt.push(k(i, 100, 100.5, 99.5, 100))
     beruehrt.push(k(24, 100, 101, 99, 100))
     check('berührt schon die erste Kerze der neuen Periode → gar nicht erst „naked"', periodenPoc(beruehrt, { tf: '1d' }).length === 0)
+
+    // Feine Kerzen: 15m-Tag mit schmalen Kerzen, Volumen klar bei 100; daraus die 1h-Kerzen
+    // gebaut — eine grosse Stundenkerze 90–110 verschmiert ihr Volumen, aus 1h allein läge der POC woanders.
+    const M15 = 15 * 60_000
+    const fein = []
+    for (let i = 0; i < 96; i++) {
+        const mitte = i >= 40 && i < 44 ? 100 : (i < 40 ? 108 - i * 0.05 : 92)
+        const v = i >= 40 && i < 44 ? 3000 : 100
+        fein.push({ t: T0 + i * M15, o: mitte, h: mitte + 0.2, l: mitte - 0.2, c: mitte, v })
+    }
+    const stunden = []
+    for (let s = 0; s < 24; s++) {
+        const g = fein.slice(s * 4, s * 4 + 4)
+        stunden.push({ t: T0 + s * H, o: g[0].o, h: Math.max(...g.map((x) => x.h)), l: Math.min(...g.map((x) => x.l)), c: g[3].c, v: g.reduce((a, x) => a + x.v, 0) })
+    }
+    stunden[10] = { ...stunden[10], h: 110, l: 90 }   // Stunde 10 = 15m-Kerzen 40–43: Docht über die ganze Spanne
+    fein[40] = { ...fein[40], h: 110 }; fein[43] = { ...fein[43], l: 90 }
+    stunden.push(k(24, 120, 121, 119, 120))           // neuer Tag, weit weg
+    const fein2 = [...fein, { t: T0 + 96 * M15, o: 120, h: 121, l: 119, c: 120, v: 100 }]
+    const ohne = periodenPoc(stunden, { tf: '1d', bins: 50 })
+    const mit = periodenPoc(stunden, { tf: '1d', bins: 50, fein: fein2, feinMs: M15 })
+    const chart15 = [...fein, { t: T0 + 96 * M15, o: 120, h: 121, l: 119, c: 120, v: 100 }]
+    const aus15 = periodenPoc(chart15, { tf: '1d', bins: 50 })
+    check('1h-Chart mit feinen 15m-Kerzen = POC des 15m-Charts', mit.length === 1 && aus15.length === 1 && Math.abs(mit[0].preis - aus15[0].preis) < 1e-9 && mit[0].fein === true,
+        JSON.stringify({ mit, aus15 }))
+    check('Gegenprobe: aus den 1h-Kerzen allein liegt er woanders', ohne.length === 1 && Math.abs(ohne[0].preis - aus15[0].preis) > 0.5, JSON.stringify(ohne))
+    check('feine Kerzen ohne Periodenanfang → aus den Chartkerzen (fein: false)',
+        periodenPoc(stunden, { tf: '1d', bins: 50, fein: fein2.slice(5), feinMs: M15 })[0]?.fein === false)
+    check('feine Kerzen, die vor dem Periodenende aufhören → aus den Chartkerzen',
+        periodenPoc(stunden, { tf: '1d', bins: 50, fein: fein.slice(0, 90), feinMs: M15 })[0]?.fein === false)
     check('Woche beginnt Montag (UTC)', periodeVon(T0, '1w') !== periodeVon(T0 - 1, '1w') && periodeVon(T0, '1w') === periodeVon(T0 + 6 * 24 * H, '1w'))
 }
 
@@ -156,6 +186,9 @@ console.log('\nRegister\n')
     check('auto mit nur 50 Chartkerzen auf 4h: feiner (3m, 80 × 50 = 4000)', intrabarTf('auto', 4 * H, TF, 50) === '3m')
     check('feste Wahl bleibt fest, aber nie ≥ Chart-Zeiteinheit', intrabarTf('1m', 4 * H, TF) === '1m' && intrabarTf('1h', H, TF) === null)
     check('auf 1m-Chart kein Candle-POC', intrabarTf('auto', 60_000, TF) === null)
+    check('Perioden-POC 1d: auf 1h feine 15m nachladen', q.pocFein === '15m', JSON.stringify(q))
+    check('Perioden-POC 1d auf dem 15m-Chart: aus den Chartkerzen (nichts nachladen)', vwapVectorQuellen(p, 900_000, TF).pocFein === null)
+    check('Perioden-POC aus → nichts nachladen', vwapVectorQuellen({ ...p, showPocPer: false }, H, TF).pocFein === null)
     check('auf dem Tageschart keine „höhere" Zeiteinheit 1d', vwapVectorQuellen(p, 24 * H, { '1m': 60_000, '1d': 24 * H }).htf.length === 0)
     const r = Array.from({ length: 300 }, (_, i) => k(i, 100 + Math.sin(i / 7) * 3, 101 + Math.sin(i / 7) * 3, 99 + Math.sin(i / 7) * 3, 100 + Math.sin((i + 1) / 7) * 3, 100 + (i % 9) * 40))
     const w = rechneIndikator('vwapVector', r, p, {})
