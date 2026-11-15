@@ -36,6 +36,7 @@ import { saubereVorlage } from './chart-vorlagen.js'
 import { ordnePunkte } from './chart-alarm-regeln.js'
 import { getStrategy, validateParams } from './strategies/index.js'
 import { signalVerlauf, fensterFuer } from './chart-signale.js'
+import { normMarkt } from './migrationen/aktien.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 const HTTP_TIMEOUT = 10000
@@ -572,9 +573,11 @@ export function setupChartRoutes(app) {
     })
 
     // ── Layouts ──────────────────────────────────────────────────────────
-    app.get('/api/chart/layouts', async (_req, res) => {
+    // Layouts und Watchlists gehören zu einem Markt (`?markt=aktien`, sonst Krypto):
+    // ein Aktien-Layout mit NVDA-Panels soll im Krypto-Markt nicht auftauchen und umgekehrt.
+    app.get('/api/chart/layouts', async (req, res) => {
         try {
-            const zeilen = await getKnex()('chart_layouts').orderBy('id')
+            const zeilen = await getKnex()('chart_layouts').where('anlageklasse', normMarkt(req.query.markt)).orderBy('id')
             res.json(zeilen.map(layoutZeile))
         } catch (e) { res.status(500).json({ error: e.message }) }
     })
@@ -586,11 +589,12 @@ export function setupChartRoutes(app) {
             if (text.length > MAX_LAYOUT_BYTES) return res.status(413).json({ error: 'Layout zu gross' })
             const knex = getKnex()
             const [zeile] = await knex('chart_layouts')
-                .insert({ name: name(req.body?.name, 'Layout'), aktiv: 0, daten: text, geaendertAm: Date.now() })
+                .insert({ name: name(req.body?.name, 'Layout'), aktiv: 0, daten: text, geaendertAm: Date.now(), anlageklasse: normMarkt(req.body?.markt) })
                 .returning('id')
             const id = typeof zeile === 'object' ? zeile.id : zeile
             if (req.body?.aktiv) {
-                await knex('chart_layouts').update({ aktiv: 0 })
+                // «aktiv» gilt je Markt: das Aktien-Layout löst das aktive Krypto-Layout nicht ab.
+                await knex('chart_layouts').where('anlageklasse', normMarkt(req.body?.markt)).update({ aktiv: 0 })
                 await knex('chart_layouts').where('id', id).update({ aktiv: 1 })
             }
             res.json(layoutZeile(await knex('chart_layouts').where('id', id).first()))
@@ -626,7 +630,7 @@ export function setupChartRoutes(app) {
                 return res.status(409).json({ error: 'Layout wurde inzwischen anderswo geändert', aktuell: layoutZeile(await knex('chart_layouts').where('id', id).first()) })
             }
             if (req.body?.aktiv) {
-                await knex('chart_layouts').whereNot('id', id).update({ aktiv: 0 })
+                await knex('chart_layouts').whereNot('id', id).where('anlageklasse', normMarkt(alt.anlageklasse)).update({ aktiv: 0 })
                 await knex('chart_layouts').where('id', id).update({ aktiv: 1 })
             }
             res.json(layoutZeile(await knex('chart_layouts').where('id', id).first()))
@@ -643,9 +647,9 @@ export function setupChartRoutes(app) {
     })
 
     // ── Watchlists ───────────────────────────────────────────────────────
-    app.get('/api/chart/watchlists', async (_req, res) => {
+    app.get('/api/chart/watchlists', async (req, res) => {
         try {
-            const zeilen = await getKnex()('chart_watchlists').orderBy([{ column: 'reihenfolge' }, { column: 'id' }])
+            const zeilen = await getKnex()('chart_watchlists').where('anlageklasse', normMarkt(req.query.markt)).orderBy([{ column: 'reihenfolge' }, { column: 'id' }])
             res.json(zeilen.map(watchlistZeile))
         } catch (e) { res.status(500).json({ error: e.message }) }
     })
@@ -658,6 +662,7 @@ export function setupChartRoutes(app) {
                 symbole: JSON.stringify(saubereSymbole(req.body?.symbole)),
                 reihenfolge: Number(req.body?.reihenfolge) || 0,
                 geaendertAm: Date.now(),
+                anlageklasse: normMarkt(req.body?.markt),
             }).returning('id')
             const id = typeof zeile === 'object' ? zeile.id : zeile
             res.json(watchlistZeile(await knex('chart_watchlists').where('id', id).first()))

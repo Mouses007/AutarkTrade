@@ -25,11 +25,12 @@ export function neuesPanel(vorlage = {}) {
     }
 }
 
-export function standardLayout() {
+/** @param {object} [panel]  Vorgabe fürs erste Panel (Aktien-Markt: ein Aktien-Symbol samt Börse). */
+export function standardLayout(panel) {
     return {
         raster: '1',
         aktiv: 0,
-        panels: [neuesPanel()],
+        panels: [{ ...neuesPanel(panel), ...(panel?.boerse ? { boerse: panel.boerse } : {}) }],
         sync: { kreuz: true, zeit: false, symbol: false, interval: false },
         seitenleiste: { offen: true, reiter: 'watchlist' },
     }
@@ -72,12 +73,13 @@ export function vorlagenInhalt(liste) {
 }
 
 export const api = {
-    layouts: () => axios.get('/api/chart/layouts').then((r) => r.data),
-    layoutNeu: (name, daten, aktiv = true) => axios.post('/api/chart/layouts', { name, daten, aktiv }).then((r) => r.data),
+    // Layouts und Watchlists gehören zu einem Markt (krypto | aktien), siehe `server/chart-api.js`.
+    layouts: (markt = 'krypto') => axios.get('/api/chart/layouts', { params: { markt } }).then((r) => r.data),
+    layoutNeu: (name, daten, aktiv = true, markt = 'krypto') => axios.post('/api/chart/layouts', { name, daten, aktiv, markt }).then((r) => r.data),
     layoutSpeichern: (id, patch) => axios.put(`/api/chart/layouts/${id}`, patch).then((r) => r.data),
     layoutLoeschen: (id) => axios.delete(`/api/chart/layouts/${id}`),
-    watchlists: () => axios.get('/api/chart/watchlists').then((r) => r.data),
-    watchlistNeu: (name, symbole = []) => axios.post('/api/chart/watchlists', { name, symbole }).then((r) => r.data),
+    watchlists: (markt = 'krypto') => axios.get('/api/chart/watchlists', { params: { markt } }).then((r) => r.data),
+    watchlistNeu: (name, symbole = [], markt = 'krypto') => axios.post('/api/chart/watchlists', { name, symbole, markt }).then((r) => r.data),
     watchlistSpeichern: (id, patch) => axios.put(`/api/chart/watchlists/${id}`, patch).then((r) => r.data),
     watchlistLoeschen: (id) => axios.delete(`/api/chart/watchlists/${id}`),
     vorlagen: () => axios.get('/api/chart/vorlagen').then((r) => r.data),

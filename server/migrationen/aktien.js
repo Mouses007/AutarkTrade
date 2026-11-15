@@ -26,6 +26,8 @@
 export const TABELLEN_MIT_ANLAGEKLASSE = [
     'coin_universen', 'coinradar_laeufe', 'rangliste_laeufe',
     'radar_ergebnisse', 'strategy_instances', 'chart_alarme',
+    // Phase 5: jeder Markt hat seine eigenen Chart-Layouts und Watchlists.
+    'chart_layouts', 'chart_watchlists',
 ]
 
 export const MAERKTE = ['krypto', 'aktien']

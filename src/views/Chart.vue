@@ -44,6 +44,8 @@ import { appEinstellungen } from '../stores/settings.js'
 import { api, vorlagenInhalt, standardLayout, vervollstaendige, passeAnRaster, PANELS_JE_RASTER, STANDARD_WATCHLIST } from '../utils/chart/arbeitsplatz.js'
 import { passePanelAn, vorgabeBoerse, waehlbareBoersen, INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE, boerseFuer } from '../utils/chart/kerzenQuelle.js'
 import { ladeMarktdaten } from '../utils/marktdaten.js'
+import { ermittleMarkt } from '../stores/markt.js'
+import { ladeAktienSymbole, standardAktien, vorzug } from '../utils/chart/aktienSymbole.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
 import { incomingPollingActive } from '../stores/journal/offenePositionen.js'
 import { fuehreZusammen } from '../utils/chart/layoutZusammenfuehren.js'
@@ -260,19 +262,27 @@ let gespeichertText = ''
 const quellenHinweis = ref('')
 const standVon = (id) => layouts.value.find((l) => l.id === id)?.geaendertAm
 
+/** Markt dieses Seitenaufrufs (krypto | aktien) — ein Wechsel lädt die Seite neu. */
+let chartMarkt = 'krypto'
+
 async function lade() {
     try {
         // Erst die Marktdatenquelle kennen: sie entscheidet, ob Binance-Panels bleiben dürfen.
         await ladeMarktdaten()
-        let liste = await api.layouts()
-        if (!liste.length) liste = [await api.layoutNeu(t('chart.layoutStandard'), standardLayout(), true)]
+        // Jeder Markt hat eigene Layouts und Watchlists; ein leerer Aktien-Chart startet mit Aktien.
+        chartMarkt = await ermittleMarkt()
+        const start = chartMarkt === 'aktien'
+            ? standardAktien(await ladeAktienSymbole(), vorzug(vorgabeBoerse(), waehlbareBoersen()))
+            : { panel: undefined, watchlist: STANDARD_WATCHLIST }
+        let liste = await api.layouts(chartMarkt)
+        if (!liste.length) liste = [await api.layoutNeu(t('chart.layoutStandard'), standardLayout(start.panel), true, chartMarkt)]
         layouts.value = liste
         const aktiv = liste.find((l) => l.aktiv) || liste[0]
         waehleLayout(aktiv)
         uebernimmSymbolAusAdresse()
 
-        let wl = await api.watchlists()
-        if (!wl.length) wl = [await api.watchlistNeu(t('chart.watchlistStandard'), STANDARD_WATCHLIST)]
+        let wl = await api.watchlists(chartMarkt)
+        if (!wl.length) wl = [await api.watchlistNeu(t('chart.watchlistStandard'), start.watchlist, chartMarkt)]
         watchlists.value = wl
         bereit.value = true
     } catch (e) {
@@ -702,7 +712,7 @@ async function gleicheLayoutAb() {
     if (JSON.stringify(daten.value) !== gespeichertText) return
     abgleichLaeuft = true
     try {
-        const frisch = (await api.layouts()).find((x) => x.id === id)
+        const frisch = (await api.layouts(chartMarkt)).find((x) => x.id === id)
         if (!frisch || !(frisch.geaendertAm > (standVon(id) || 0))) return
         // Während des Abrufs geändert oder gewechselt? Dann nichts überschreiben.
         if (layoutId.value !== id || JSON.stringify(daten.value) !== gespeichertText) return
@@ -723,7 +733,7 @@ async function layoutWechsel(id) {
     if (!l) return
     // Den gespeicherten Stand frisch holen — ein anderes Gerät kann ihn
     // inzwischen geändert haben.
-    const frisch = (await api.layouts()).find((x) => x.id === id) || l
+    const frisch = (await api.layouts(chartMarkt)).find((x) => x.id === id) || l
     waehleLayout(frisch)
     await api.layoutSpeichern(id, { aktiv: true })
 }
@@ -731,7 +741,7 @@ async function layoutWechsel(id) {
 async function layoutNeu(name) {
     await speichere()
     const kopie = JSON.parse(JSON.stringify(daten.value))
-    const neu = await api.layoutNeu(name, kopie, true)
+    const neu = await api.layoutNeu(name, kopie, true, chartMarkt)
     layouts.value = [...layouts.value.map((l) => ({ ...l, aktiv: false })), neu]
     waehleLayout(neu)
 }
@@ -1049,7 +1059,7 @@ async function watchlistAendern(id, symbole) {
 }
 
 async function watchlistNeu(name) {
-    const neu = await api.watchlistNeu(name, [])
+    const neu = await api.watchlistNeu(name, [], chartMarkt)
     watchlists.value = [...watchlists.value, neu]
 }
 

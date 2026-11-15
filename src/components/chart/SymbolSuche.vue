@@ -12,6 +12,10 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { loadSymbolMeta } from '../../utils/liveSymbols.js'
 import { Symbol } from '../basis'
+import { ermittleMarkt } from '../../stores/markt.js'
+import { ladeAktienSymbole, sucheintraege, sucheAktien, vorzug } from '../../utils/chart/aktienSymbole.js'
+import { vorgabeBoerse, waehlbareBoersen } from '../../utils/chart/kerzenQuelle.js'
+import { ladeMarktdaten } from '../../utils/marktdaten.js'
 
 const props = defineProps({
     symbol: { type: String, default: '' },
@@ -31,9 +35,19 @@ const markiert = ref(0)
 const futures = ref([])
 const spot = ref([])
 /* Kennzeichen BX/BG/PX: dieselbe Regel wie die Watchlist (`utils/chart/handelbar.js`). */
-const boersenFuer = (s) => boersenFuerSymbol(s.symbol, s.markt)
+const boersenFuer = (s) => (s.plaetze ? s.plaetze.map((id) => ({ id, kurz: PLATZ_KURZ[id] || id })) : boersenFuerSymbol(s.symbol, s.markt))
+
+/*
+ * Aktien-Markt: gesucht wird in den Aktien des Titel-Stamms statt in den
+ * Coin-Paaren — nach Ticker oder Firmenname. Ein Treffer bringt die Börse
+ * mit, unter deren Symbol der Chart ihn lädt.
+ */
+const PLATZ_KURZ = { binance: 'BN', bitunix: 'BX', bitget: 'BG', pionex: 'PX', bitpanda: 'BP' }
+const aktienMarkt = ref(false)
+const aktien = ref([])
 
 const treffer = computed(() => {
+    if (aktienMarkt.value) return sucheAktien(aktien.value, suche.value)
     const q = suche.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
     const alle = [
         ...futures.value.map((s) => ({ ...s, markt: 'futures' })),
@@ -63,7 +77,7 @@ async function oeffne() {
 
 function waehle(s) {
     if (!s) return
-    emit('waehle', { symbol: s.symbol, markt: s.markt })
+    emit('waehle', { symbol: s.symbol, markt: s.markt, ...(s.boerse ? { boerse: s.boerse } : {}) })
     offen.value = false
 }
 
@@ -75,6 +89,12 @@ function taste(e) {
 }
 
 onMounted(async () => {
+    if (await ermittleMarkt() === 'aktien') {
+        aktienMarkt.value = true
+        await ladeMarktdaten()
+        aktien.value = sucheintraege(await ladeAktienSymbole(), vorzug(vorgabeBoerse(), waehlbareBoersen()))
+        return
+    }
     const [f, s] = await Promise.all([loadSymbolMeta('futures'), loadSymbolMeta('spot')])
     futures.value = f
     spot.value = s
@@ -93,19 +113,20 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
         </button>
         <div v-if="offen && !eingebettet" class="hintergrund" @click="offen = false"></div>
         <div v-if="offen" class="liste" :class="{ eingebettet }">
-            <input ref="feld" v-model="suche" class="at-feld klein" :placeholder="t('chart.symbolPlatzhalter')"
+            <input ref="feld" v-model="suche" class="at-feld klein" :placeholder="t(aktienMarkt ? 'chart.aktiePlatzhalter' : 'chart.symbolPlatzhalter')"
                 @keydown="taste" />
             <div class="zeilen">
                 <div v-for="(s, i) in treffer" :key="s.markt + s.symbol" class="zeile" :class="{ markiert: i === markiert }"
                     @mouseenter="markiert = i" @click="waehle(s)">
-                    <span class="sym">{{ s.symbol }}</span>
+                    <span class="sym">{{ s.plaetze ? s.base : s.symbol }}</span>
+                    <span v-if="s.name" class="firma">{{ s.name }}</span>
                     <span class="chip" :class="s.markt">{{ s.markt === 'spot' ? 'Spot' : 'Perp' }}</span>
                     <span class="boersen">
                         <span v-for="b in boersenFuer(s)" :key="b.id" class="boerseKuerzel"
-                            :title="t('chart.handelbarAuf', { boerse: b.id })">{{ b.kurz }}</span>
+                            :title="t(s.plaetze ? 'chart.handelbarBei' : 'chart.handelbarAuf', { boerse: b.id })">{{ b.kurz }}</span>
                     </span>
                 </div>
-                <div v-if="!treffer.length" class="leer">{{ t('chart.keinTreffer') }}</div>
+                <div v-if="!treffer.length" class="leer">{{ t(aktienMarkt && !aktien.length ? 'chart.aktienLeer' : 'chart.keinTreffer') }}</div>
             </div>
         </div>
     </div>
@@ -188,6 +209,19 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
 .zeile .sym {
     flex: 1;
     font-weight: 500;
+}
+
+.zeile .sym:has(+ .firma) {
+    flex: 0 0 auto;
+}
+
+.zeile .firma {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
 }
 
 .chip {

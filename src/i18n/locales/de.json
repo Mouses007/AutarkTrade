@@ -5648,6 +5648,9 @@
     "symbolPlatzhalter": "Symbol, z. B. BTC oder SOLUSDT",
     "handelbarAuf": "Als Future handelbar auf {boerse}",
     "keinTreffer": "Kein Treffer",
+    "aktiePlatzhalter": "Aktie, z. B. NVDA oder Tesla",
+    "handelbarBei": "Handelbar bei {boerse}",
+    "aktienLeer": "Noch keine Aktien im Stamm. Unter Research › Titel-Liste zuerst abgleichen.",
     "skala": {
       "normal": "Lineare Skala",
       "log": "Logarithmische Skala",
@@ -8622,6 +8625,7 @@
     }
   },
   "markt": {
+    "nurKrypto": "Der Marktradar zeigt bisher nur Krypto-Daten. Kacheln für Aktien (Marktbreite, Sektoren, Zahlentermine) gibt es noch nicht.",
     "umschalter": "Markt",
     "krypto": "Krypto",
     "aktien": "Aktien"
@@ -8710,6 +8714,7 @@
     "zuordnung_sucheFremd": "Kurse von einer Zweitlistung – das Datum des Börsengangs ist deshalb unbekannt."
   },
   "aktienradar": {
+    "zumChart": "Im Chart öffnen",
     "lauf": "Lauf starten",
     "zeigeHuerden": "An den Hürden gescheiterte Titel zeigen",
     "stand": "Stand {zeit}: {geprueft} Aktien-Futures geprüft, {bewertet} über den Hürden.",

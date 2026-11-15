@@ -16,6 +16,7 @@ import Pille from '../components/basis/Pille.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Leerzustand from '../components/basis/Leerzustand.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
+import { marktdaten, ladeMarktdaten } from '../utils/marktdaten.js'
 
 const { t, locale } = useI18n()
 
@@ -23,6 +24,13 @@ const PLATZ = { binance: 'Binance', bitget: 'Bitget', bitunix: 'Bitunix', pionex
 const TON = { perp: 'akzent', 'token-spot': 'gut', 'broker-spot': 'neutral' }
 const RANG = { perp: 0, 'token-spot': 1, 'broker-spot': 2 }
 const MARKT = { markt: 'aktien' }
+
+/* Sprung in den Chart: das Symbol einer Zeile ist das der Marktdatenquelle, also auch deren Kerzen. */
+ladeMarktdaten()
+function chartZiel(z) {
+    const boerse = marktdaten.value?.wahl
+    return { path: '/chart', query: { symbol: z.symbol, ...(boerse && boerse !== 'aus' ? { boerse } : {}) } }
+}
 
 const zeilen = ref([])
 const lauf = ref(null)
@@ -155,7 +163,7 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? 'â
                         <td class="rechts">{{ z.rang || 'â€”' }}</td>
                         <td class="rechts note" :title="teilText(z.teilnoten)">{{ z.note == null ? 'â€”' : zahl(z.note, 0) }}</td>
                         <td class="ticker" :title="z.symbol">
-                            {{ z.boersen?.ticker || z.symbol }}
+                            <router-link :to="chartZiel(z)" :title="t('aktienradar.zumChart')">{{ z.boersen?.ticker || z.symbol }}</router-link>
                             <span v-if="z.boersen?.unterart && z.boersen.unterart !== 'aktie'" class="art">{{ t('aktien.art_' + z.boersen.unterart) }}</span>
                         </td>
                         <td class="name">{{ z.boersen?.name || 'â€”' }}</td>
@@ -262,6 +270,15 @@ const teilText = (n) => t('aktienradar.teilnoten', { bewegung: n?.bewegung ?? 'â
     font-weight: 700;
     color: var(--accent);
     cursor: help;
+}
+
+.ticker a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.ticker a:hover {
+    color: var(--accent);
 }
 
 .ticker {

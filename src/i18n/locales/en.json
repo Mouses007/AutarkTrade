@@ -5648,6 +5648,9 @@
     "symbolPlatzhalter": "Symbol, e.g. BTC or SOLUSDT",
     "handelbarAuf": "Tradable as a future on {boerse}",
     "keinTreffer": "No match",
+    "aktiePlatzhalter": "Stock, e.g. NVDA or Tesla",
+    "handelbarBei": "Tradable at {boerse}",
+    "aktienLeer": "No stocks in the list yet. Sync it first under Research › Instrument list.",
     "skala": {
       "normal": "Linear scale",
       "log": "Logarithmic scale",
@@ -8622,6 +8625,7 @@
     }
   },
   "markt": {
+    "nurKrypto": "The market radar shows crypto data only so far. Tiles for stocks (breadth, sectors, earnings dates) do not exist yet.",
     "umschalter": "Market",
     "krypto": "Crypto",
     "aktien": "Stocks"
@@ -8710,6 +8714,7 @@
     "zuordnung_sucheFremd": "Prices from a secondary listing – the IPO date is therefore unknown."
   },
   "aktienradar": {
+    "zumChart": "Open in chart",
     "lauf": "Start run",
     "zeigeHuerden": "Show titles that failed the gates",
     "stand": "As of {zeit}: {geprueft} stock futures checked, {bewertet} above the gates.",

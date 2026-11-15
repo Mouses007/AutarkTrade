@@ -5,9 +5,11 @@
  *                                     handelsplatz, art, nurKryptoBoersen, grenze)
  *   GET  /api/aktien/stamm/stand      Zahlen und letzter Lauf dieses Prozesses
  *   POST /api/aktien/stamm/abgleich   jetzt abgleichen (liest nur öffentliche Listen)
+ *   GET  /api/aktien/chart-symbole    Aktien, deren Kerzen der Chart laden kann (Symbol je Börse)
  */
 import { getKnex } from '../database.js'
 import { gleicheAb, letzterLauf, leseStamm, stammZahlen, HANDELSPLAETZE } from './stamm.js'
+import { chartSymboleAus } from './chart-symbole.js'
 
 const ARTEN = ['perp', 'token-spot', 'broker-spot']
 const KLASSEN = ['aktien', 'sonstige']
@@ -32,6 +34,13 @@ export function setupAktienRoutes(app) {
     app.get('/api/aktien/stamm/stand', async (req, res) => {
         try {
             res.json({ ok: true, ...(await stammZahlen(getKnex())), letzterLauf: letzterLauf() })
+        } catch (e) { fehler(res, e) }
+    })
+
+    app.get('/api/aktien/chart-symbole', async (req, res) => {
+        try {
+            const titel = await leseStamm(getKnex(), { anlageklasse: 'aktien', art: 'perp', grenze: 5000 })
+            res.json({ ok: true, titel: chartSymboleAus(titel) })
         } catch (e) { fehler(res, e) }
     })
 
