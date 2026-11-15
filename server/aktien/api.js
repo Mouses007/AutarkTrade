@@ -38,6 +38,7 @@ const TITEL_MS = 15 * 60_000
 const BEWEGUNG_MS = 6 * 60 * 60_000
 const titelCache = new Map()      // ticker → { zeit, wert } | { laeuft: Promise }
 const bewegungCache = new Map()   // ticker → { zeit, wert }
+const bewegungLaeuft = new Map()  // ticker → Promise des laufenden (bezahlten) Abrufs
 
 async function baueTitelSeite(ticker) {
     const gefunden = await ladeTitel(getKnex(), ticker)
@@ -72,6 +73,61 @@ async function baueTitelSeite(ticker) {
         if (e instanceof Gebremst) return { ...kopf, daten: null, grund: 'gebremst' }
         throw e
     }
+}
+
+const BEWEGUNG_DIENSTE = {
+    ladeTitel: (ticker) => ladeTitel(getKnex(), ticker),
+    ladeLlmConfig, rechercheThema, merkeKiGuthaben,
+}
+
+/**
+ * Recherche «was hat den Kurs bewegt» holen (Perplexity, kostet). Liefert
+ * `{status, body}` für die Route.
+ *
+ * Solange ein Abruf für den Ticker läuft, bekommt jeder weitere Aufruf
+ * DASSELBE Versprechen: ein Doppelklick oder ein zweiter Tab löst keinen
+ * zweiten bezahlten Abruf aus (Audit SEC-S-004). Die Sprache des ersten
+ * Aufrufs gilt für alle, die sich anhängen.
+ * @param {object} [dienste]  nur der Selbsttest reicht Attrappen herein — er löst nie einen echten Abruf aus
+ */
+export function holeBewegung(ticker, sprache = 'de', dienste = BEWEGUNG_DIENSTE) {
+    const laeuft = bewegungLaeuft.get(ticker)
+    if (laeuft) return laeuft
+    const abruf = recherchiereBewegung(ticker, sprache, dienste).finally(() => {
+        if (bewegungLaeuft.get(ticker) === abruf) bewegungLaeuft.delete(ticker)
+    })
+    bewegungLaeuft.set(ticker, abruf)
+    return abruf
+}
+
+async function recherchiereBewegung(ticker, sprache, d) {
+    const gefunden = await d.ladeTitel(ticker)
+    if (!gefunden) return { status: 404, body: { ok: false, error: 'Titel nicht im Stamm' } }
+    const cfg = await d.ladeLlmConfig({ provider: 'perplexity', model: 'sonar' })
+    if (!cfg.apiKey) return { status: 200, body: { ok: false, grund: 'schluesselFehlt' } }
+    let r
+    try {
+        r = await d.rechercheThema({
+            thema: ticker,
+            frage: bewegungsFrage({ name: gefunden.titel.name, symbol: gefunden.kursSymbol || ticker, sprache }),
+            apiKey: cfg.apiKey, modell: 'sonar', timeoutMs: 60000, aktualitaet: 'week',
+            ausloeser: 'manuell', funktion: 'aktien-titel',
+        })
+        d.merkeKiGuthaben('perplexity').catch(() => { })
+    } catch (e) {
+        if (istGuthabenFehler(e.message)) await d.merkeKiGuthaben('perplexity', e.message).catch(() => { })
+        throw e
+    }
+    // Wie überall: keine Prognosen, keine Empfehlungen — auch nicht aus der Websuche.
+    const geprueft = pruefeEinordnung({ text: r.text })
+    if (!geprueft.ok) return { status: 200, body: { ok: false, grund: 'verworfen', warum: geprueft.grund } }
+    const wert = {
+        text: geprueft.text,
+        quellen: (r.citations || []).filter((u) => /^https?:\/\//.test(u)).slice(0, 12),
+        zeit: Date.now(), kiGeneriert: true,
+    }
+    bewegungCache.set(ticker, { zeit: Date.now(), wert })
+    return { status: 200, body: { ok: true, bewegung: wert } }
 }
 
 const ARTEN = ['perp', 'token-spot', 'broker-spot']
@@ -191,33 +247,8 @@ export function setupAktienRoutes(app) {
         const ticker = String(req.params.ticker || '').toUpperCase()
         if (!TICKER_RE.test(ticker)) return res.status(400).json({ ok: false, error: 'ungültiger Ticker' })
         try {
-            const gefunden = await ladeTitel(getKnex(), ticker)
-            if (!gefunden) return res.status(404).json({ ok: false, error: 'Titel nicht im Stamm' })
-            const cfg = await ladeLlmConfig({ provider: 'perplexity', model: 'sonar' })
-            if (!cfg.apiKey) return res.json({ ok: false, grund: 'schluesselFehlt' })
-            let r
-            try {
-                r = await rechercheThema({
-                    thema: ticker,
-                    frage: bewegungsFrage({ name: gefunden.titel.name, symbol: gefunden.kursSymbol || ticker, sprache: req.body?.sprache === 'en' ? 'en' : 'de' }),
-                    apiKey: cfg.apiKey, modell: 'sonar', timeoutMs: 60000, aktualitaet: 'week',
-                    ausloeser: 'manuell', funktion: 'aktien-titel',
-                })
-                merkeKiGuthaben('perplexity').catch(() => { })
-            } catch (e) {
-                if (istGuthabenFehler(e.message)) await merkeKiGuthaben('perplexity', e.message).catch(() => { })
-                throw e
-            }
-            // Wie überall: keine Prognosen, keine Empfehlungen — auch nicht aus der Websuche.
-            const geprueft = pruefeEinordnung({ text: r.text })
-            if (!geprueft.ok) return res.json({ ok: false, grund: 'verworfen', warum: geprueft.grund })
-            const wert = {
-                text: geprueft.text,
-                quellen: (r.citations || []).filter((u) => /^https?:\/\//.test(u)).slice(0, 12),
-                zeit: Date.now(), kiGeneriert: true,
-            }
-            bewegungCache.set(ticker, { zeit: Date.now(), wert })
-            res.json({ ok: true, bewegung: wert })
+            const { status, body } = await holeBewegung(ticker, req.body?.sprache === 'en' ? 'en' : 'de')
+            res.status(status).json(body)
         } catch (e) {
             logWarn('aktien', `Bewegung ${ticker}: ${e.message}`)
             res.status(502).json({ ok: false, error: String(e?.message || e) })

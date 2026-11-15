@@ -66,7 +66,7 @@ ok(linie.length <= 502 && linie.at(-1)[0] === 1000 && linie[0][0] === 0, 'Kursli
 ok(kursLinie([{ t: 1, c: 2 }]).length === 1 && kursLinie().length === 0, 'kurze und leere Reihe')
 
 const frage = bewegungsFrage({ name: 'NVIDIA', symbol: 'NVDA' })
-ok(frage.includes('NVIDIA (NVDA)') && /Keine Anlageberatung/.test(frage) && /keine Prognosen/.test(frage), 'Frage ohne Beratung und Prognose')
+ok(frage.includes('<<<NVIDIA>>> (NVDA)') && /Keine Anlageberatung/.test(frage) && /keine Prognosen/.test(frage), 'Frage ohne Beratung und Prognose')
 ok(bewegungsFrage({ symbol: 'ASML.AS', sprache: 'en' }).includes('ASML.AS') , 'englische Frage, ohne Namen')
 
 console.log(`✓ Titel-Seite Aktien: ${n} Prüfungen`)
