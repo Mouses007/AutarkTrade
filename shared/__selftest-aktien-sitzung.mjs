@@ -4,7 +4,7 @@
  *   node shared/__selftest-aktien-sitzung.mjs
  */
 import assert from 'node:assert/strict'
-import { nyTeile, feiertage, istHandelstag, sitzungVon, handelstagVon, handelstagBeginn, regimeWechsel, sitzungsBilanz, REGIME_STICHTAGE } from './aktien-sitzung.js'
+import { nyTeile, feiertage, istHandelstag, sitzungVon, handelstagVon, handelstagBeginn, regimeWechsel, sitzungsBilanz, REGIME_STICHTAGE, verkuerzteTage, istVerkuerzt } from './aktien-sitzung.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -48,6 +48,34 @@ gleich(sitzungVon(utc(2026, 6, 1, 13, 30)), 'regulaer', 'Sommerzeit: 09:30')
 gleich(sitzungVon(utc(2026, 8, 7, 15, 0)), 'feiertag', 'Labor Day mittags')
 gleich(sitzungVon(utc(2026, 8, 7, 0, 30)), 'feiertag', 'Sonntagabend vor Labor Day')
 gleich(sitzungVon(utc(2026, 8, 8, 0, 0)), 'nacht', 'Labor Day 20:00 gehört zum Dienstag')
+
+// ── Verkürzte Handelstage (Schluss 13:00) — Kalender der NYSE 2025 bis 2028 ──
+const kurz = (jahr) => [...verkuerzteTage(jahr)].sort().join(',')
+gleich(kurz(2025), '2025-07-03,2025-11-28,2025-12-24', '2025: 3. Juli, Tag nach Thanksgiving, Heiligabend')
+gleich(kurz(2026), '2026-11-27,2026-12-24', '2026: 4. Juli am Samstag → 3. Juli ist der Feiertag, der 2. Juli ein voller Tag')
+gleich(kurz(2027), '2027-11-26', '2027: 4. Juli am Sonntag, Weihnachten am Samstag → nur der Tag nach Thanksgiving')
+gleich(kurz(2028), '2028-07-03,2028-11-24', '2028: 3. Juli am Montag; der 24.12. ist ein Sonntag')
+gleich(kurz(2023), '2023-07-03,2023-11-24', '2023: Heiligabend am Sonntag')
+gleich(kurz(2020), '2020-11-27,2020-12-24', '2020: wie 2026')
+ok(istVerkuerzt('2026-11-27') && !istVerkuerzt('2026-07-02') && !istVerkuerzt('2026-11-26'), 'istVerkuerzt; ein Feiertag ist kein verkürzter Tag')
+for (const j of [2019, 2021, 2022, 2024, 2029, 2030]) {
+    ok([...verkuerzteTage(j)].every((d) => !feiertage(j).has(d) && new Date(d + 'T12:00Z').getUTCDay() % 6 !== 0), `${j}: verkürzte Tage sind Handelstage`)
+}
+// Freitag, 27.11.2026 (Winterzeit: New York = UTC − 5)
+gleich(sitzungVon(utc(2026, 10, 27, 14, 30)), 'regulaer', 'verkürzt: 09:30 regulär')
+gleich(sitzungVon(utc(2026, 10, 27, 17, 59)), 'regulaer', 'verkürzt: 12:59 noch regulär')
+gleich(sitzungVon(utc(2026, 10, 27, 18, 0)), 'nach', 'verkürzt: 13:00 ist nachbörslich')
+gleich(sitzungVon(utc(2026, 10, 27, 21, 59)), 'nach', 'verkürzt: 16:59 noch nachbörslich')
+gleich(sitzungVon(utc(2026, 10, 27, 22, 0)), 'nacht', 'verkürzt: ab 17:00 ist keine US-Börse mehr offen')
+gleich(sitzungVon(utc(2026, 10, 28, 1, 0)), 'wochenende', 'verkürzt: 20:00 beginnt das Wochenende wie immer')
+gleich(sitzungVon(utc(2026, 10, 27, 14, 29)), 'vor', 'verkürzt: vorbörslich unverändert')
+gleich(sitzungVon(utc(2026, 10, 25, 20, 0)), 'regulaer', 'Gegenprobe: Mittwoch davor 15:00 ist regulär')
+// Donnerstag, 3.7.2025 (Sommerzeit: New York = UTC − 4)
+gleich(sitzungVon(utc(2025, 6, 3, 16, 59)), 'regulaer', '3.7.2025 12:59 regulär')
+gleich(sitzungVon(utc(2025, 6, 3, 17, 0)), 'nach', '3.7.2025 13:00 nachbörslich')
+gleich(sitzungVon(utc(2026, 6, 2, 19, 0)), 'regulaer', '2.7.2026 15:00: voller Handelstag')
+gleich(sitzungVon(utc(2026, 11, 24, 18, 30)), 'nach', 'Heiligabend 2026 13:30 nachbörslich')
+gleich(handelstagBeginn(utc(2026, 10, 27, 22, 30)), utc(2026, 10, 27, 1, 0), 'verkürzter Tag: der Handelstag selbst endet weiter um 20:00')
 
 // ── Handelstag und sein Beginn ──
 gleich(handelstagVon(utc(2026, 10, 13, 15, 0)), '2026-11-13', 'Handelstag am Tag')

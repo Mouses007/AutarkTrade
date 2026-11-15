@@ -22,8 +22,14 @@
  * Der Handelstag beginnt deshalb um 20:00 des Vorabends — dort endet der
  * nachbörsliche Handel, und dort beginnt auch das Tageslimit einer Strategie.
  *
- * Nicht abgebildet: verkürzte Handelstage (Schluss 13:00 vor Thanksgiving-
- * Freitag, Heiligabend) und ausserplanmässige Schliessungen.
+ * Verkürzte Handelstage (Schluss 13:00 statt 16:00, `istVerkuerzt`): der Tag
+ * nach Thanksgiving, der 3. Juli und der 24. Dezember, sofern sie Handelstage
+ * sind und der Feiertag selbst auf einen Wochentag fällt. An diesen Tagen:
+ *   regulaer   09:30 – 13:00
+ *   nach       13:00 – 17:00   (die Spätsitzungen der Börsen enden um 17:00)
+ *   nacht      17:00 – 04:00   (danach ist bis 20:00 keine US-Börse offen)
+ *
+ * Nicht abgebildet: ausserplanmässige Schliessungen (Staatstrauer, Unwetter).
  *
  * Rein — kein Netz, keine Datenbank; läuft im Browser und auf dem Server.
  */
@@ -33,6 +39,8 @@ export const SITZUNGEN = ['regulaer', 'vor', 'nach', 'nacht', 'wochenende', 'fei
 
 const MIN = 60_000
 const VOR_AB = 4 * 60, REGULAER_AB = 9 * 60 + 30, NACH_AB = 16 * 60, NACHT_AB = 20 * 60
+/** Verkürzter Handelstag: regulärer Schluss 13:00, Spätsitzung bis 17:00. */
+const KURZ_NACH_AB = 13 * 60, KURZ_NACHT_AB = 17 * 60
 
 const leser = new Intl.DateTimeFormat('en-US', {
     timeZone: ZONE, hourCycle: 'h23', weekday: 'short',
@@ -138,6 +146,51 @@ export function istHandelstag(datum, wochentag) {
     return wochentag >= 1 && wochentag <= 5 && !feiertage(Number(datum.slice(0, 4))).has(datum)
 }
 
+/* ── Verkürzte Handelstage ────────────────────────────────────────── */
+
+const verkuerztJeJahr = new Map()
+
+/**
+ * Verkürzte Handelstage eines Jahres (Schluss 13:00 New Yorker Zeit) als Menge
+ * von `YYYY-MM-DD`.
+ *
+ * Anders als die Feiertage stehen sie in keiner Börsenregel: die NYSE gibt sie
+ * mit ihrem Jahreskalender bekannt. Die Übung ist aber seit Jahren dieselbe,
+ * und sie ist hier als Regel gefasst:
+ *   - der Freitag nach Thanksgiving, immer;
+ *   - der 3. Juli, wenn er ein Handelstag ist UND der 4. Juli auf einen
+ *     Wochentag fällt (3. Juli = Montag bis Donnerstag). Fällt der 4. Juli auf
+ *     einen Samstag, ist der 3. Juli selbst der Feiertag und der 2. Juli ein
+ *     voller Handelstag (2026); fällt er auf einen Sonntag, ist der Freitag
+ *     davor ein voller Handelstag (2027);
+ *   - der 24. Dezember unter derselben Bedingung (Montag bis Donnerstag).
+ * Geprüft gegen die Kalender der NYSE für 2025 bis 2028 (Mitteilungen vom
+ * 8.11.2024 und 23.12.2025) — der Selbsttest hält die Daten fest. Weicht die
+ * Börse in einem künftigen Jahr von ihrer Übung ab, ist diese Regel falsch.
+ */
+export function verkuerzteTage(jahr) {
+    let menge = verkuerztJeJahr.get(jahr)
+    if (!menge) {
+        const thanksgiving = nterWochentag(jahr, 11, 4, 4)
+        const vortag = (monat, t) => {
+            const d = tag(jahr, monat, t)
+            return d.getUTCDay() >= 1 && d.getUTCDay() <= 4 ? d : null
+        }
+        menge = new Set([
+            new Date(thanksgiving.getTime() + 86_400_000),
+            vortag(7, 3),
+            vortag(12, 24),
+        ].filter(Boolean).map(alsDatum).filter((d) => !feiertage(jahr).has(d)))
+        verkuerztJeJahr.set(jahr, menge)
+    }
+    return menge
+}
+
+/** Schliesst die Börse an diesem New Yorker Kalendertag schon um 13:00? */
+export function istVerkuerzt(datum) {
+    return verkuerzteTage(Number(datum.slice(0, 4))).has(datum)
+}
+
 /* ── Sitzung und Handelstag ───────────────────────────────────────── */
 
 /** Der Kalendertag, zu dem ein Zeitpunkt gehört: ab 20:00 schon der Folgetag. */
@@ -154,6 +207,10 @@ export function sitzungVon(ms) {
     if (!istHandelstag(t.datum, t.wochentag)) return t.wochentag === 0 || t.wochentag === 6 ? 'wochenende' : 'feiertag'
     if (t.abend || t.minuten < VOR_AB) return 'nacht'
     if (t.minuten < REGULAER_AB) return 'vor'
+    if (istVerkuerzt(t.datum)) {
+        if (t.minuten < KURZ_NACH_AB) return 'regulaer'
+        return t.minuten < KURZ_NACHT_AB ? 'nach' : 'nacht'
+    }
     if (t.minuten < NACH_AB) return 'regulaer'
     return 'nach'
 }
