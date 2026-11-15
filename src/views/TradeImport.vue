@@ -29,6 +29,8 @@ import { ersetzeObjekt } from '../utils/journal/hilfen.js'
 import { formDatum } from '../utils/journal/format.js'
 import { useQuickApiImport, createBitunixTradeObj, createBitgetTradeObj, buildTradeObj, saveManualTrade } from '../utils/quickImport.js'
 import { istGewinn } from '../../shared/gewinn.js'
+import { istAktienSymbol } from '../../shared/anlageklasse.js'
+import { holeAktienSymbole } from '../stores/journal/anlageklasse.js'
 import { sendNotification } from '../utils/notify.js'
 import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
 
@@ -284,9 +286,12 @@ async function importiereApi() {
         tradeZeilen.length = 0
 
         const erzeuge = broker.value === 'bitget' ? createBitgetTradeObj : createBitunixTradeObj
+        // Anlageklasse aus dem Titel-Stamm wie beim Schnell-Import; null = Stamm unbekannt → keine Angabe.
+        const aktienSymbole = await holeAktienSymbole({ neu: true })
         const jeTag = {}
         positionen.forEach((pos, i) => {
             const trade = erzeuge(pos, i)
+            if (aktienSymbole) trade.anlageklasse = istAktienSymbol(aktienSymbole, broker.value, trade.symbol) ? 'aktien' : 'krypto'
             ;(jeTag[trade.td] ||= []).push(trade)
             ;(executions[trade.td] ||= []).push({ ...trade, trade: trade.id })
         })

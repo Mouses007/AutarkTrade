@@ -572,6 +572,12 @@ export async function saveManualTrade(tradeObj) {
     const broker = tradeObj.broker
     const dateUnix = Number(tradeObj.td)
 
+    // Anlageklasse wie beim API-Import (`shared/anlageklasse.js`); ohne Stamm bleibt die Angabe weg.
+    if (tradeObj.anlageklasse === undefined) {
+        const aktienSymbole = await holeAktienSymbole()
+        if (aktienSymbole) tradeObj.anlageklasse = istAktienSymbol(aktienSymbole, broker, tradeObj.symbol) ? 'aktien' : 'krypto'
+    }
+
     const existing = await dbFind('trades', { equalTo: { broker, dateUnix }, limit: 1 })
     const existingRecord = Array.isArray(existing) ? existing[0] : null
 
