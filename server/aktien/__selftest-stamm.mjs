@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import knexLib from 'knex'
 import { migriereAktien } from '../migrationen/aktien.js'
 import { ordneAlle } from './einordnung.js'
-import { speichereStamm, leseStamm, stammZahlen, holeListen, ausgefalleneListen } from './stamm-speicher.js'
+import { speichereStamm, leseStamm, stammZahlen, holeListen, ausgefalleneListen, suchForm, fuelleSuchNamen } from './stamm-speicher.js'
 
 const hier = path.dirname(fileURLToPath(import.meta.url))
 const roh = JSON.parse(fs.readFileSync(path.join(hier, '../fixtures/aktien-listungen.json'), 'utf8'))
@@ -108,6 +108,50 @@ liste = await leseStamm(knex, { anlageklasse: 'aktien', art: 'token-spot' })
 ok(liste.length >= 3 && liste.every((t) => t.listungen.some((l) => l.art === 'token-spot')), 'Filter nach Art')
 liste = await leseStamm(knex, { suche: "%' OR 1=1 --" })
 gleich(liste, [], 'Sonderzeichen in der Suche sind harmlos')
+
+// ── 8b. DB-D-003: Namenssuche über die Suchform (Umlaute, Akzente, Gross/Klein) ──
+gleich(['Münchener Rück', 'Nestlé S.A.', 'STRAßE  Ørsted', 'İstanbul', null].map(suchForm), ['munchener ruck', 'nestle s.a.', 'strasse orsted', 'istanbul', ''], 'Suchform: klein, ohne Akzente')
+ok((await knex('instrumente').whereNotNull('name')).every((z) => z.suchName === suchForm(z.name)), 'der Abgleich füllt die Suchform für jeden Titel mit Namen')
+{
+    const j = Date.now()
+    const neuTitel = [['MUV2', 'Münchener Rück'], ['NESN', 'Nestlé S.A.'], ['ORSTED', 'Ørsted A/S']]
+    // Wie eine Zeile aus der Zeit vor der Spalte: Name da, Suchform fehlt
+    await knex('instrumente').insert(neuTitel.map(([ticker, name]) => ({ anlageklasse: 'aktien', ticker, name, unterart: 'aktie', stand: j, createdAt: j })))
+    const neu = await knex('instrumente').whereIn('ticker', neuTitel.map((x) => x[0])).select('id', 'ticker')
+    await knex('instrument_listungen').insert(neu.map((z) => ({ instrumentId: z.id, handelsplatz: 'bitpanda', symbol: z.ticker, art: 'broker-spot', sicher: 1, aktiv: 1, ersteSichtung: j, letzteSichtung: j })))
+    gleich((await leseStamm(knex, { suche: 'münch' })).map((t) => t.ticker), [], 'vor dem Nachfüllen: nicht gefunden (so sähe eine alte Zeile aus)')
+    // Die Migration füllt bestehende Zeilen nach — und fasst beim zweiten Lauf nichts mehr an
+    await migriereAktien(knex, async () => {})
+    gleich(await fuelleSuchNamen(knex), 0, 'Migration hat nachgefüllt; ein zweiter Durchgang ändert nichts')
+    for (const [frage, ticker] of [['münch', 'MUV2'], ['MÜNCH', 'MUV2'], ['munch', 'MUV2'], ['Rück', 'MUV2'], ['nestlé', 'NESN'], ['NESTLE', 'NESN'], ['ørsted', 'ORSTED'], ['orsted a/s', 'ORSTED']]) {
+        gleich((await leseStamm(knex, { suche: frage })).map((t) => t.ticker), [ticker], `Suche «${frage}» findet ${ticker}`)
+    }
+    gleich((await leseStamm(knex, { suche: 'APPLE' })).map((t) => t.ticker), ['AAPL'], 'Namenssuche ohne Sonderzeichen wie bisher, gross geschrieben')
+    // Ändert ein anderer Weg den Namen, zieht der nächste Abgleich die Suchform nach
+    await knex('instrumente').where('ticker', 'NESN').update({ name: 'Nestlé AG' })
+    gleich(await fuelleSuchNamen(knex), 1, 'geänderter Name: genau eine Zeile nachgezogen')
+    gleich((await leseStamm(knex, { suche: 'nestle ag' })).map((t) => t.ticker), ['NESN'], 'neuer Name wird gefunden')
+    // Kein Datenbank-eigenes Umwandeln mehr in der Abfrage — nur das trägt auf SQLite UND PostgreSQL gleich
+    const quelle = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'stamm-speicher.js'), 'utf8')
+    ok(!/upper\(|lower\(|ilike|unaccent/i.test(quelle.slice(quelle.indexOf('export async function leseStamm'))), 'leseStamm überlässt Gross/Klein und Akzente nicht der Datenbank')
+    await knex('instrument_listungen').whereIn('instrumentId', neu.map((z) => z.id)).del()
+    await knex('instrumente').whereIn('id', neu.map((z) => z.id)).del()
+}
+{
+    // Datenbank aus der Zeit vor der Spalte: die Migration legt sie an und füllt bestehende Zeilen
+    const alt = knexLib({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
+    const add = async (table, column, buildCol) => {
+        if (!(await alt.schema.hasTable(table))) return
+        if (!(await alt.schema.hasColumn(table, column))) await alt.schema.alterTable(table, (t) => buildCol(t))
+    }
+    await migriereAktien(alt, add)
+    await alt.schema.alterTable('instrumente', (t) => t.dropColumn('suchName'))
+    await alt('instrumente').insert([{ anlageklasse: 'aktien', ticker: 'MUV2', name: 'Münchener Rück' }, { anlageklasse: 'aktien', ticker: 'OHNE', name: null }])
+    ok(!(await alt.schema.hasColumn('instrumente', 'suchName')), 'Ausgangslage: Spalte fehlt')
+    await migriereAktien(alt, add)
+    gleich(await alt('instrumente').orderBy('ticker').select('ticker', 'suchName'), [{ ticker: 'MUV2', suchName: 'munchener ruck' }, { ticker: 'OHNE', suchName: null }], 'Migration: Spalte angelegt, bestehende Zeile nachgefüllt, ohne Namen bleibt leer')
+    await alt.destroy()
+}
 const zahlen = await stammZahlen(knex)
 ok(zahlen.titelFuture > 0 && zahlen.titelFuture <= zahlen.handelsplaetze.filter((p) => p.art === 'perp').reduce((s, p) => s + p.anzahl, 0), 'Future-Titel zählen Titel, nicht Listungen')
 ok(zahlen.unterarten.some((u) => u.unterart === 'vorboerslich') && zahlen.handelsplaetze.some((p) => p.handelsplatz === 'pionex'), 'Zahlen je Unterart und Handelsplatz')

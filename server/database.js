@@ -256,7 +256,10 @@ async function fixPostgresSequences(knex) {
 // Android-Widget über UnifiedPush). Rein additiv.
 // v35: `chart_zeichnungen.gruppe` — eigene Gruppen von Zeichnungen (Objekte-Reiter),
 // gemeinsam ein-/ausblenden. Rein additiv; ein älterer Codestand zeigt sie ungruppiert.
-const SCHEMA_VERSION = 35
+// v36: `instrumente.suchName` — Firmenname in Suchform (klein, ohne Akzente), damit die
+// Namenssuche im Stamm auf SQLite und PostgreSQL dasselbe findet (Audit DB-D-003). Additiv;
+// ein älterer Codestand füllt die Spalte nicht, der nächste Start oder Abgleich holt es nach.
+const SCHEMA_VERSION = 36
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'

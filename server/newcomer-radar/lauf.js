@@ -16,7 +16,7 @@
 import { getKnex } from '../database.js'
 import { beansprucheAufgabe } from '../db-claim.js'
 import { quelleErlaubt } from '../quellen/freigabe.js'
-import { leseStamm } from '../aktien/stamm-speicher.js'
+import { leseStamm, suchForm } from '../aktien/stamm-speicher.js'
 import { kennzahlen, rendite } from './kennzahlen.js'
 import { bewerte } from './bewertung.js'
 import { wechselkursSymbol, ausWechselkurs } from './waehrung.js'
@@ -88,6 +88,9 @@ export async function findeKurse(titel, gespeichert, jetzt, quelle = { holeChart
     return null
 }
 
+/** Name der Kursquelle für den Stamm — samt Suchform, sonst fände die Namenssuche ihn erst nach dem nächsten Abgleich. */
+const mitSuchName = (name) => { const kurz = String(name).slice(0, 120); return { name: kurz, suchName: suchForm(kurz) } }
+
 async function speichere(knex, instrumentId, zeile) {
     const da = await knex('newcomer_titel').where('instrumentId', instrumentId).first('id')
     if (da) await knex('newcomer_titel').where('id', da.id).update(zeile)
@@ -136,7 +139,7 @@ async function bearbeite(knex, titel, gespeichert, referenz, jetzt, wechselkurse
     if (chart.meta.typ === 'ETF') {
         await knex('instrumente').where('id', titel.id).update({
             unterart: 'etf', stand: jetzt, heimatboerse: chart.meta.boerse, waehrung: chart.meta.waehrung,
-            ...(!titel.name && chart.meta.name ? { name: chart.meta.name.slice(0, 120) } : {}),
+            ...(!titel.name && chart.meta.name ? mitSuchName(chart.meta.name) : {}),
         })
         await knex('newcomer_titel').where('instrumentId', titel.id).del()
         return 'ohneKurse'
@@ -158,7 +161,7 @@ async function bearbeite(knex, titel, gespeichert, referenz, jetzt, wechselkurse
     })
     // Was die Kursquelle über die Firma weiss, gehört in den Stamm.
     const ergaenzt = { ipoDatum, heimatboerse: zuordnung === 'sucheFremd' ? null : chart.meta.boerse, waehrung: chart.meta.waehrung, stand: jetzt }
-    if (!titel.name && chart.meta.name) ergaenzt.name = chart.meta.name.slice(0, 120)
+    if (!titel.name && chart.meta.name) Object.assign(ergaenzt, mitSuchName(chart.meta.name))
     await knex('instrumente').where('id', titel.id).update(ergaenzt)
     return 'bewertet'
 }

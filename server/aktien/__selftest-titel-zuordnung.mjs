@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict'
 import knexLib from 'knex'
 import { migriereAktien } from '../migrationen/aktien.js'
-import { leseStamm } from './stamm-speicher.js'
+import { leseStamm, suchForm } from './stamm-speicher.js'
 import { ladeTitel, namensWarnung } from './titel-stamm.js'
 
 const knex = knexLib({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
@@ -27,7 +27,8 @@ const ok = (bed, text) => { assert.ok(bed, text); n++ }
 const gleich = (a, b, text) => { assert.deepEqual(a, b, text); n++ }
 
 async function lege(ticker, name, plaetze, mehr = {}) {
-    const [id] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker, unterart: 'aktie', name, stand: 1, createdAt: 1, ...mehr })
+    // `suchName` wie vom Stamm-Abgleich gefüllt (DB-D-003) — die Namenssuche liest nur diese Spalte
+    const [id] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker, unterart: 'aktie', name, suchName: name ? suchForm(name) : null, stand: 1, createdAt: 1, ...mehr })
     const instrumentId = typeof id === 'object' ? id.id : id
     for (const [handelsplatz, symbol, art] of plaetze) {
         await knex('instrument_listungen').insert({ instrumentId, handelsplatz, symbol, art, quote: 'USDT', sicher: 1, aktiv: 1, ersteSichtung: 1, letzteSichtung: 1 })

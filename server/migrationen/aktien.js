@@ -28,9 +28,15 @@
  *    `[{t, faktor, bei}]`; leer = keiner. Sichert «genau einmal je Split»
  *    über Neustarts.
  *
+ * 7. `instrumente.suchName` (Schema v36) — der Name klein und ohne Akzente/Umlaut-Punkte
+ *    (`suchForm` in `server/aktien/stamm-speicher.js`). Die Namenssuche vergleicht
+ *    nur diese Spalte, damit SQLite und PostgreSQL dasselbe finden (Audit DB-D-003).
+ *    Der Stamm-Abgleich füllt sie, der Start füllt bestehende Zeilen nach.
+ *
  * 5. `edgarKontakt` — womit sich die App bei der SEC ausweist (`server/aktien/edgar.js`).
  *    Trägt der Nutzer selbst ein; leer = EDGAR aus.
  */
+import { fuelleSuchNamen } from '../aktien/stamm-speicher.js'
 
 /** Tabellen, deren Zeilen eine Anlageklasse tragen. */
 export const TABELLEN_MIT_ANLAGEKLASSE = [
@@ -55,6 +61,7 @@ export async function migriereAktien(knex, addColumnIfNotExists) {
             t.string('ticker').notNullable()         // Basis ohne Notierung: NVDA, BRKB
             t.string('unterart')                     // aktie | etf | vorboerslich | rohstoff | index | devise | coin
             t.string('name')
+            t.string('suchName')                     // Name in Suchform (`suchForm`), für die Namenssuche
             t.string('isin')
             t.string('region')                       // US, HK, KR … soweit bekannt
             t.string('heimatboerse')                 // MIC
@@ -89,6 +96,10 @@ export async function migriereAktien(knex, addColumnIfNotExists) {
 
     // Für Datenbanken, die die Tabelle vor dieser Spalte bekommen haben.
     await addColumnIfNotExists('instrument_listungen', 'gelistetSeit', (t) => t.bigInteger('gelistetSeit'))
+
+    // Punkt 7: Suchform des Namens; bestehende Zeilen werden hier nachgefüllt.
+    await addColumnIfNotExists('instrumente', 'suchName', (t) => t.string('suchName'))
+    if (await knex.schema.hasColumn('instrumente', 'suchName')) await fuelleSuchNamen(knex)
 
     // Newcomer-Radar (Phase 4): ein Stand je Titel, bei jedem Lauf überschrieben.
     if (!(await knex.schema.hasTable('newcomer_titel'))) {

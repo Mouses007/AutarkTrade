@@ -40,6 +40,42 @@ export function ausgefalleneListen(stand = {}) {
     return HANDELSPLAETZE.filter((p) => stand[p] && !stand[p].ok && stand[p].grund !== 'nichtGewaehlt')
 }
 
+/* ── Suchform des Namens ── */
+
+const OHNE_ZERLEGUNG = { ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ß: 'ss' }
+
+/**
+ * Text → Suchform: klein, ohne Akzente und Umlaut-Punkte («Münchener Rück» →
+ * `munchener ruck`, «Nestlé» → `nestle`, «Straße» → `strasse`).
+ *
+ * In dieser Form steht der Name in `instrumente.suchName`, und in dieser Form
+ * wird gesucht. Die Datenbank vergleicht damit nur noch gleich geformten Text:
+ * `upper(name) like …` fand auf SQLite keine Namen mit Umlaut oder Akzent
+ * (SQLite wandelt nur ASCII), auf PostgreSQL schon (Audit DB-D-003).
+ */
+export function suchForm(text) {
+    return String(text ?? '').toLowerCase().normalize('NFD').replace(/\p{M}+/gu, '')
+        .replace(/[øæœłđß]/g, (z) => OHNE_ZERLEGUNG[z]).replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * `suchName` aller Titel auf den Stand ihres Namens bringen. Fasst nur Zeilen
+ * an, bei denen er fehlt oder nicht zum Namen passt — nach dem ersten Mal also
+ * keine. Läuft beim Start (bestehende Zeilen) und in jedem Stamm-Abgleich.
+ * @returns {Promise<number>} wie viele Zeilen geändert wurden
+ */
+export async function fuelleSuchNamen(knex) {
+    const zeilen = await knex('instrumente').whereNotNull('name').select('id', 'name', 'suchName')
+    let n = 0
+    for (const z of zeilen) {
+        const soll = suchForm(z.name)
+        if (z.suchName === soll) continue
+        await knex('instrumente').where('id', z.id).update({ suchName: soll })
+        n++
+    }
+    return n
+}
+
 /* ── Speichern ── */
 
 const stuecke = (liste, n) => {
@@ -99,7 +135,7 @@ export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(
         for (const teil of stuecke(fehlend, 100)) {
             await trx('instrumente').insert(teil.map((t) => ({
                 anlageklasse: t.anlageklasse, ticker: t.basis, unterart: t.unterart,
-                name: t.name, region: t.region, stand: jetzt, createdAt: jetzt,
+                name: t.name, suchName: t.name ? suchForm(t.name) : null, region: t.region, stand: jetzt, createdAt: jetzt,
             })))
         }
         if (fehlend.length) vorhanden = new Map((await trx('instrumente').select()).map((z) => [iSchluessel(z), z]))
@@ -112,6 +148,8 @@ export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(
             if (!z.region && t.region) neuWert.region = t.region
             if (Object.keys(neuWert).length) await trx('instrumente').where('id', z.id).update({ ...neuWert, stand: jetzt })
         }
+        // Suchform nachziehen — auch für Namen, die ein anderer Weg gesetzt hat (DB-D-003).
+        await fuelleSuchNamen(trx)
 
         // 2. Listungen.
         const altKarte = new Map(alt.map((z) => [lSchluessel(z), z]))
@@ -188,7 +226,9 @@ export async function leseStamm(knex, filter = {}) {
     if (filter.nurKryptoBoersen) q = q.whereNot('l.handelsplatz', 'bitpanda')
     const suche = String(filter.suche || '').trim().toUpperCase().replace(/[%_\\]/g, '')
     if (filter.ticker) q = q.where('i.ticker', String(filter.ticker).toUpperCase())
-    if (suche) q = q.where((w) => w.where('i.ticker', 'like', `${suche}%`).orWhereRaw('upper(??) like ?', ['i.name', `%${suche}%`]))
+    // Name über die Suchform (klein, ohne Akzente) — auf SQLite und PostgreSQL derselbe Vergleich (DB-D-003).
+    const imNamen = suchForm(suche)
+    if (suche) q = q.where((w) => w.where('i.ticker', 'like', `${suche}%`).orWhere('i.suchName', 'like', `%${imNamen}%`))
     // Gruppieren statt DISTINCT: PostgreSQL verlangt bei DISTINCT jede Sortierspalte in der Auswahl.
     let idAbfrage = q.clone().select('i.id').groupBy('i.id', 'i.ticker')
     if (suche) {
