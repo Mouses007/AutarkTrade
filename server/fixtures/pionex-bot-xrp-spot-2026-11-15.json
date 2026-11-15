@@ -1,0 +1,32 @@
+{
+ "hinweis": "Echter XRP-Spot-Grid am 15.11.2026 kurz nach dem Start. Pionex zeigte: Investition 10, Gewinn −0.00293 bei Kurs 0.9666, Position 6.05 XRP, Band 0.788–1.2 (Anzeige gekürzt, top ist 1.205).",
+ "buOrderData": {
+  "averageCost": "0.9670835417708854427213606803",
+  "baseAmount": "6.05697",
+  "baseTotalAmount": "6.05697",
+  "bottom": "0.788",
+  "closeSellModel": "NOT_SELL",
+  "exchangeOrderPairedCount": 0,
+  "gridProfit": "0",
+  "gridType": "arithmetic",
+  "initFee": "0.002928798",
+  "initPrice": "0.9666",
+  "initQuoteAmount": "4.142404",
+  "initUsdtInvestment": "10",
+  "investCoin": "USDT",
+  "leverage": "1",
+  "perVolume": "0.39",
+  "profitWithdrawn": "0",
+  "quoteAmount": "4.142404",
+  "quoteInvestment": "9.597014",
+  "quoteTotalAmount": "4.142404",
+  "quoteTotalInvestment": "10",
+  "realizedProfit": "0",
+  "row": 27,
+  "status": "running",
+  "top": "1.205",
+  "trend": "long",
+  "trx24h": 0,
+  "usdtInvestment": "10"
+ }
+}

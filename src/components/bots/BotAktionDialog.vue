@@ -58,6 +58,11 @@ const felderFuer = computed(() => {
 })
 const offen = computed({ get: () => props.modelValue, set: (v) => emit('update:modelValue', v) })
 const mc = computed(() => props.bot.marginCoin)
+const istSpot = computed(() => props.bot.typ === 'spot_grid')
+const aktionTextSchluessel = computed(() => {
+    const k = props.bot.plan ? 'planStarten' : props.aktion
+    return istSpot.value && te(`bots.st.aktionText.${k}Spot`) ? `${k}Spot` : k
+})
 
 function zuruecksetzen() {
     // ein KI-Vorschlag bringt den Anteil in % mit
@@ -163,7 +168,8 @@ const vergleich = computed(() => {
         zeig(t('bots.st.redEinsatz'), r.einsatz, (x) => betrag(x, mc.value))
         zeig(t('bots.st.redGebuehr'), r.gebuehr, (x) => betrag(x, mc.value))
     }
-    if (p.liq?.vorher || p.liq?.nachher) {
+    // Ein Spot-Grid hat keine Liquidation — die Zeile stand dort mit zwei Strichen
+    if (!istSpot.value && (p.liq?.vorher || p.liq?.nachher)) {
         const l = (x) => preis(x?.unten ?? x?.oben)
         // Neuer Bot: Pionex' checkParams nennt nur EINE Schätzung (ohne Before/After) — die gehört zum neuen
         // Bot, also unter „Nachher" (gesehen 14.11.2026 beim ersten echten Start: stand unter „Vorher")
@@ -174,14 +180,16 @@ const vergleich = computed(() => {
 })
 // Nach einem Sendeversuch (egal welcher Ausgang) nie mit demselben Token erneut — Audit SEC-02
 const kannSenden = computed(() => pruefung.value?.bestanden && pruefung.value?.token && haken.value && !pruefung.value?.testbetrieb && !ergebnis.value)
+// Pionex meldet ein Spot-Grid direkt nach dem Beenden als `destroy_grid` (wird abgebaut), danach als beendet
+const ENDE = ['canceled', 'closed', 'destroy_grid']
 const istZeilen = computed(() => {
     const r = ergebnis.value
     if (!r?.ist || r.ist.fehler || r.ist.status === 'nichtMehrLaufend' || r.ist.status === 'nichtGefunden') return []
     const soll = r.soll || {}
-    const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['status', 'Status', (x) => x]]
+    const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['status', 'Status', (x) => (te(`bots.status.${x}`) ? t(`bots.status.${x}`) : x)]]
     return felder.filter(([k]) => soll[k] !== undefined).map(([k, titel, f]) => {
         const s = soll[k], i = r.ist[k]
-        const gleich = s == null ? i == null : (typeof s === 'number' && typeof i === 'number' ? Math.abs(s - i) <= Math.abs(s) * 0.001 : String(s) === String(i))
+        const gleich = k === 'status' && ENDE.includes(String(s)) && ENDE.includes(String(i)) ? true : s == null ? i == null : (typeof s === 'number' && typeof i === 'number' ? Math.abs(s - i) <= Math.abs(s) * 0.001 : String(s) === String(i))
         return { titel, soll: s == null ? '—' : f(s), ist: i == null ? '—' : f(i), gleich }
     })
 })
@@ -190,7 +198,7 @@ const istZeilen = computed(() => {
 <template>
     <Dialog v-model="offen" :titel="t(`bots.st.aktion.${aktion}`)" breite="40rem">
         <div class="dlg">
-            <p class="leise">{{ t(`bots.st.aktionText.${bot.plan ? 'planStarten' : aktion}`) }}</p>
+            <p class="leise">{{ t(`bots.st.aktionText.${aktionTextSchluessel}`) }}</p>
 
             <div v-if="aktion === 'reduzieren'" class="einheit" role="group" :aria-label="t('bots.st.redEinheit')">
                 <span class="leise">{{ t('bots.st.redEinheit') }}</span>

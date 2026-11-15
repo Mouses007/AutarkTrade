@@ -34,6 +34,7 @@ const props = defineProps({
 })
 const { t, te } = useI18n()
 const emit = defineEmits(['gesendet'])
+const istSpot = computed(() => props.bot.typ === 'spot_grid')
 const steuerungAktiv = computed(() => !!(props.steuerung?.schluessel && props.steuerung?.freigeschaltet && ['futures_grid', 'coinm_grid', 'spot_grid'].includes(props.bot.typ)))
 const vorschlag = ref(null)
 const aktKarte = ref(null)
@@ -190,7 +191,7 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
                     </template>
                     <dt>{{ t('bots.feld.gridGewinn') }}</dt><dd :class="ton(bot.ergebnis?.gridGewinn)">{{ betrag(bot.ergebnis?.gridGewinn, mc, { vorzeichen: true }) }}</dd>
                     <dt>{{ t('bots.feld.gridGewinn24h') }}</dt><dd>{{ betrag(bot.ergebnis?.gridGewinn24h, mc, { vorzeichen: true }) }}</dd>
-                    <dt>{{ t('bots.feld.funding') }}</dt><dd :class="ton(bot.ergebnis?.funding)">{{ betrag(bot.ergebnis?.funding, mc, { vorzeichen: true }) }}</dd>
+                    <template v-if="!istSpot"><dt>{{ t('bots.feld.funding') }}</dt><dd :class="ton(bot.ergebnis?.funding)">{{ betrag(bot.ergebnis?.funding, mc, { vorzeichen: true }) }}</dd></template>
                     <dt>{{ t('bots.feld.gebuehren') }}</dt><dd>{{ betrag(bot.ergebnis?.gebuehren, mc) }}</dd>
                     <dt>{{ t('bots.feld.renditeJahr') }}</dt><dd>{{ prozent(k.rendite?.jahr, { vorzeichen: true }) }}</dd>
                     <dt>{{ t('bots.feld.gridRenditeJahr') }}</dt><dd>{{ prozent(k.gridRendite?.jahr, { vorzeichen: true }) }}</dd>
@@ -205,10 +206,11 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
                 <dl class="liste">
                     <dt>{{ t('bots.feld.kurs') }}</dt>
                     <dd>{{ bot.laufend ? preis(bot.kurs) : '—' }} <span v-if="k.band" class="leise">{{ t(`bots.lage.${k.band.lage}`) }}</span></dd>
-                    <dt>{{ t('bots.feld.position') }}</dt><dd>{{ zahl(bot.position?.menge, 4) }}</dd>
+                    <dt>{{ t('bots.feld.position') }}</dt><dd>{{ zahl(bot.position?.menge, 4) }}<span v-if="istSpot && bot.position?.menge != null" class="leise"> {{ bot.coin }}</span></dd>
                     <dt>{{ t('bots.feld.einstieg') }}</dt><dd>{{ preis(bot.position?.einstieg) }}</dd>
                     <dt>{{ t('bots.feld.startPreis') }}</dt><dd>{{ preis(bot.position?.startPreis) }}</dd>
                     <dt v-if="!bot.laufend">{{ t('bots.feld.schlussPreis') }}</dt><dd v-if="!bot.laufend">{{ preis(bot.position?.schlussPreis) }}</dd>
+                    <template v-if="!istSpot">
                     <dt>{{ t('bots.feld.liquidation') }}</dt>
                     <dd>
                         <template v-if="bot.liquidation?.unten != null || bot.liquidation?.oben != null || bot.liquidation?.preis != null">
@@ -218,11 +220,15 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
                     </dd>
                     <dt>{{ t('bots.feld.liqAbstand') }}</dt>
                     <dd>{{ k.liquidation ? prozent(k.liquidation.abstand) : '—' }}<span v-if="k.liquidation?.inAtr != null" class="leise"> · {{ t('bots.feld.inAtr', { n: zahl(k.liquidation.inAtr, 1) }) }}</span></dd>
+                    </template>
                     <dt>{{ t('bots.feld.stopLoss') }}</dt><dd>{{ stopText(bot.stops?.stopLoss) }}</dd>
                     <dt>{{ t('bots.feld.takeProfit') }}</dt><dd>{{ stopText(bot.stops?.takeProfit) }}</dd>
+                    <template v-if="istSpot"><dt>{{ t('bots.feld.usdtImBot') }}</dt><dd>{{ betrag(bot.einsatz?.quoteBestand, mc) }}</dd></template>
+                    <template v-else>
                     <dt>{{ t('bots.feld.marge') }}</dt><dd>{{ betrag(bot.einsatz?.marge, mc) }}</dd>
                     <dt>{{ t('bots.feld.extraMarge') }}</dt><dd>{{ betrag(bot.einsatz?.extraMarge, mc) }}</dd>
                     <template v-if="bot.laufend"><dt>{{ t('bots.feld.risiko') }}</dt><dd>{{ bot.risikoStatus || '—' }}</dd></template>
+                    </template>
                     <dt>{{ t('bots.feld.atrTag') }}</dt><dd>{{ preis(markt?.atrTag) }}</dd>
                 </dl>
             </Karte>

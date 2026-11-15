@@ -135,5 +135,19 @@ console.log('Echter XRP-Bot 15.11.2026: nach Erhöhen, Stops und Reduzieren')
     p('Stop 0 oder leer = keiner', ohne.stops.stopLoss === null && ohne.stops.takeProfit === null)
 }
 
+console.log('Echter XRP-Spot-Grid 15.11.2026')
+{
+    const x = JSON.parse(readFileSync(path.join(hier, '..', 'fixtures', 'pionex-bot-xrp-spot-2026-11-15.json'), 'utf8'))
+    const b = normalisiereBot({ buOrderId: 'spot-1', buOrderType: 'spot_grid', base: 'XRP', quote: 'USDT', status: 'running', createTime: 1794779644000, closeTime: 0, buOrderData: x.buOrderData })
+    p('Spot-Grid erkannt, Marge in USDT, kein Coin-M', b?.typ === 'spot_grid' && b.marginCoin === 'USDT' && !b.coinM, JSON.stringify({ typ: b?.typ, mc: b?.marginCoin }))
+    p('Einsatz = Einzahlung 10, nicht 9.597 (ohne Gebührenreserve)', b.einsatz.basis === 10)
+    p('Position = gehaltene Coins 6.05697 zum Durchschnitt 0.9671', b.position.menge === 6.05697 && Math.abs(b.position.einstieg - 0.96708354) < 1e-6)
+    p('Obergrenze 1.205 (Pionex zeigt gekürzt 1,2)', b.grid.oben === 1.205 && b.grid.unten === 0.788)
+    const k = kennzahlen(b, { kurs: 0.9666 })
+    p('Gewinn −0.00293 wie bei Pionex', Math.abs(k.gewinn.gesamt - (-0.00293)) < 0.00002, String(k.gewinn?.gesamt))
+    p('Spot ohne Kurs: Gewinn unbekannt, nicht 0', kennzahlen(b, {}).gewinn.gesamt === null)
+    p('Spot: kein Hinweis «Hebel ohne Stop-Loss»', !k.hinweise.includes('ohneStop'))
+}
+
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)
 process.exit(fehl ? 1 : 0)

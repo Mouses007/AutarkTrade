@@ -84,7 +84,7 @@ function gesendet() { ladeProtokoll(); emit('gesendet') }
         <div class="knopfreihe">
             <Knopf v-for="a in AKTIONEN" :key="a" klein :art="a === 'beenden' ? 'gefahr' : 'normal'" :symbol="SYMBOL[a]" @click="oeffne(a)">{{ t(`bots.st.aktion.${a}`) }}</Knopf>
         </div>
-        <p class="leise">{{ t('bots.st.hebelHinweis') }}</p>
+        <p v-if="bot.typ !== 'spot_grid'" class="leise">{{ t('bots.st.hebelHinweis') }}</p>
 
         <details v-if="protokoll.length" class="protokoll">
             <summary>{{ t('bots.st.protokoll', { n: protokoll.length }) }}</summary>

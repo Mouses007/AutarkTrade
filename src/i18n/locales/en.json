@@ -8440,6 +8440,7 @@
       "paused": "paused",
       "condition_lock": "waiting for trigger",
       "prepare": "starting",
+      "destroy_grid": "closing",
       "canceled": "finished",
       "closed": "finished"
     },
@@ -8460,6 +8461,7 @@
       "lage": "Position",
       "einsatz": "Investment",
       "extraMarge": "Extra margin",
+      "usdtImBot": "USDT in the bot",
       "marge": "Margin",
       "gewinn": "Profit",
       "realisiert": "realised",
@@ -8722,6 +8724,8 @@
         "fortsetzen": "The bot resumes grid trading immediately.",
         "beenden": "Pionex closes the position at market price and releases the margin. The floating loss or gain becomes final.",
         "starten": "Starts a new bot with this bot's type, direction and coin; empty fields take today's values.",
+        "beendenSpot": "Pionex cancels the open grid orders and releases the bot's coins and USDT. The coins bought stay in your Pionex account and are not sold.",
+        "planStartenSpot": "Starts the planned spot grid at Pionex with the plan's coin and grid type. Pionex checks the request first (checkParams). On start the bot buys the coins for the lines above the price.",
         "planStarten": "Starts the planned bot at Pionex with the plan's coin, type, direction and grid type. Pionex checks the request first (checkParams) and states the estimated liquidation.",
         "reduzieren": "Sells part of the position at market price and so realises part of the profit or loss. The bot keeps running. You enter the share in % or an amount. Pionex reduces in whole steps only and states beforehand how much is sold and what comes of it."
       },

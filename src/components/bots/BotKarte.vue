@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
-import { preis, betrag, prozent, dauer, ton } from './format.js'
+import { preis, betrag, prozent, zahl, dauer, ton } from './format.js'
 
 const props = defineProps({ bot: { type: Object, required: true } })
 const emit = defineEmits(['oeffnen'])
@@ -59,7 +59,11 @@ const richtungTon = computed(() => ({ LONG: 'gut', SHORT: 'schlecht' }[props.bot
                 <dt>{{ t('bots.feld.gridGewinn') }}</dt>
                 <dd :class="ton(bot.ergebnis?.gridGewinn)">{{ betrag(bot.ergebnis?.gridGewinn, bot.marginCoin, { vorzeichen: true }) }}</dd>
             </div>
-            <div v-if="bot.laufend">
+            <div v-if="bot.laufend && bot.typ === 'spot_grid'">
+                <dt>{{ t('bots.feld.position') }}</dt>
+                <dd>{{ zahl(bot.position?.menge, 4) }} <span class="leise">{{ bot.coin }}</span></dd>
+            </div>
+            <div v-else-if="bot.laufend">
                 <dt>{{ t('bots.feld.liqAbstand') }}</dt>
                 <dd>{{ k.liquidation ? prozent(k.liquidation.abstand) : '—' }}</dd>
             </div>

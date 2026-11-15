@@ -71,6 +71,7 @@ export function normalisiereBot(o) {
     if (!o?.buOrderId) return null
     const d = o.buOrderData || {}
     const typ = typVon(o.buOrderType, d.cateType)
+    const spot = o.buOrderType === 'spot_grid'
     const coinM = o.buOrderType !== 'spot_grid' && istCoinM(o, d)
     const coin = coinM ? ohneSuffix(o.quote) : ohneSuffix(o.base)
     const marginCoin = coinM ? (d.investCoin || coin) : (o.buOrderType === 'spot_grid' ? 'USDT' : (d.investCoin || 'USDT'))
@@ -155,7 +156,10 @@ export function normalisiereBot(o) {
             // USDT-Bots: `quoteInvestment` ist die HEUTIGE Investition (Pionex «Tatsächliche Investition»);
             // `usdtInvestment` blieb am 15.11.2026 nach «Investition erhöhen» (9.2 → 19.2) und «Reduzieren»
             // (→ 15.36) auf 9.2 stehen — der Gewinn las sich dadurch als +67 % statt −0.4 %.
-            basis: coinM ? zahl(d.quoteInvestment)
+            // Spot: `quoteTotalInvestment` ist, was eingezahlt wurde (Pionex «Investition» 10); `quoteInvestment`
+            // (9.597) ist derselbe Betrag ohne die Gebührenreserve und liesse 0.40 USDT als Verlust erscheinen.
+            basis: spot ? (zahl(d.quoteTotalInvestment) ?? zahl(d.usdtInvestment ?? d.initUsdtInvestment) ?? zahl(d.quoteInvestment))
+                : coinM ? zahl(d.quoteInvestment)
                 : (String(d.investCoin || 'USDT').toUpperCase() === 'USDT' ? (zahl(d.quoteInvestment) ?? zahl(d.usdtInvestment ?? d.initUsdtInvestment))
                     : (zahl(d.usdtInvestment ?? d.initUsdtInvestment) ?? zahl(d.quoteInvestment))),
             aktuell: zahl(d.quoteInvestment),
@@ -163,6 +167,8 @@ export function normalisiereBot(o) {
             usdt: zahl(d.usdtInvestment ?? d.initUsdtInvestment),
             extraMarge: zahl(d.extraMargin),
             marge: zahl(d.marginBalance),
+            // Spot: USDT, die der Bot neben den Coins hält (für offene Käufe und als Gebührenreserve)
+            quoteBestand: spot ? zahl(d.quoteTotalAmount ?? d.quoteAmount) : null,
             startKurs: coinM ? zahl(d.initQuotePrice) : null,   // Coin-Preis in USDT beim Start (Coin-M)
         },
         ergebnis: {
@@ -179,8 +185,9 @@ export function normalisiereBot(o) {
             volumen: zahl(d.totalVolume),
         },
         position: {
-            menge: zahl(d.position),
-            einstieg: p(d.positionOpenPrice),
+            // Spot hat keine Futures-Position: gehaltene Coins und ihr Durchschnittspreis
+            menge: spot ? zahl(d.baseTotalAmount ?? d.baseAmount) : zahl(d.position),
+            einstieg: spot ? preisOderNull(d.averageCost) : p(d.positionOpenPrice),
             startPreis: p(d.initPrice ?? d.openPrice),
             schlussPreis: p(d.closedPrice),
         },

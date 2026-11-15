@@ -8440,6 +8440,7 @@
       "paused": "pausiert",
       "condition_lock": "wartet auf Trigger",
       "prepare": "startet",
+      "destroy_grid": "wird beendet",
       "canceled": "beendet",
       "closed": "beendet"
     },
@@ -8460,6 +8461,7 @@
       "lage": "Lage",
       "einsatz": "Einsatz",
       "extraMarge": "Extra-Marge",
+      "usdtImBot": "USDT im Bot",
       "marge": "Marge",
       "gewinn": "Gewinn",
       "realisiert": "realisiert",
@@ -8722,6 +8724,8 @@
         "fortsetzen": "Der Bot nimmt den Grid-Handel sofort wieder auf.",
         "beenden": "Pionex schliesst die Position zum Marktpreis und gibt die Marge frei. Der schwebende Verlust oder Gewinn wird damit fest.",
         "starten": "Startet einen neuen Bot mit Typ, Richtung und Coin dieses Bots; leere Felder übernehmen die heutigen Werte.",
+        "beendenSpot": "Pionex löscht die offenen Grid-Orders und gibt Coins und USDT des Bots frei. Die gekauften Coins bleiben in deinem Pionex-Konto und werden nicht verkauft.",
+        "planStartenSpot": "Startet den geplanten Spot-Grid bei Pionex mit Coin und Grid-Art des Plans. Pionex prüft die Anfrage vorher (checkParams). Beim Start kauft der Bot die Coins für die Linien über dem Kurs.",
         "planStarten": "Startet den geplanten Bot bei Pionex mit Coin, Art, Richtung und Grid-Art des Plans. Pionex prüft die Anfrage vorher (checkParams) und nennt die geschätzte Liquidation.",
         "reduzieren": "Verkauft einen Teil der Position zum Marktpreis und realisiert so einen Teil des Gewinns oder Verlusts. Der Bot läuft weiter. Du gibst den Anteil in % oder einen Betrag an. Pionex reduziert nur in ganzen Schritten und nennt vorab, wie viel verkauft wird und was dabei herauskommt."
       },

@@ -49,7 +49,14 @@ p('ohne Kurs keine Lage im Band', kennzahlen(lauf, {}).band === null)
 
 console.log('Beendeter SUI-Bot (liquidiert)')
 const ks = kennzahlen(sui, {})
-p('Gewinn = totalRealizedProfit', nahe(ks.gewinn.gesamt, sui.ergebnis.gesamt))
+// totalRealizedProfit ist VOR Gebühren und Funding (XRP 15.11.2026: 0.2144 gegen Pionex 0.15) — es zählt die Marge
+p('Gewinn = Marge − Investition − Extra-Marge, nicht totalRealizedProfit', nahe(ks.gewinn.gesamt, sui.einsatz.marge - sui.einsatz.basis - (sui.einsatz.extraMarge || 0)) && !nahe(ks.gewinn.gesamt, sui.ergebnis.gesamt), `${ks.gewinn.gesamt} / ${sui.ergebnis.gesamt}`)
+p('Liquidation = ganzer Einsatz weg (−100 %)', nahe(ks.rendite.gesamt, -1), String(ks.rendite?.gesamt))
+{
+    const xrpEnde = { laufend: false, coinM: false, einsatz: { basis: 11.52, aktuell: 11.52, extraMarge: 5, marge: 16.67057363816801 }, ergebnis: { gesamt: 0.2144000000000011 } }
+    p('Echter XRP-Bot beendet: +0.15 wie Pionex «Gesamt Profit», nicht +0.21', Math.abs(gewinn(xrpEnde, null).gesamt - 0.15) < 0.001)
+    p('ohne Marge bleibt totalRealizedProfit der Rückfall', gewinn({ laufend: false, einsatz: { basis: 10 }, ergebnis: { gesamt: 1.5 } }, null).gesamt === 1.5)
+}
 p('Hinweis liquidiert, keine Lage-Hinweise', ks.hinweise.includes('liquidiert') && !ks.hinweise.includes('unterBand') && ks.band === null)
 
 console.log('Beendeter Coin-M-Bot')

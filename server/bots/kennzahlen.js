@@ -31,13 +31,26 @@ export function gewinn(bot, kurs) {
     const e = bot.einsatz || {}
     const basis = e.basis ?? (bot.coinM ? e.aktuell : (e.usdt ?? e.aktuell))
     if (!bot.laufend) {
-        // Beendet: linear ist totalRealizedProfit das Wallet-Delta; Coin-M aus der Marge.
-        if (bot.coinM && istZahl(e.marge) && istZahl(basis)) {
+        // Beendet: was zurückkam (Marge) minus was drin war (Investition + Extra-Marge) — für Coin-M UND linear.
+        // `totalRealizedProfit` ist bei linearen Bots der Gewinn VOR Gebühren und Funding: XRP 15.11.2026
+        // 0.2144 gegen Pionex «Gesamt Profit» 0.15 (Marge 16.6706 − 11.52 − 5 = 0.1506); in den gespeicherten
+        // Antworten überall dieselbe Lücke in Höhe von totalFee + totalFundingFee (−13.09 statt −13.75,
+        // Liquidation −3.18 statt −4.09). Nur ohne Marge bleibt das Feld der Rückfall.
+        if (istZahl(e.marge) && istZahl(basis)) {
             const g = e.marge - (basis + (e.extraMarge || 0))
             return { realisiert: g, schwebend: 0, gesamt: g, basis }
         }
         const g = bot.ergebnis?.gesamt
         return { realisiert: istZahl(g) ? g : null, schwebend: 0, gesamt: istZahl(g) ? g : null, basis: istZahl(basis) ? basis : null }
+    }
+    if (bot.typ === 'spot_grid') {
+        // Spot: Wert der gehaltenen Coins + USDT im Bot + entnommener Gewinn − Einzahlung
+        // (XRP 15.11.2026: 6.05697 × 0.9666 + 4.142404 − 10 = −0.00293 wie bei Pionex «Gewinn»).
+        const menge = bot.position?.menge, usdt = e.quoteBestand
+        if (!istZahl(menge) || !istZahl(usdt) || !istZahl(basis) || !(istZahl(kurs) && kurs > 0)) return { realisiert: null, schwebend: null, gesamt: null, basis: istZahl(basis) ? basis : null }
+        const gesamt = menge * kurs + usdt + (bot.ergebnis?.entnommen || 0) - basis
+        const realisiert = istZahl(bot.ergebnis?.gridGewinn) ? bot.ergebnis.gridGewinn : null
+        return { realisiert, schwebend: realisiert == null ? null : gesamt - realisiert, gesamt, basis }
     }
     if (!istZahl(e.marge) || !istZahl(basis)) return { realisiert: null, schwebend: null, gesamt: null, basis: istZahl(basis) ? basis : null }
     const realisiert = e.marge - (basis + (e.extraMarge || 0))
