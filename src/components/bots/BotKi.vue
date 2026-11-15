@@ -141,7 +141,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <summary>{{ t('bots.ki.alleKandidaten', { n: erg.kandidaten.length }) }}</summary>
                 <div class="tabelleRahmen">
                     <table class="tabelle">
-                        <thead><tr><th>ID</th><th>{{ t('bots.sim.einstellung') }}</th><th>{{ t('bots.ki.rueckblick') }}</th><th>{{ t('bots.ki.nachschiessen') }}</th><th>{{ t('bots.sim.realisiertCa') }}</th><th>{{ t('bots.sim.liqNeu') }}</th></tr></thead>
+                        <thead><tr><th>ID</th><th>{{ t('bots.sim.einstellung') }}</th><th>{{ t('bots.ki.rueckblick') }}</th><th>{{ t('bots.ki.nachschiessen') }}</th><th>{{ t('bots.sim.realisiertCa') }}</th><th>{{ t('bots.sim.liqNeu') }}</th><th></th></tr></thead>
                         <tbody>
                             <tr v-for="c in erg.kandidaten" :key="c.id" :class="{ gewaehlt: erg.vorschlaege.some((v) => v.id === c.id) }">
                                 <th>{{ c.id }}</th><td>{{ c.titel }}</td>
@@ -149,6 +149,12 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                                 <td>{{ c.abJetzt?.zusatz > 0 ? betrag(c.abJetzt.zusatz, mc) : '—' }}</td>
                                 <td>{{ betrag(c.abJetzt?.realisiertCa, mc, { vorzeichen: true }) }}</td>
                                 <td>{{ preis(c.abJetzt?.liqNeu) }}</td>
+                                <td class="zeilenKnoepfe">
+                                    <template v-if="c.variante">
+                                        <Knopf art="leise" symbol="rechner" klein nurSymbol :titel="t('bots.ki.inSimulation')" @click="emit('inSimulation', c.variante)" />
+                                        <Knopf v-if="steuerungAktiv" art="leise" symbol="hochladen" klein nurSymbol :titel="t('bots.ki.umsetzen')" @click="emit('umsetzen', c.variante)" />
+                                    </template>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -191,5 +197,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 .tabelle th, .tabelle td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
 .tabelle th:first-child, .tabelle td:nth-child(2) { text-align: left; }
 .tabelle thead th { color: var(--muted); font-weight: 500; }
+.tabelle td.zeilenKnoepfe { padding-top: 2px; padding-bottom: 2px; }
+.tabelle td.zeilenKnoepfe > * + * { margin-left: 4px; }
 .tabelle tr.gewaehlt { background: var(--accent-flaeche); }
 </style>
