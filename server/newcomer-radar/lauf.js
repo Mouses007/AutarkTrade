@@ -182,6 +182,10 @@ export async function starteLauf(opt = {}) {
             meiner.ende = Date.now()
             console.log(` -> Newcomer-Radar: ${meiner.bewertet} bewertet, ${meiner.ohneKurse} ohne Kurse, ${meiner.fehler} Fehler`
                 + (meiner.abbruch ? `, abgebrochen (${meiner.abbruch})` : ''))
+            // «Newcomer mit hoher Note» (nur wenn eingeschaltet, je Titel einmal in 30 Tagen).
+            if (meiner.bewertet > 0) {
+                import('../aktien/meldungen.js').then((m) => m.meldeNewcomer(meiner.beginn)).catch(() => {})
+            }
         })
     return stand
 }

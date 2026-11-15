@@ -30,6 +30,7 @@ import { holeBitunixPaare } from '../bitunix-api.js'
 import * as marktdaten from '../marktdaten/index.js'
 import { ordneAlle } from './einordnung.js'
 import { holeListen, speichereStamm } from './stamm-speicher.js'
+import { meldeNeueListungen } from './meldungen.js'
 
 export { leseStamm, stammZahlen, HANDELSPLAETZE } from './stamm-speicher.js'
 const TAKT_MS = 12 * 3600e3
@@ -103,6 +104,9 @@ export function gleicheAb() {
         }
         const ergebnis = await speichereStamm(getKnex(), ordneAlle(roh), gelesen, beginn)
         letzter = { ok: true, zeit: beginn, dauerMs: Date.now() - beginn, stand, ...ergebnis }
+        // Neue Listungen melden (gebündelt, nur wenn eingeschaltet; Regel 3 hält den
+        // ersten Abgleich eines Handelsplatzes aus `neu` heraus). Hält den Abgleich nicht auf.
+        if (ergebnis.neu.length) meldeNeueListungen(ergebnis.neu).catch(() => {})
         return letzter
     })().finally(() => { laeuft = null })
     return laeuft

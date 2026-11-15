@@ -74,6 +74,14 @@ export const REGISTER = [
     // Neue Bewegungen überwachter Konten (Schalter je Konto unter Portfolio ›
     // Börsen & Wallets). Erkannt im Portfolio-Abruf, Sperre je Konto + Zeilen.
     { id: 'portfolioBewegung', gruppe: 'portfolio', email: true, browser: false, symbol: '\u{1F514}', ton: 'warnung', bereich: 'Portfolio · Kontoüberwachung' },
+    // ── Aktien ───────────────────────────────────────────────────────────
+    // Nur mit eingeschaltetem Aktien-Modus sichtbar und wirksam (`nurAktien`).
+    // Alle drei entstehen auf dem Server (`server/aktien/meldungen.js`), also
+    // ohne Browser-Sender, und sind wie jede Mail ab Werk aus. Ihre Texte
+    // stehen im eigenen Sprachblock (`i18n`).
+    { id: 'aktienListung', gruppe: 'aktien', email: true, browser: false, nurAktien: true, i18n: 'aktienAlltag.meldungen', symbol: '\u{1F195}', ton: 'info', bereich: 'Aktien · Neue Listung' },
+    { id: 'aktienZahlen', gruppe: 'aktien', email: true, browser: false, nurAktien: true, i18n: 'aktienAlltag.meldungen', symbol: '\u{1F4C5}', ton: 'warnung', bereich: 'Aktien · Quartalszahlen' },
+    { id: 'aktienNewcomer', gruppe: 'aktien', email: true, browser: false, nurAktien: true, i18n: 'aktienAlltag.meldungen', symbol: '\u{1F331}', ton: 'info', bereich: 'Aktien · Newcomer-Radar' },
     // ── System ───────────────────────────────────────────────────────────
     // Einziger Eintrag mit EIGENER Stelle: Der Lagebericht geht oft an mehrere
     // Leser, und ein Empfängerfeld je Ereignis waere fuer die anderen zehn
@@ -95,6 +103,11 @@ export const REGISTER = [
 ]
 
 const NACH_ID = new Map(REGISTER.map(e => [e.id, e]))
+
+/** Das Register, wie die Oberfläche es zeigt: Aktien-Ereignisse nur im Aktien-Modus. */
+export function sichtbareTypen(modusAktienAn) {
+    return REGISTER.filter((e) => !e.nurAktien || modusAktienAn)
+}
 
 /**
  * Höchstens so viele Mails je rollender Stunde — über ALLE Ereignisse hinweg.
@@ -591,6 +604,8 @@ export async function taktDurchlauf() {
         ['Pi-Cycle', () => pruefePicycle()],
         ['Pi-Cycle-Vorwarnung', () => pruefePicycleVorwarnung(s)],
         ['Version', () => pruefeVersion()],
+        // Quartalszahlen der Aktien-Watchlist — prüft selbst, ob Modus und Mail an sind.
+        ['Aktien-Zahlentermine', async () => (await import('./aktien/meldungen.js')).pruefeZahlentermine()],
     ]) {
         try {
             await fn()
@@ -684,8 +699,11 @@ export function pruefeMailKonfig({ mailHost, mailPort, mailSicherheit, mailVon, 
 export function setupBenachrichtigungsRoutes(app) {
     // Register für die Oberfläche — damit ein neuer Meldungstyp nur HIER
     // eingetragen werden muss und nicht ein zweites Mal im Frontend.
-    app.get('/api/benachrichtigungen/typen', (req, res) => {
-        res.json({ typen: REGISTER })
+    app.get('/api/benachrichtigungen/typen', async (req, res) => {
+        // Aktien-Ereignisse nur mit eingeschaltetem Aktien-Modus — sonst stünden
+        // in der Matrix Schalter für einen Markt, den es in der App nicht gibt.
+        const s = await ladeSettings()
+        res.json({ typen: sichtbareTypen(Number(s?.modusAktienAn ?? 0) === 1) })
     })
 
     app.get('/api/mail/settings', async (req, res) => {

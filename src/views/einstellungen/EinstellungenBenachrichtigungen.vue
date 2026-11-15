@@ -33,7 +33,18 @@ const mailKonfigRef = ref(null)
 const meldungenOffen = ref(true)   // der Hauptteil der Seite
 
 /** Reihenfolge der Gruppen in der Anzeige. */
-const MELDE_GRUPPEN = ['markt', 'portfolio', 'system']
+const MELDE_GRUPPEN = ['markt', 'portfolio', 'aktien', 'system']
+/*
+ * Texte eines Ereignisses. Neuere Einträge bringen ihren Sprachblock im
+ * Register mit (`i18n`, z. B. die Aktien-Ereignisse unter `aktienAlltag.meldungen`);
+ * die älteren stehen unter `settings.benachrichtigungen`.
+ */
+const typName = (typ) => t(`${typ.i18n || 'settings.benachrichtigungen'}.typ_${typ.id}`)
+const typHinweis = (typ) => t(`${typ.i18n || 'settings.benachrichtigungen'}.hinweis_${typ.id}`)
+const gruppenName = (g) => {
+    const eigener = g.typen.find((typ) => typ.i18n)?.i18n
+    return t(`${eigener || 'settings.benachrichtigungen'}.gruppe_${g.id}`)
+}
 /*
  * Ereignisse mit `eigeneStelle` stehen NICHT in dieser Tabelle.
  *
@@ -157,12 +168,12 @@ async function divergenzLeeren() {
                     </thead>
                     <tbody v-for="g in typenNachGruppe" :key="g.id">
                         <tr>
-                            <td colspan="5" class="gruppe">{{ t('settings.benachrichtigungen.gruppe_' + g.id) }}</td>
+                            <td colspan="5" class="gruppe">{{ gruppenName(g) }}</td>
                         </tr>
                         <tr v-for="typ in g.typen" :key="typ.id" class="ereignis">
                             <td class="name">
-                                {{ t('settings.benachrichtigungen.typ_' + typ.id) }}
-                                <span class="unterzeile">{{ t('settings.benachrichtigungen.hinweis_' + typ.id) }}</span>
+                                {{ typName(typ) }}
+                                <span class="unterzeile">{{ typHinweis(typ) }}</span>
                             </td>
                             <td class="mitte" :data-titel="t('settings.benachrichtigungen.browser')">
                                 <!-- `browser: false`: entsteht nur auf dem Server, der Browser
@@ -180,7 +191,7 @@ async function divergenzLeeren() {
                             </td>
                             <td :class="{ leer: !SCHWELLEN[typ.id] }" :data-titel="t('settings.benachrichtigungen.schwelle')">
                                 <select v-if="SCHWELLEN[typ.id]" class="wahl"
-                                    :aria-label="t('settings.benachrichtigungen.schwelle') + ': ' + t('settings.benachrichtigungen.typ_' + typ.id)"
+                                    :aria-label="t('settings.benachrichtigungen.schwelle') + ': ' + typName(typ)"
                                     v-model.number="SCHWELLEN[typ.id].ref().value"
                                     @change="radarSpeichern(SCHWELLEN[typ.id].spalte)">
                                     <option v-for="[wert, schluessel] in SCHWELLEN[typ.id].optionen"
@@ -238,7 +249,7 @@ async function divergenzLeeren() {
             <p v-if="meldeAnderswo.length" class="fusszeile mit-symbol">
                 <Symbol name="info" :groesse="14" />
                 <span>{{ t('settings.benachrichtigungen.anderswo', {
-                    was: meldeAnderswo.map(typ => t('settings.benachrichtigungen.typ_' + typ.id)).join(', ')
+                    was: meldeAnderswo.map(typ => typName(typ)).join(', ')
                 }) }}
                     <!-- Direkt in den Unter-Reiter springen, statt den Weg zu beschreiben -->
                     <router-link to="/einstellungen/ki?ki=nachrichten&abschnitt=news-versand" class="sprung">
