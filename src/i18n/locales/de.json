@@ -6700,8 +6700,12 @@
         "hebelzonen": "Hebelzonen sind ein MODELL: Aus dem Verlauf des Open Interest (offene Kontrakte) schätzt der Code, wo Positionen eröffnet wurden und bei welchem Kurs sie mit üblichem Hebel liquidiert würden. Unter dem Kurs liegen Long-Liquidationen — erreicht der Kurs sie, wird zwangsweise verkauft. Darüber liegen Short-Liquidationen — dort wird zwangsweise gekauft. Dichte Zonen ziehen den Kurs oft an und beschleunigen Bewegungen. Nur mit Binance als Marktdatenquelle.",
         "liquidationen": "Liquidationen sind GEMESSEN: Zwangsschliessungen, die die Börse tatsächlich gemeldet hat, in USD je Kerze. Balken nach oben = Shorts wurden liquidiert (Kurs stieg), nach unten = Longs (Kurs fiel). Grosse Ausschläge markieren oft Erschöpfung einer Bewegung. Nur Futures, nur so weit zurück, wie die Aufzeichnung lief (höchstens 7 Tage).",
         "zahlen": "Senkrechte Linie an jedem bekannten Meldezeitpunkt der Quartalszahlen (die letzten vier und der nächste), dazu als schwache Fläche das Zahlen-Fenster: ein Tag davor bis ein Tag danach — dieselbe Spanne, die Backtest und Papierbetrieb als Zahlen-Tage ausweisen. Der nächste Termin ist gestrichelt und als «voraussichtlich» gekennzeichnet, solange die Firma ihn nicht bestätigt hat. Termine von Yahoo Finance; sind sie unbekannt, zeichnet die Ebene nichts.",
-        "sitzungen": "Hinterlegt die Zeiten ausserhalb der regulären US-Börsensitzung (09:30–16:00 New Yorker Zeit, mit Sommerzeit und US-Feiertagen): türkis = vor- und nachbörslich (04:00–09:30, 16:00–20:00), grau = Nacht, kräftigeres Grau = Wochenende oder Feiertag. Der Future handelt dort weiter, aber dünn — Bewegungen in diesen Stunden haben weniger Umsatz hinter sich. Bis zur Zeiteinheit 4h; eine Kerze, die die reguläre Sitzung berührt, bleibt frei."
-      }
+        "sitzungen": "Hinterlegt die Zeiten ausserhalb der regulären US-Börsensitzung (09:30–16:00 New Yorker Zeit, mit Sommerzeit und US-Feiertagen): türkis = vor- und nachbörslich (04:00–09:30, 16:00–20:00), grau = Nacht, kräftigeres Grau = Wochenende oder Feiertag. Der Future handelt dort weiter, aber dünn — Bewegungen in diesen Stunden haben weniger Umsatz hinter sich. Bis zur Zeiteinheit 4h; eine Kerze, die die reguläre Sitzung berührt, bleibt frei.",
+        "buchPerp": "Ruhende Limit-Orders im Binance-Futures-Buch, über die Zeit als Farbe hinter den Kerzen (dunkel → gelb = mehr Coins), rechts das aktuelle Buch: Käufe türkis, Verkäufe rot, die grössten mit Menge, USD-Wert und wie lange sie schon stehen. Die Mengen veröffentlicht Binance selbst (anonym, Summe je Preis); der Server hört dauernd den Änderungsstrom und kennt so auch Orders weit vom Kurs (±20 %). Grenzen: Orders können jederzeit gelöscht werden — grosse Wände weit weg verschwinden oft, wenn der Kurs näher kommt. Eine Order, die schon vor dem Start der Aufnahme lag und sich nie geändert hat, fehlt; nach einem Neustart füllt sich das Bild über Stunden. Nur Binance, nur BTC und ETH, nur bei eingeschalteter Aufzeichnung (Live-Analyse).",
+        "buchSpot": "Dasselbe für das Binance-Spot-Buch — dort liegen viele der grossen Kaufwände (wer echte Coins kaufen will). Mit beiden Schaltern an werden Spot und Perp zusammengezählt."
+      },
+      "buchPerp": "Orderbuch-Heatmap Perp (BTC/ETH)",
+      "buchSpot": "Orderbuch-Heatmap Spot (BTC/ETH)"
     },
     "news": {
       "zeitraum": "Zeitraum",
@@ -7311,6 +7315,20 @@
         "keinKursSymbol": "zum Titel ist kein Kurssymbol bekannt",
         "abrufFehlgeschlagen": "der Abruf ist gescheitert"
       }
+    },
+    "buch": {
+      "seit": "seit",
+      "nurBtcEth": "Orderbuch-Heatmap: nur für BTC und ETH aufgezeichnet",
+      "keineAufnahme": "Orderbuch-Heatmap: noch keine Aufnahme — läuft nur bei eingeschalteter Aufzeichnung (Einstellungen › Live-Analyse) und mit Binance als Datenquelle",
+      "jung": "Orderbuch {quellen}: erst seit {seit} gesammelt — weit vom Kurs fehlen noch Orders, die sich seither nicht geändert haben",
+      "stand": "Orderbuch {quellen}: gesammelt seit {seit}, ±20 %",
+      "fehler": "Orderbuch-Heatmap: Abruf fehlgeschlagen",
+      "quelle": {
+        "futures": "Perp",
+        "spot": "Spot"
+      },
+      "waendeFern": "Orderbuch-Wände aus dem gesammelten Buch (±15 %, seit {seit})",
+      "waendeFernKeine": "Orderbuch: keine Wand in ±15 % (gesammelt seit {seit})"
     }
   },
   "rechtliches": {

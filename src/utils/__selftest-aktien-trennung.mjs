@@ -91,7 +91,8 @@ gleich(alarmImMarkt({ anlageklasse: null }, 'aktien'), false, 'Alarm ohne Angabe
 gleich(alarmImMarkt({ anlageklasse: 'aktien' }, ''), true, 'ohne Markt (Aktien-Teil aus) zählen alle')
 
 // ── Chart-Ebenen: Krypto-Ebenen ruhen bei Aktien ─────────────────────────────
-gleich(overlaysFuer(false).map((o) => o.id), OVERLAYS.filter((o) => !o.nurAktien).map((o) => o.id), 'Coin: alles ausser den Aktien-Ebenen')
+gleich(overlaysFuer(false).map((o) => o.id), OVERLAYS.filter((o) => !o.nurAktien && !o.nurSymbole).map((o) => o.id), 'Coin: alles ausser den Aktien-Ebenen (und der Heatmap, die es nur bei BTC/ETH gibt)')
+gleich(overlaysFuer(false, 'BTCUSDT').map((o) => o.id), ['positionen', 'journal', 'liquidationen', 'hebelzonen', 'orderbuch', 'buchPerp', 'buchSpot'], 'BTC: dazu die Orderbuch-Heatmap')
 gleich(overlaysFuer(false).map((o) => o.id), ['positionen', 'journal', 'liquidationen', 'hebelzonen', 'orderbuch'], 'Coin: Ebenen wie vor den Aktien')
 gleich(overlaysFuer(true).map((o) => o.id), ['positionen', 'journal', 'orderbuch', 'zahlen', 'sitzungen'], 'Aktie: ohne Liquidationen und Hebelzonen')
 gleich([istNurKrypto('liquidationen'), istNurKrypto('hebelzonen'), istNurKrypto('orderbuch'), istNurKrypto('zahlen'), istNurKrypto('gibtsNicht')],

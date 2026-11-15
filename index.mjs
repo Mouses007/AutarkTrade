@@ -27,6 +27,7 @@ import { setupChartKiRoutes } from './server/chart-ki.js'
 import { setupFlashNewsRoutes } from './server/flash-news.js'
 import { setupChartTeilenRoutes } from './server/chart-teilen.js'
 import { setupChartFootprintRoutes } from './server/chart-footprint.js'
+import { setupChartBuchkarteRoutes } from './server/chart-buchkarte.js'
 import { setupLageRoutes } from './server/marktradar-lage.js'
 import { setupHandelslageRoutes } from './server/handelslage.js'
 import { setupNewsRoutes, startNewsTakt, stopNews } from './server/marktradar-news.js'
@@ -262,6 +263,7 @@ async function starteServer() {
     setupFlashNewsRoutes(app);
     setupChartTeilenRoutes(app);
     setupChartFootprintRoutes(app);
+    setupChartBuchkarteRoutes(app);
     // Fremde Orderbücher zum Vergleich — bewusst NICHT in die Karte gemischt,
     // die Begründung steht im Kopf von server/fremdbuch.js.
     setupFremdbuchRoute(app);

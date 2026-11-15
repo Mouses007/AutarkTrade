@@ -228,7 +228,7 @@ const aktivIndex = computed(() => Math.min(daten.value.aktiv, sichtbareAnzahl.va
 const aktivesPanel = computed(() => daten.value.panels[aktivIndex.value])
 // Handy-Schublade: die Aktien-Ebenen (Quartalszahlen, Börsensitzungen) nur bei einem Aktien-Future.
 const aktiveAktie = computed(() => aktieVon(aktivesPanel.value))
-const schubOverlays = computed(() => overlaysFuer(!!aktiveAktie.value))
+const schubOverlays = computed(() => overlaysFuer(!!aktiveAktie.value, aktivesPanel.value?.symbol))
 const zahlenGrund = computed(() => termineGrundSchluessel(aktiveAktie.value))
 const rasterKlasse = computed(() => (telefon.value || vollbild.value ? 'r1' : 'r' + daten.value.raster))
 

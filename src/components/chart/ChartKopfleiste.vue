@@ -51,12 +51,14 @@ const OVERLAY_SYMBOL = {
     liquidationen: 'feuer',
     hebelzonen: 'ebenen',
     orderbuch: 'liste',
+    buchPerp: 'raster',
+    buchSpot: 'muenzen',
     zahlen: 'kalender',
     sitzungen: 'uhr',
 }
 // Die Aktien-Ebenen (Quartalszahlen, Börsensitzungen) gibt es nur, wenn das Symbol ein Aktien-Future ist.
 const aktie = computed(() => aktieVon(props.panel))
-const overlays = computed(() => overlaysFuer(!!aktie.value))
+const overlays = computed(() => overlaysFuer(!!aktie.value, props.panel.symbol))
 const SKALEN = ['normal', 'log', 'prozent']
 // Kerzenansicht: normal, Breite nach Volumen (panel.volumenBreite) oder Footprint (sichtbarer Footprint-Indikator)
 const KERZEN_ARTEN = ['normal', 'volumen', 'footprint']

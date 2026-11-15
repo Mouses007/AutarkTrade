@@ -48,6 +48,7 @@ import axios from 'axios'
 import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { InstanzEbene } from '../../utils/chart/overlays/InstanzEbene.js'
 import { MarktEbene, waendeAusBuch } from '../../utils/chart/overlays/MarktEbene.js'
+import { BuchKarteEbene, dauerKurz } from '../../utils/chart/overlays/BuchKarteEbene.js'
 import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
 import { AktienEbene } from '../../utils/chart/overlays/AktienEbene.js'
 import { ladeAktienKontext, aktieVon, termineGrundSchluessel } from '../../utils/chart/aktienKontext.js'
@@ -60,7 +61,7 @@ import { letzterStil, merkeStil } from '../../stores/zeichenStil.js'
 import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
 import { tabellenZeilen } from '../../utils/chart/fensterTabelle.js'
 import { atr } from '../../../shared/indicators.js'
-import { overlayAn as overlayAnFuer, istNurKrypto } from '../../utils/chart/overlays/liste.js'
+import { overlayAn as overlayAnFuer, istNurKrypto, fuerSymbol } from '../../utils/chart/overlays/liste.js'
 
 const props = defineProps({
     panel: { type: Object, required: true },     // { symbol, markt, interval, skala }
@@ -160,6 +161,7 @@ let positionsTakt = null
 let positionsLinien = []               // [{ linie, art, pos }]
 let positionen = []
 let marktEbene = null
+let buchEbene = null
 let kerzenUhr = null
 let aktienEbene = null               // nur bei Aktien-Futures angelegt (Sitzungen, Quartalszahlen)
 let volumenKerzen = null
@@ -336,6 +338,8 @@ function baueChart() {
         },
     })
     zeigeKi()
+    // Orderbuch-Heatmap VOR der MarktEbene anhängen: sie liegt hinter allem anderen
+    buchEbene = new BuchKarteEbene({ chart: c, serie: ks, texte: { seit: t('chart.buch.seit') } })
     marktEbene = new MarktEbene({
         chart: c, serie: ks,
         texte: { kauf: t('chart.markt.kaufwand'), verkauf: t('chart.markt.verkaufswand'), liqLong: t('chart.markt.liqLong'), liqShort: t('chart.markt.liqShort') },
@@ -447,6 +451,7 @@ function setzeDaten(liste) {
     journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     instanzEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     marktEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
+    buchEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     aktienEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     kerzenUhr?.setze(liste[liste.length - 1], INTERVALL_MS[props.panel.interval], props.panel.interval)
     planeJournal()
@@ -539,10 +544,76 @@ async function umsatzJeMinute(symbol, markt) {
     } catch { return null }
 }
 
+/*
+ * Orderbuch-Heatmap (BTC/ETH) aus dem eigenen Fernfeld. Erstes Laden: bis 72 h
+ * (unter 15-min-Kerzen 24 h), danach nur noch ab der letzten Spalte. Der
+ * Preisbereich wird beim ersten Laden festgelegt (Kerzen ±15 %) — damit bleibt
+ * die Zeilenstufe gleich und die Spalten passen aneinander.
+ */
+let buchCache = null   // { schluessel, lo, hi, spalten, stufe }
+const buchQuellen = () => [overlayAn('buchPerp') && 'futures', overlayAn('buchSpot') && 'spot'].filter(Boolean)
+async function ladeBuchkarte() {
+    if (!buchEbene) return
+    const quellen = buchQuellen()
+    const { symbol, interval } = props.panel
+    if (!quellen.length || !fuerSymbol('buchPerp', symbol) || !kerzen.value.length) {
+        buchEbene.setzeDaten(null); buchCache = null; hinweis('buchkarte', null); return
+    }
+    const iv = INTERVALL_MS[interval]
+    const schluessel = `${symbol}|${interval}|${quellen.join(',')}`
+    if (buchCache?.schluessel !== schluessel) {
+        const juengst = kerzen.value.slice(-300)
+        const lo = Math.min(...juengst.map((k) => k.l)) * 0.85
+        const hi = Math.max(...juengst.map((k) => k.h)) * 1.15
+        buchCache = { schluessel, lo, hi, spalten: [], stufe: null }
+    }
+    const c = buchCache
+    const von = c.spalten.length ? c.spalten[c.spalten.length - 1].t : undefined
+    try {
+        const { data } = await axios.get('/api/chart/buchkarte', { params: { symbol, quellen: quellen.join(','), iv, von, lo: c.lo, hi: c.hi } })
+        if (buchCache !== c) return
+        if (!data?.verfuegbar) {
+            buchEbene.setzeDaten(null)
+            hinweis('buchkarte', t(data?.grund === 'symbol' ? 'chart.buch.nurBtcEth' : 'chart.buch.keineAufnahme'))
+            return
+        }
+        if (c.stufe !== data.stufe) c.spalten = []
+        c.stufe = data.stufe
+        const ab = data.spalten[0]?.t ?? Infinity
+        c.spalten = [...c.spalten.filter((sp) => sp.t < ab), ...data.spalten].slice(-1500)
+        buchEbene.setzeDaten({ spalten: c.spalten, stufe: c.stufe, profil: data.profil, basis: symbol.replace(/USDT$|USDC$/, '') })
+        const alter = data.seit ? Date.now() - data.seit : 0
+        hinweis('buchkarte', t(alter < 6 * 3_600_000 ? 'chart.buch.jung' : 'chart.buch.stand', {
+            quellen: quellen.map((q) => t('chart.buch.quelle.' + q)).join(' + '),
+            seit: dauerKurz(alter),
+        }))
+    } catch { hinweis('buchkarte', t('chart.buch.fehler')) }
+}
+
 async function ladeWaende() {
     if (!marktEbene) return
     if (!overlayAn('orderbuch')) { marktEbene.setzeWaende(null); hinweis('orderbuch', null); return }
     const { symbol, markt } = props.panel
+    // BTC/ETH: das gesammelte Fernfeld (±20 %) statt der Momentaufnahme, die bei BTC nur ±0,09 % reicht
+    if (fuerSymbol('buchPerp', symbol)) {
+        try {
+            const m = markt === 'spot' ? 'spot' : 'futures'
+            const [{ data }, proMin] = await Promise.all([
+                axios.get('/api/chart/buchkarte', { params: { symbol, quellen: m, iv: 60_000, von: Date.now() - 120_000 } }),
+                umsatzJeMinute(symbol, m),
+            ])
+            if (symbol !== props.panel.symbol) return
+            if (data?.verfuegbar && data.profil) {
+                const p = data.profil
+                const w = waendeAusBuch({ bids: p.b.map(([pr, q]) => [pr, q]), asks: p.a.map(([pr, q]) => [pr, q]) },
+                    { umsatzJeMinute: proMin, spannePct: 15, zonenJeSeite: 60 })
+                marktEbene.setzeWaende(w)
+                hinweis('orderbuch', t(w.kaeufe.length || w.verkaeufe.length ? 'chart.buch.waendeFern' : 'chart.buch.waendeFernKeine',
+                    { seit: dauerKurz(data.seit ? Date.now() - data.seit : 0) }))
+                return
+            }
+        } catch { /* weiter mit der Momentaufnahme */ }
+    }
     try {
         // limit 500 statt 1000: halbes Gewicht, und Wände jenseits von ±5 %
         // zeigt der Chart ohnehin nicht.
@@ -893,6 +964,7 @@ function marktTick() {
     if (document.hidden) return
     const n = marktZaehler++
     ladeWaende()
+    if (n % 6 === 0) ladeBuchkarte()
     if (n % 3 === 0) ladeLiquidationen()
     if (n % 2 === 0) ladeExtern(['footprint', 'cvd'])
     if (n % 6 === 0) ladeExtern(['momentum', 'vwapVector', 'emaMtf', 'signale_lsob', 'signale_ema_touch'])
@@ -1233,6 +1305,8 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], () =>
     marktEbene?.setzeLiquidationen([])
     marktEbene?.setzeZonen(null)
     marktEbene?.setzeWaende(null)
+    buchEbene?.setzeDaten(null)
+    buchCache = null
     // OI, Funding, Momentum, VWAP-Vector-Kerzen gehören zum ALTEN Symbol. Ohne
     // Leeren rechneten die neuen Kerzen damit — und schlug der neue Abruf fehl,
     // stand BTC-OI dauerhaft unter einem anderen Coin.
@@ -1774,6 +1848,7 @@ function starteLive(nr) {
                 journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
                 instanzEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
                 marktEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
+                buchEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
                 aktienEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
             }
             kerzenSerie.value?.update(kerzenPunkt(bar, liste.length - 1))
@@ -1931,6 +2006,8 @@ onBeforeUnmount(() => {
     externNochmal.clear()
     marktEbene?.abbauen()
     marktEbene = null
+    buchEbene?.abbauen()
+    buchEbene = null
     aktienEbene?.abbauen()
     aktienEbene = null
     kerzenUhr?.abbauen()

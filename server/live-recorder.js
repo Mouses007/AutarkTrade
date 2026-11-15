@@ -26,6 +26,8 @@ import { merkeLiq, liqEintragBinance } from './liq-ticker.js'
 import { beansprucheFuehrung, gibFuehrungFrei } from './db-claim.js'
 import { umgebungAn } from './umgebung.js'
 import { istTestbetrieb } from './umgebung.js'
+import { FernBuchRecorder } from './fern-buch.js'
+import { FERN_SYMBOLE, FERN_MAERKTE } from '../shared/fernBuch.js'
 
 // Börsen-Streams liefern Nachrichten von wenigen kB; die ws-Vorgabe (100 MiB)
 // liesse einen gestörten oder fremden Endpunkt den Speicher füllen (Audit SEC-SRV-019).
@@ -1479,6 +1481,8 @@ function requantize(value, scale) {
 // ── Verwaltung ──────────────────────────────────────────────
 
 const active = new Map()   // "SYMBOL|market" -> SymbolRecorder
+// Orderbuch-Fernfeld BTC/ETH × Futures/Spot (`server/fern-buch.js`), läuft mit, sobald die Aufzeichnung an ist
+const fernAktiv = new Map()   // "SYMBOL|market" -> FernBuchRecorder
 let collector = null       // MarketLiquidationCollector, wenn eingeschaltet
 let bybitCollector = null  // BybitLiquidationCollector — an dieselbe Flagge gekoppelt
 let reconcileTimer = null
@@ -1555,7 +1559,8 @@ async function reconcile() {
     // die Führung. Die Aufzeichnung in die DB lief dann zwar weiter, aber der
     // Liquidations-Ticker liest aus dem Arbeitsspeicher DIESES Prozesses — auf
     // der NAS stand „0 Ereignisse", stundenlang (gesehen 10.10.2026).
-    const arbeit = !RECORDER_AUS && ((config.enabled && config.symbols.length > 0) || config.allLiq)
+    // Das Fernfeld (BTC/ETH) braucht keine Symbolliste: eingeschaltete Aufzeichnung genügt.
+    const arbeit = !RECORDER_AUS && (config.enabled || config.allLiq)
     if (arbeit) {
         const vorher = hatFuehrung
         hatFuehrung = await beansprucheFuehrung(FUEHRUNG_KEY, FUEHRUNG_TTL_MS)
@@ -1598,6 +1603,25 @@ async function reconcile() {
         console.log(` -> [recorder] gestartet: ${target.symbol} (${target.frameMs} ms, ${target.rows} Zeilen)`)
     }
 
+    // Fernfeld BTC/ETH × Futures/Spot: mit der Aufzeichnung an, ohne Binance oder Führung aus
+    const fernSoll = config.enabled && binanceStreams
+    for (const symbol of FERN_SYMBOLE) {
+        for (const market of FERN_MAERKTE) {
+            const k = `${symbol}|${market}`
+            if (fernSoll && !fernAktiv.has(k)) {
+                const r = new FernBuchRecorder(symbol, market)
+                fernAktiv.set(k, r)
+                r.start()
+                console.log(` -> [recorder] Fernfeld gestartet: ${k}`)
+            } else if (!fernSoll && fernAktiv.has(k)) {
+                const r = fernAktiv.get(k)
+                fernAktiv.delete(k)
+                await r.stop()
+                console.log(` -> [recorder] Fernfeld gestoppt: ${k}`)
+            }
+        }
+    }
+
     const binanceLiq = config.allLiq && binanceStreams
     if (binanceLiq && !collector) {
         collector = new MarketLiquidationCollector()
@@ -1634,7 +1658,7 @@ async function runRetention() {
         // das jeweils andere ist nur ein halbes Bild.
         const cutoff = Date.now() - days * 24 * HOUR_MS
         const deleted = await knex('live_recordings')
-            .where('hourStart', '<', cutoff).whereIn('kind', ['heat', 'trades']).del()
+            .where('hourStart', '<', cutoff).whereIn('kind', ['heat', 'trades', 'fern']).del()
         if (deleted) console.log(` -> [recorder] ${deleted} alte Aufzeichnungen gelöscht (älter als ${days} Tage)`)
 
         // Liquidationen sind winzig und der eigentliche Wert der Sammlung:
@@ -1691,6 +1715,8 @@ export function setupLiveRecorder(app) {
                 .sum({ bytes: 'bytes' })
                 .min({ von: 'hourStart' })
                 .max({ bis: 'hourStart' })
+                // Das Fernfeld (BTC/ETH-Spot ohne Heatmap) ist keine Wiedergabe-Aufzeichnung
+                .whereNot('kind', 'fern')
                 .groupBy('symbol', 'market')
             res.json({
                 laufend: [...active.values()].map(r => ({
@@ -1924,9 +1950,16 @@ export async function stopLiveRecorder() {
     clearInterval(retentionTimer)
     for (const recorder of active.values()) await recorder.stop()
     active.clear()
+    for (const r of fernAktiv.values()) await r.stop()
+    fernAktiv.clear()
     if (collector) { const alt = collector; collector = null; await alt.stop() }
     if (bybitCollector) { const alt = bybitCollector; bybitCollector = null; await alt.stop() }
     // Führung sofort zurückgeben, damit der andere Prozess ohne TTL-Wartezeit
     // übernehmen kann (z.B. NAS-Container nach einem Dev-Server-Stopp).
     if (hatFuehrung) { hatFuehrung = false; await gibFuehrungFrei(FUEHRUNG_KEY).catch(() => {}) }
+}
+
+/** Frames des Fernfelds aus dem Speicher dieses Prozesses (nur, wenn er die Führung hat) — sonst []. */
+export function fernFramesImSpeicher(symbol, market, von) {
+    return fernAktiv.get(`${symbol}|${market}`)?.framesAb(von) || []
 }
