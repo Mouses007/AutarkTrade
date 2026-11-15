@@ -122,6 +122,8 @@ export const PAGES = [
     // Newcomer-Radar zuerst: er ist die Frage, der Stamm das Nachschlagewerk dazu.
     { id: 'newcomerRadar', mode: 'research', path: '/newcomer-radar', symbol: 'entdecken', titleKey: 'nav.newcomerRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
     { id: 'aktienRadar', mode: 'research', path: '/aktien-radar', symbol: 'listeNummer', titleKey: 'nav.aktienRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
+    // Das Umfeld (Index, Schwankung, Sektoren) — nach den Radaren, damit der Newcomer-Radar die Startseite bleibt.
+    { id: 'aktienMarktlage', mode: 'research', path: '/aktien-marktlage', symbol: 'tacho', titleKey: 'nav.aktienMarktlage', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
     { id: 'aktienStamm', mode: 'research', path: '/aktien', symbol: 'gebaeude', titleKey: 'nav.aktienStamm', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
 
     // ── Strategien ──────────────────────────────────────────

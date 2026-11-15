@@ -26,7 +26,7 @@ gleich([seiteImMarkt({ markt: 'aktien' }, 'krypto'), seiteImMarkt({ markt: 'akti
 const research = pagesForMode('research')
 gleich(research.filter((s) => seiteImMarkt(s, 'krypto')).map((s) => s.id),
     ['hypeRadar', 'hypeFrueh', 'hypeBoersen', 'hypeBerichte', 'coinRadar', 'coinVerlauf', 'coinAbverkauf'], 'Research im Markt Krypto unverändert')
-gleich(research.filter((s) => seiteImMarkt(s, 'aktien')).map((s) => s.id), ['newcomerRadar', 'aktienRadar', 'aktienStamm'], 'Research im Markt Aktien')
+gleich(research.filter((s) => seiteImMarkt(s, 'aktien')).map((s) => s.id), ['newcomerRadar', 'aktienRadar', 'aktienMarktlage', 'aktienStamm'], 'Research im Markt Aktien')
 // Jede Aktien-Seite hängt am Schalter, sonst stünde sie nach dem Abschalten noch im Menü
 gleich(PAGES.filter((s) => s.markt === 'aktien' && s.flag !== 'modusAktienAn').map((s) => s.id), [], 'Aktien-Seiten tragen das Flag')
 // Ausserhalb von Research ist (noch) keine Seite an einen Markt gebunden
