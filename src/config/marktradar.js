@@ -31,7 +31,7 @@ import { baueKachelListe, macheSortierer } from './kachel-registry.js'
  */
 export const STANDARD_REIHENFOLGE = [
     'mechanik', 'funding', 'lsoi', 'liq24', 'fng', 'dom',
-    'picycle', 'altseason', 'markt', 'rainbow', 'regime', 'rsi', 'makro', 'etf', 'wal',
+    'picycle', 'altseason', 'markt', 'rainbow', 'bewertung', 'regime', 'rsi', 'makro', 'etf', 'wal',
     // Die Zusammenfassung steht am Ende: sie liest die anderen Kacheln, also
     // gehört sie hinter sie — und nachrückende Ids landen ohnehin dort.
     'lage',
@@ -62,6 +62,9 @@ export const Q = {
     blockchainInfo: { name: 'blockchain.info', url: 'https://www.blockchain.com/explorer/charts/market-price', art: 'daten', freigabe: true },
     coinmarketcap: { name: 'CoinMarketCap', url: 'https://coinmarketcap.com/charts/', art: 'daten', freigabe: true },
     telegram: { name: 'eigene Telegram-Quellen (Whale Alert, Lookonchain, …)', art: 'daten', freigabe: true },
+    /** CC BY-NC 4.0: Quelle nennen, nicht-kommerziell. */
+    coinmetrics: { name: 'Coin Metrics', url: 'https://coinmetrics.io/community-network-data/', art: 'daten', freigabe: true },
+    bgeometrics: { name: 'BGeometrics', url: 'https://bitcoin-data.com/', art: 'daten', freigabe: true },
 }
 
 const DEFINITIONEN = [
@@ -185,6 +188,17 @@ const DEFINITIONEN = [
         flaeche: true,
         quelle: [Q.blockchainInfo, { marktdaten: true, zusatz: '(BTCUSDT Spot)', freigabe: true },
             { marktdaten: true, zusatz: '(BTCUSDT Spot, ab 2017)', ohneSchalter: true }],
+    },
+    {
+        id: 'bewertung',
+        titleKey: 'marktradar.bewertung.title',
+        icon: 'tacho',
+        endpunkt: '/api/marktradar/bewertung',
+        // Der Endpunkt liest nur den eigenen Bestand; die Quellen liefern
+        // Tageswerte und werden im Hintergrund nachgeführt.
+        intervallMs: 60 * 60 * 1000,
+        spalten: 1,
+        quelle: [Q.coinmetrics, Q.bgeometrics, { name: 'eigener Bestand ab Einrichtung', klein: false }],
     },
     {
         id: 'regime',

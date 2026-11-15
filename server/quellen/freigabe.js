@@ -51,6 +51,8 @@ export const QUELLEN_OHNE_FREIGABE = {
     gelbeBoersen: { name: 'Coinbase, Kraken, KuCoin, Gate (Vorgabe an)', zeilen: ['77', '79', '80', '81'], was: 'Börsenwächter: diese Börsen ab Werk an (sonst nur auf Wunsch)' },
     binanceBrackets: { name: 'Binance bapi-Brackets', zeilen: ['34'], was: 'Wartungsmarge je Symbol „Binance (automatisch)"' },
     newsVorschlaege: { name: 'Vorbelegte News-Quellen', zeilen: ['46', '53'], was: 'Verlags-RSS und Truth Social als Vorschläge (Seed, Onboarding)' },
+    coinmetrics: { name: 'Coin Metrics (Community)', zeilen: ['93'], was: 'Bitcoin-Bewertung: Tageskurs und MVRV seit 2010 (Realized Price, 200-Wochen-Durchschnitt)' },
+    bgeometrics: { name: 'BGeometrics (ohne Abo)', zeilen: ['94'], was: 'Bitcoin-Bewertung: Einstand der kurzfristigen Halter' },
     deepseekSuche: { name: 'DeepSeek-Suche', zeilen: ['89d'], was: 'Recherche-Weg „DeepSeek-Suche" im Lagebericht' },
 }
 

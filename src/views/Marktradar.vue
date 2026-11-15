@@ -32,6 +32,7 @@ import KachelMechanik from '../components/radar/KachelMechanik.vue'
 import KachelMakro from '../components/radar/KachelMakro.vue'
 import KachelLage from '../components/radar/KachelLage.vue'
 import KachelEtf from '../components/radar/KachelEtf.vue'
+import KachelBewertung from '../components/radar/KachelBewertung.vue'
 import KachelWal from '../components/radar/KachelWal.vue'
 import { liveSymbol } from '../stores/live.js'
 import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
@@ -65,6 +66,7 @@ const KOMPONENTEN = {
     makro: KachelMakro,
     lage: KachelLage,
     etf: KachelEtf,
+    bewertung: KachelBewertung,
     wal: KachelWal,
 }
 

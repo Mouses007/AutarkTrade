@@ -42,6 +42,7 @@ import { beansprucheAufgabe, meldeFehler } from './db-claim.js'
 import { ausCache, sendeRadar, sendRadarError, verwerfeCache } from './marktradar-api.js'
 import { baueNutzlast, reiheAusAntwort, frischeHinweis, abrufLimit, verdichtePremium } from './etf-fluss.js'
 import { istTestbetrieb } from './umgebung.js'
+import { leseReihe, schreibeReihe } from './snapshot-reihe.js'
 
 const CQ_BASE = 'https://api.cryptoquant.com/v1'
 const HTTP_TIMEOUT = 15000
@@ -188,26 +189,8 @@ const warte = (ms) => new Promise(r => setTimeout(r, ms))
 
 // ── Einlagerung ─────────────────────────────────────────────────────────
 
-/** Eingelagerte Reihe lesen (`kind` wie in `ABRUFE`). */
-async function leseReihe(kind) {
-    const zeilen = await getKnex()('market_snapshots')
-        .where('kind', kind).orderBy('dayUnix', 'asc').select('dayUnix', 'value')
-    return zeilen.map(z => [Number(z.dayUnix), Number(z.value)])
-}
-
-/** Reihe einlagern. Der spätere Wert gewinnt — die Quelle korrigiert nach. */
-async function schreibeReihe(kind, reihe) {
-    if (!reihe.length) return 0
-    const knex = getKnex()
-    const zeilen = reihe.map(([tag, wert]) => ({
-        kind, dayUnix: tag, value: wert, createdAt: Date.now(),
-    }))
-    for (let i = 0; i < zeilen.length; i += 200) {
-        await knex('market_snapshots').insert(zeilen.slice(i, i + 200))
-            .onConflict(['kind', 'dayUnix']).merge(['value', 'createdAt'])
-    }
-    return zeilen.length
-}
+// `leseReihe` / `schreibeReihe` liegen in `snapshot-reihe.js` (geteilt mit der
+// Bitcoin-Bewertung); `kind` wie in `ABRUFE`.
 
 /**
  * Bestände nachführen.

@@ -3719,6 +3719,37 @@
       "info": "Ob gerade Altcoins oder Bitcoin selbst die Führung im Markt haben.\nÜber 75 = Altcoin-Saison (Alt-Longs haben Rückenwind), unter 25 = Bitcoin-Saison (Alts laufen dann oft schwächer als BTC, auch wenn sie steigen). Die Schwellen sind gesetzt, nicht hergeleitet.",
       "basisUmsatz": "Ohne CoinGecko-Schlüssel: gezählt werden die 50 umsatzstärksten Perpetuals statt der 50 grössten Coins."
     },
+    "bewertung": {
+      "title": "Bitcoin-Bewertung",
+      "info": "Wo der Bitcoin-Kurs gemessen an seiner eigenen Geschichte steht.\nVerglichen wird mit drei Preisen: Realized Price (durchschnittlicher Einstand aller Coins), 200-Wochen-Durchschnitt und Einstand der kurzfristigen Halter. Der Rang sagt, an wie viel Prozent der bisherigen Tage Bitcoin tiefer bewertet war.\nEine Einordnung in die Vergangenheit, keine Prognose.",
+      "wartet": "Daten werden geholt",
+      "hoeher": "An {pct} % der Tage seit {jahr} höher bewertet",
+      "ohneGesamt": "Gesamtwert folgt, sobald die Langzeitreihen da sind",
+      "rangVon": "Rang {rang} von 100",
+      "stand": "BTC {preis} $ · Stand {datum}",
+      "stufe": {
+        "guenstig": "tief bewertet",
+        "eherGuenstig": "eher tief bewertet",
+        "mittel": "im Mittelfeld",
+        "eherTeuer": "eher hoch bewertet",
+        "teuer": "hoch bewertet"
+      },
+      "modell": {
+        "realized": "Realized Price",
+        "w200": "200-Wochen-Schnitt",
+        "sth": "Kurzfrist-Einstand"
+      },
+      "spalte": {
+        "modell": "Modell",
+        "preis": "Vergleichspreis",
+        "abstand": "Kurs dazu",
+        "rang": "Rang",
+        "seit": "Rang seit",
+        "stand": "Stand"
+      },
+      "zaehltNicht": "{modell}: zählt nicht zum Gesamtwert, weil der Verlauf erst ab {datum} reicht. Die Quelle liefert ohne Abo vier Jahre Rückblick und eine Woche verzögert; verglichen wird der heutige Kurs mit dem letzten bekannten Einstand.",
+      "caveat": "Der Rang ordnet den heutigen Kurs in die Vergangenheit ein. Wohin der Kurs geht, sagt er nicht: In Bärenmärkten blieb Bitcoin monatelang tief bewertet und fiel weiter. Die Modelle hängen zudem zusammen — alle beruhen auf Kurs und Einstandskursen —, und die Geschichte umfasst nur wenige Zyklen."
+    },
     "etf": {
       "title": "ETF-Fluss (BTC)",
       "fluss": "Tagesfluss",
@@ -3849,6 +3880,10 @@
         {
           "h": "ETF-FLUSS (BTC)",
           "p": "Wie viele Bitcoin die Spot-ETFs zusammen halten und wie sich das täglich ändert. Der Zufluss IST die Bestandsänderung — eine zweite Zahl dafür gibt es nicht. Angezeigt wird in BTC, nicht in Dollar: mal Tageskurs gerechnet bewegte sich der „Zufluss\" auch an Tagen, an denen kein einziger Anteil geschaffen wurde. Gross zeigt die Kachel die einzelnen Fonds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) und weist als „Übrige Fonds\" aus, was auf die nicht einzeln abgefragten entfällt — die Gesamtsumme kommt von der Quelle und wird nie aus den Einzelnen addiert. Braucht einen CryptoQuant-Schlüssel (Gratis-Tarif genügt), einzutragen unter Einstellungen › Datenquellen › CryptoQuant. Die Quelle gibt nur 30 Tage Rückblick her; alles Ältere sammelt das Journal selbst, die Kurve wächst also mit der Zeit. Ein Warndreieck an der 7- oder 30-Tage-Summe heisst: für einzelne Tage im Fenster fehlt ein Wert, die Summe beruht auf weniger Tagen. Aus derselben Quelle kommen zwei Beigaben: der Tagesfluss der Ethereum-Spot-ETFs (gross per Umschalter BTC/ETH mit eigener Kurve und Fondstabelle) und das Coinbase-Premium — der prozentuale Abstand des BTC-Kurses bei Coinbase zu Binance. Über null drängen US-Käufer; aussagekräftig ist das Vorzeichen über mehrere Tage, nicht der einzelne Wert."
+        },
+        {
+          "h": "BITCOIN-BEWERTUNG",
+          "p": "Ordnet den Bitcoin-Kurs in seine eigene Geschichte ein. Drei Vergleichspreise: der Realized Price (durchschnittlicher Einstand aller Coins, bewertet zum Kurs ihrer letzten Bewegung), der Durchschnitt der letzten 200 Wochen und der Einstand der kurzfristigen Halter (Coins, die in den letzten rund 155 Tagen bewegt wurden). Je Modell zeigt die Kachel den Vergleichspreis, den Abstand des Kurses dazu und einen Rang von 0 bis 100: an wie viel Prozent der Tage seit 2012 das Verhältnis tiefer war als heute. Die grosse Zahl („Q18\") ist der Mittelwert der Ränge mit langer Geschichte — Q18 heisst, an 82 % der Tage war Bitcoin höher bewertet. Der Kurzfrist-Einstand steht daneben und zählt nicht mit, weil sein Verlauf ohne Abo nur vier Jahre zurückreicht. Kurs und MVRV kommen von Coin Metrics (Tageswerte seit 2010), der Kurzfrist-Einstand von BGeometrics (eine Woche verzögert); beide ohne Schlüssel, beide unter dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\". Geholt wird im Hintergrund, alles Geholte bleibt gespeichert. Ein Rang ist keine Prognose: tief bewertet kann lange tief bleiben."
         },
         {
           "h": "GESAMTLAGE (KI)",

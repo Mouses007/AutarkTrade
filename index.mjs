@@ -33,6 +33,7 @@ import { setupHandelslageRoutes } from './server/handelslage.js'
 import { setupNewsRoutes, startNewsTakt, stopNews } from './server/marktradar-news.js'
 import { setupNewsProfilRoutes } from './server/news-profil-api.js'
 import { setupCryptoquantRoutes, stopCryptoquant } from './server/cryptoquant-api.js'
+import { setupBewertungRoutes, stopBewertung } from './server/bewertung-api.js'
 import { setupBenachrichtigungsRoutes, startBenachrichtigungsTakt, stopBenachrichtigungen } from './server/benachrichtigungen.js'
 import { setupOllamaRoutes } from './server/ollama-api.js'
 import { setupAiModelRoutes } from './server/ai-models.js'
@@ -277,6 +278,7 @@ async function starteServer() {
     // ETF-Bestände: eigene Datei, weil sie als einzige Radar-Quelle einen
     // Schlüssel braucht — und nach dem Marktradar, dessen Cache sie mitbenutzt.
     setupCryptoquantRoutes(app);
+    setupBewertungRoutes(app);
     setupBenachrichtigungsRoutes(app);
     setupOllamaRoutes(app);
     setupAiModelRoutes(app);
@@ -518,7 +520,7 @@ async function starteServer() {
         try { stopOiArchivTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopChartAlarmTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopMarktradar() } catch (e) { /* trotzdem beenden */ }
-        try { stopKalender(); stopNews(); stopBenachrichtigungen(); stopCryptoquant() } catch (e) { /* trotzdem beenden */ }
+        try { stopKalender(); stopNews(); stopBenachrichtigungen(); stopCryptoquant(); stopBewertung() } catch (e) { /* trotzdem beenden */ }
         process.exit(code)
     }
 

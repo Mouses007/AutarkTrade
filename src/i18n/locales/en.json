@@ -3719,6 +3719,37 @@
       "info": "Whether altcoins or Bitcoin itself are currently leading the market.\nAbove 75 = altcoin season (alt longs have a tailwind), below 25 = bitcoin season (alts often lag BTC then, even while rising). The thresholds are set, not derived.",
       "basisUmsatz": "Without a CoinGecko key: counting the 50 highest-volume perpetuals instead of the 50 largest coins."
     },
+    "bewertung": {
+      "title": "Bitcoin valuation",
+      "info": "Where the Bitcoin price stands measured against its own history.\nIt is compared with three prices: realized price (average cost basis of all coins), the 200-week average and the cost basis of short-term holders. The rank says on what percentage of past days Bitcoin was valued lower.\nA placement in the past, not a forecast.",
+      "wartet": "Fetching data",
+      "hoeher": "Valued higher on {pct} % of days since {jahr}",
+      "ohneGesamt": "The overall value follows once the long-term series are in",
+      "rangVon": "Rank {rang} of 100",
+      "stand": "BTC {preis} $ · as of {datum}",
+      "stufe": {
+        "guenstig": "valued low",
+        "eherGuenstig": "valued rather low",
+        "mittel": "mid-range",
+        "eherTeuer": "valued rather high",
+        "teuer": "valued high"
+      },
+      "modell": {
+        "realized": "Realized price",
+        "w200": "200-week average",
+        "sth": "Short-term cost basis"
+      },
+      "spalte": {
+        "modell": "Model",
+        "preis": "Reference price",
+        "abstand": "Price vs. it",
+        "rang": "Rank",
+        "seit": "Rank since",
+        "stand": "As of"
+      },
+      "zaehltNicht": "{modell}: not part of the overall value because its history only starts in {datum}. Without a subscription the source provides four years of history, delayed by a week; today's price is compared with the last known cost basis.",
+      "caveat": "The rank places today's price in the past. It does not say where the price is going: in bear markets Bitcoin stayed valued low for months and kept falling. The models are also related — all of them rest on price and cost bases — and the history covers only a few cycles."
+    },
     "etf": {
       "title": "ETF flow (BTC)",
       "fluss": "Daily flow",
@@ -3849,6 +3880,10 @@
         {
           "h": "ETF FLOW (BTC)",
           "p": "How many bitcoin the spot ETFs hold in total and how that changes day by day. The inflow IS the change in holdings — there is no second number for it. Shown in BTC, not dollars: multiplied by the daily price, the \"inflow\" would move on days when not a single share was created. Enlarged, the tile lists the individual funds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) and reports the remainder as \"Other funds\" — the total comes from the source and is never summed up from the individual ones. Requires a CryptoQuant key (the free tier is enough), entered under Settings › Data sources › CryptoQuant. The source only reaches back 30 days; everything older the journal collects itself, so the curve grows over time. A warning triangle next to the 7- or 30-day sum means some days in the window have no value and the sum rests on fewer days. Two extras come from the same source: the daily flow of the Ethereum spot ETFs (in the large view via the BTC/ETH switch, with its own curve and fund table) and the Coinbase premium — the percentage gap between the BTC price on Coinbase and Binance. Above zero, US buyers are pushing; the sign over several days matters, not the single value."
+        },
+        {
+          "h": "BITCOIN VALUATION",
+          "p": "Places the Bitcoin price in its own history. Three reference prices: the realized price (average cost basis of all coins, valued at the price of their last move), the average of the last 200 weeks and the cost basis of short-term holders (coins moved within roughly the last 155 days). For each model the tile shows the reference price, the distance of the price from it and a rank from 0 to 100: on what percentage of days since 2012 the ratio was lower than today. The large number (\"Q18\") is the mean of the ranks with a long history — Q18 means Bitcoin was valued higher on 82 % of days. The short-term holder cost basis is shown alongside and does not count, because without a subscription its history only goes back four years. Price and MVRV come from Coin Metrics (daily values since 2010), the short-term holder cost basis from BGeometrics (delayed by a week); both without a key, both under the switch \"Sources with restricted terms of use\". Data is fetched in the background and everything fetched stays stored. A rank is not a forecast: valued low can stay low for a long time."
         },
         {
           "h": "OVERALL PICTURE (AI)",
