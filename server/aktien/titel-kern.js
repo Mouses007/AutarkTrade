@@ -206,8 +206,65 @@ export function bewegungsFrage({ name, symbol, sprache = 'de' }) {
     return (sprache === 'en'
         ? `What moved the stock ${wer} over the last few days? Name the concrete news with date and figures: earnings, guidance, `
             + 'analyst rating changes, management changes, regulation, deals. Sober and factual, at most 150 words. '
-            + 'No investment advice, no forecasts, no price targets of your own. If there is nothing, say so in one sentence.'
+            + 'Report analyst ratings, price targets and company guidance only as what they are, naming who issued them. '
+            + 'No investment advice, no forecasts of your own, no statement on where the price is going. If there is nothing, say so in one sentence.'
         : `Was hat die Aktie ${wer} in den letzten Tagen bewegt? Nenne die konkreten Meldungen mit Datum und Zahlen: Quartalszahlen, Ausblick, `
             + 'Analysten-Einstufungen, Wechsel im Management, Regulierung, Übernahmen. Nüchtern und faktisch, auf Deutsch, höchstens 150 Wörter. '
-            + 'Keine Anlageberatung, keine Prognosen, keine eigenen Kursziele. Gibt es nichts, sag das in einem Satz.') + hinweis
+            + 'Einstufungen, Kursziele und den Ausblick des Unternehmens nur als das wiedergeben, was sie sind, mit dem Namen dessen, der sie abgegeben hat. '
+            + 'Keine Anlageberatung, keine eigenen Prognosen, keine Aussage dazu, wohin der Kurs geht. Gibt es nichts, sag das in einem Satz.') + hinweis
+}
+
+/*
+ * Die Antwort der Websuche prüfen — rein.
+ *
+ * Bis 16.11.2026 lief sie durch `pruefeEinordnung` des Coin-Radars. Die verwirft
+ * jeden Text mit «Kursziel», «Prognose», «price target», «forecast», «kaufen» oder
+ * «empfehl…» — während die Frage oben ausdrücklich nach Ausblick und Analysten-
+ * Einstufungen fragt. Ein sachlicher Bericht («Bank X hob das Kursziel auf 150»,
+ * «das Unternehmen senkte die Prognose») fiel damit fast sicher durch, bezahlt
+ * und ungesehen.
+ *
+ * Hier gilt: Berichtet ist nicht geraten. Hauptwörter wie Kursziel, Prognose oder
+ * Einstufung sind Nachricht. Gestrichen wird satzweise, was die Seite nicht sagen
+ * darf: ein Rat an den Leser, und eine Kursvorhersage ohne genannten Urheber.
+ * Verworfen wird nur, wenn danach nichts übrig bleibt.
+ *
+ * Grenze: Das sind Wortmuster, kein Verständnis. Eine geschickt formulierte
+ * Vorhersage kann durchgehen; die Karte bleibt deshalb als KI-generiert gezeichnet.
+ */
+const KURSVERB = '(?:steigen|fallen|klettern|sinken|zulegen|nachgeben|anziehen|ausbrechen|einbrechen|erholen|verlieren|gewinnen)'
+const VORHERSAGE_RE = new RegExp(
+    `\\b(?:dürfte[nst]?|wird|werden|könnte[n]?|sollte[n]?)\\s+(?:[^\\s.,;:!?]+\\s+){0,7}?${KURSVERB}\\b`
+    + '|\\b(?:will|is\\s+(?:likely|expected|set|poised)\\s+to|should|could|may|might)\\s+(?:[^\\s.,;:!?]+\\s+){0,3}?'
+    + '(?:rise|fall|rally|drop|climb|decline|surge|slide|rebound|go\\s+(?:up|down)|break\\s+out)\\b', 'i')
+// Wer es gesagt hat: mit einem Urheber ist eine Vorhersage eine Meldung.
+const URHEBER_RE = /analyst|laut\b|zufolge|nach angaben|erwarte[nt]|rechne[nt]\s+mit|prognostizier|schätz(?:t|en)\b|sieht\b|sehen\b|sagte|erklärte|teilte|stufte|according to|expects?\b|estimates?\b|predicts?\b|sees?\b|sa(?:ys|id)\b|management|vorstand|\bceo\b|\bcfo\b|unternehmen|konzern|company|konsens|consensus|\bbank\b|research|broker/i
+const RAT_RE = /\b(?:jetzt|sofort|nun)\s+(?:noch\s+)?(?:kaufen|verkaufen|einsteigen|aussteigen|zugreifen)|\b(?:sollte[nt]?\s+(?:man|anleger|investoren|sie)|(?:anleger|investoren)\s+sollten|(?:ich|wir)\s+(?:empfehle|raten|rate)|empfehlenswert|es\s+empfiehlt\s+sich|lohnt\s+sich|long\s+gehen|short\s+gehen)|\b(?:buy|sell)\s+now|\b(?:you|investors|traders)\s+(?:should|may\s+want\s+to|might\s+want\s+to)|\b(?:i|we)\s+(?:would\s+)?recommend|\bconsider\s+(?:buying|selling)|\bgo\s+(?:long|short)\b|\bworth\s+buying/i
+const BEWEGUNG_MAX = 1500
+
+/**
+ * @returns {{ok: boolean, text: string, gestrichen: number, grund: ''|'leer'|'prognose'|'empfehlung'}}
+ */
+export function pruefeBewegung(roh) {
+    const voll = String(roh ?? '').trim()
+    if (!voll) return { ok: false, text: '', gestrichen: 0, grund: 'leer' }
+    let gestrichen = 0
+    let grund = ''
+    const zeilen = voll.split(/\n/).map((zeile) => {
+        // Nicht nach einer Ziffer trennen: «am 12. November» ist ein Datum, kein Satzende.
+        const saetze = zeile.split(/(?<=[^\d\s][.!?]["»“)\]]?)\s+(?=["«„(\[]?[A-ZÄÖÜ])/)
+        return saetze.filter((satz) => {
+            const rat = RAT_RE.test(satz)
+            const vorhersage = !rat && VORHERSAGE_RE.test(satz) && !URHEBER_RE.test(satz)
+            if (!rat && !vorhersage) return true
+            gestrichen++
+            if (rat || !grund) grund = rat ? 'empfehlung' : 'prognose'
+            return false
+        }).join(' ')
+    })
+    let text = zeilen.filter((z, i) => z.trim() || (i > 0 && zeilen[i - 1].trim())).join('\n').trim()
+    // Übrig gebliebene Aufzählungszeichen und Überschriften allein sind keine Antwort.
+    if (!/[a-zäöü]{3,}[^\n]*\s[^\n]*[a-zäöü]{3,}/i.test(text.replace(/^[\s#*\-–•\d.)]+/gm, ''))) return { ok: false, text: '', gestrichen, grund: grund || 'leer' }
+    if (text.length > BEWEGUNG_MAX) text = `${text.slice(0, BEWEGUNG_MAX).replace(/\s+\S*$/, '')} …`
+    return { ok: true, text, gestrichen, grund: '' }
 }

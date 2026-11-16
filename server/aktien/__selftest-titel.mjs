@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { ausZusammenfassung, kursLinie, bewegungsFrage, zahl, termineAus } from './titel-kern.js'
+import { ausZusammenfassung, kursLinie, bewegungsFrage, pruefeBewegung, zahl, termineAus } from './titel-kern.js'
 
 let n = 0
 const ok = (bed, text) => { assert.ok(bed, text); n++ }
@@ -66,7 +66,26 @@ ok(linie.length <= 502 && linie.at(-1)[0] === 1000 && linie[0][0] === 0, 'Kursli
 ok(kursLinie([{ t: 1, c: 2 }]).length === 1 && kursLinie().length === 0, 'kurze und leere Reihe')
 
 const frage = bewegungsFrage({ name: 'NVIDIA', symbol: 'NVDA' })
-ok(frage.includes('<<<NVIDIA>>> (NVDA)') && /Keine Anlageberatung/.test(frage) && /keine Prognosen/.test(frage), 'Frage ohne Beratung und Prognose')
+ok(frage.includes('<<<NVIDIA>>> (NVDA)') && /Keine Anlageberatung/.test(frage) && /keine eigenen Prognosen/.test(frage) && /mit dem Namen dessen/.test(frage), 'Frage ohne Beratung und eigene Prognose, Urheber verlangt')
 ok(bewegungsFrage({ symbol: 'ASML.AS', sprache: 'en' }).includes('ASML.AS') , 'englische Frage, ohne Namen')
+
+// ── Prüfung der Recherche-Antwort (Beispielantworten NACHGEBAUT, keine echten Perplexity-Antworten) ──
+const bericht = 'Am 12. November meldete CoreWeave Quartalszahlen: Umsatz 1,36 Mrd. USD, über den Erwartungen. Das Unternehmen senkte die Prognose für die Investitionen 2026. Goldman Sachs hob das Kursziel von 130 auf 150 USD und bestätigte die Einstufung «Kaufen». Analysten von JPMorgan erwarten, dass die Aktie nach Ablauf der Haltefrist nachgeben wird.'
+const b1 = pruefeBewegung(bericht)
+ok(b1.ok && b1.gestrichen === 0 && b1.text === bericht, 'sachlicher Bericht mit Kursziel, Prognose des Unternehmens und Analystenstimme geht ganz durch')
+const b2 = pruefeBewegung(`${bericht} Die Aktie dürfte in den nächsten Wochen weiter steigen. Anleger sollten jetzt kaufen.`)
+ok(b2.ok && b2.gestrichen === 2 && b2.text === bericht, 'Vorhersage ohne Urheber und Rat werden gestrichen, der Bericht bleibt')
+ok(b1.text.includes('Am 12. November meldete'), 'Datum «12. November» wird nicht als Satzende getrennt')
+const b3 = pruefeBewegung('Die Aktie wird bald deutlich steigen. Jetzt einsteigen!')
+ok(!b3.ok && b3.grund === 'empfehlung' && b3.gestrichen === 2 && b3.text === '', 'nur Prognose und Rat: verworfen')
+ok(!pruefeBewegung('').ok && pruefeBewegung(null).grund === 'leer' && pruefeBewegung('Die Aktie dürfte steigen.').grund === 'prognose', 'leer und reine Prognose')
+const en = pruefeBewegung('Morgan Stanley raised its price target to $160 and kept its Overweight rating. The company cut its full-year forecast. The stock is likely to rally from here. Investors should buy now.')
+ok(en.ok && en.gestrichen === 2 && en.text.endsWith('full-year forecast.') && en.text.includes('price target'), 'englisch: Bericht bleibt, Vorhersage und Rat fallen')
+ok(pruefeBewegung('According to Citi analysts, the stock could fall further if demand slows.').gestrichen === 0, 'englische Vorhersage mit Urheber ist Meldung')
+const liste = pruefeBewegung('- Quartalszahlen am 12. November über den Erwartungen.\n- Die Aktie könnte jetzt ausbrechen.\n- Der Finanzchef trat am 10. November zurück.')
+ok(liste.ok && liste.gestrichen === 1 && liste.text.split('\n').length === 3 && !/ausbrechen/.test(liste.text), 'Aufzählung: nur der betroffene Punkt fällt')
+ok(pruefeBewegung('In den letzten Tagen gab es keine kursbewegenden Meldungen zu diesem Titel.').ok, '«nichts gefunden» ist eine gültige Antwort')
+const lang = pruefeBewegung('Der Kurs reagierte auf die Zahlen. '.repeat(80))
+ok(lang.ok && lang.text.length <= 1502 && lang.text.endsWith('…'), 'überlange Antwort wird am Wortende gekürzt')
 
 console.log(`✓ Titel-Seite Aktien: ${n} Prüfungen`)

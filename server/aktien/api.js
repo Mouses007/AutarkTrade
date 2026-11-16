@@ -25,14 +25,13 @@ import { gleicheAb, letzterLauf, leseStamm, stammZahlen, HANDELSPLAETZE } from '
 import { chartSymboleAus } from './chart-symbole.js'
 import { holeMarktlage } from './marktlage.js'
 import { aktienKontext } from './kontext.js'
-import { ausZusammenfassung, kursLinie, bewegungsFrage } from './titel-kern.js'
+import { ausZusammenfassung, kursLinie, bewegungsFrage, pruefeBewegung } from './titel-kern.js'
 import { holeZusammenfassung, holeChart, NichtGefunden, Gebremst } from '../newcomer-radar/kursquelle.js'
 import { ladeTitel, namensWarnung } from './titel-stamm.js'
 import { boersengangDatum } from '../newcomer-radar/kursquelle-kern.js'
 import { sendeWennAus, istAus } from '../quellen/aus.js'
 import { ladeLlmConfig, merkeKiGuthaben, istGuthabenFehler } from '../llm.js'
 import { rechercheThema } from '../news-recherche.js'
-import { pruefeEinordnung } from '../coin-radar/einordnung.js'
 import { logWarn } from '../logger.js'
 import { holeEinreichungen, EdgarAbgelehnt, EdgarGebremst } from './edgar.js'
 import { merkeSparte, leseSparten } from './sparte.js'
@@ -130,11 +129,11 @@ async function recherchiereBewegung(ticker, sprache, d) {
         if (istGuthabenFehler(e.message)) await d.merkeKiGuthaben('perplexity', e.message).catch(() => { })
         throw e
     }
-    // Wie überall: keine Prognosen, keine Empfehlungen — auch nicht aus der Websuche.
-    const geprueft = pruefeEinordnung({ text: r.text })
+    // Keine Prognose und kein Rat der Seite selbst; berichtete Einstufungen bleiben (pruefeBewegung).
+    const geprueft = pruefeBewegung(r.text)
     if (!geprueft.ok) return { status: 200, body: { ok: false, grund: 'verworfen', warum: geprueft.grund } }
     const wert = {
-        text: geprueft.text,
+        text: geprueft.text, gestrichen: geprueft.gestrichen,
         quellen: (r.citations || []).filter((u) => /^https?:\/\//.test(u)).slice(0, 12),
         zeit: Date.now(), kiGeneriert: true,
     }

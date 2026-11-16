@@ -466,6 +466,7 @@ const grundText = computed(() => {
                     <Hinweis v-if="bewegungHinweis" art="warn">{{ bewegungHinweis }}</Hinweis>
                     <div v-if="bewegung" data-ki-generiert="true">
                         <p class="bewegungText">{{ bewegung.text }}</p>
+                        <p v-if="bewegung.gestrichen" class="klein">{{ t('titel.bewegungGestrichen', { n: bewegung.gestrichen }) }}</p>
                         <ol v-if="bewegung.quellen?.length" class="quellen">
                             <li v-for="q in bewegung.quellen" :key="q"><a :href="q" target="_blank" rel="noopener noreferrer">{{ host(q) }}</a></li>
                         </ol>
