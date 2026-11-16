@@ -164,7 +164,17 @@ export function ausZusammenfassung(json) {
  * der letzten Quartale (Yahoo nennt vier). Für die Simulation
  * (`shared/aktien-zahlen.js`) und die Spalte im Aktien-Radar.
  *
- * @returns {{naechster: {zeit: number, geschaetzt: boolean}|null, vergangene: number[]}}
+ * `vergangene` bleibt eine Liste nackter Zeitpunkte (Simulation, Engine, Radar
+ * lesen sie so). Was gemeldet wurde, steht daneben in `einzelheiten` — je
+ * Termin ein Eintrag mit demselben Zeitpunkt, für die Karte im Chart. Ein
+ * Termin, zu dem die Quelle weder Gewinn noch Schätzung nennt, hat keinen
+ * Eintrag. Umsatz je Quartal steht in dieser Antwort NICHT
+ * (`earnings.financialsChart` fehlt, geprüft an beiden Fixtures vom
+ * 15.11.2026); für den nächsten Termin nennt sie die Umsatzschätzung.
+ *
+ * @returns {{naechster: {zeit: number, geschaetzt: boolean, epsSchaetzung: number|null, umsatzSchaetzung: number|null}|null,
+ *            vergangene: number[],
+ *            einzelheiten: {zeit: number, quartal: string, eps: number|null, schaetzung: number|null, ueberraschungPct: number|null}[]}}
  * @throws wenn die Antwort keinen Titel enthält
  */
 export function termineAus(json) {
@@ -175,8 +185,14 @@ export function termineAus(json) {
     const t = r.calendarEvents?.earnings
     const zeit = ms(t?.earningsDate?.[0])
     return {
-        naechster: zeit ? { zeit, geschaetzt: t.isEarningsDateEstimate === true } : null,
+        naechster: zeit ? {
+            zeit, geschaetzt: t.isEarningsDateEstimate === true,
+            epsSchaetzung: zahl(t.earningsAverage), umsatzSchaetzung: zahl(t.revenueAverage),
+        } : null,
         vergangene: (r.earnings?.earningsChart?.quarterly || []).map((q) => ms(q.reportedDate)).filter(Boolean).sort((a, b) => a - b),
+        einzelheiten: ertraege(r).filter((q) => q.gemeldet)
+            .map((q) => ({ zeit: q.gemeldet, quartal: q.quartal, eps: q.eps, schaetzung: q.schaetzung, ueberraschungPct: q.ueberraschungPct }))
+            .sort((a, b) => a.zeit - b.zeit),
     }
 }
 

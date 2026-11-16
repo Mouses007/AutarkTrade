@@ -42,6 +42,7 @@ import TextStil from './TextStil.vue'
 import { kiVorschau } from '../../utils/chart/kiZeichnungen.js'
 import { kiVorschauDaten, kiVorschlag, uebernimmKi, verwirfKi } from '../../stores/chartKi.js'
 import TradeKarte from './TradeKarte.vue'
+import ZahlenKarte from './ZahlenKarte.vue'
 import { Symbol, Kreisel, Knopf } from '../basis'
 import InfoTipp from '../InfoTipp.vue'
 import axios from 'axios'
@@ -53,6 +54,8 @@ import { haengeSpaltenAn } from '../../../shared/fernBuch.js'
 import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
 import { AktienEbene } from '../../utils/chart/overlays/AktienEbene.js'
 import { ladeAktienKontext, aktieVon, termineGrundSchluessel } from '../../utils/chart/aktienKontext.js'
+import { zahlenMarken } from '../../utils/chart/sitzungsAbschnitte.js'
+import { researchZiel, researchAdresse } from '../../utils/researchZiel.js'
 import { POC_FEIN_PERIODEN, TF_MS as VV_TF_MS } from '../../utils/chart/vwapVector.js'
 import { benoetigteQuellen, vwapVectorQuellen, vwapVectorSchluessel, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
@@ -363,6 +366,9 @@ function baueChart() {
         const zeichnungDa = fensterKey !== undefined && ebene?.imFenster(fensterKey, () => ebene.trefferTest(p.point.x, p.point.y))?.z
         const ind = !zeichnungDa && zeichner?.instanzBeiSchild(pane, p.point.x, p.point.y)
         if (ind) { emit('indikator', { aktion: 'bearbeiten', id: ind }); return }
+        // Ein Zahlen-Schild (Aktien-Future): die Karte zum Termin. Eine eigene Zeichnung darunter geht vor.
+        const zm = pane === 0 && !zeichnungDa ? aktienEbene?.trefferTest(p.point.x, p.point.y, istTouchGeraet() ? 10 : 3) : null
+        if (zm) { oeffneZahlen(zm, p.point.x, p.point.y); return }
         // Ein Setup oder Trade der Strategie: die Seite zeigt ihn in ihrer Liste.
         const st = instanzEbene?.trefferTest(p.point.x, p.point.y) || null
         if (st) {
@@ -1014,6 +1020,8 @@ function aktienNeu() {
     if (!a || !chart.value || !kerzenSerie.value) {
         aktienEbene?.abbauen()
         aktienEbene = null
+        zahlenTermine.value = null
+        zahlenKarte.value = null
         if (marktHinweise.value.zahlen) hinweis('zahlen', null)
         return
     }
@@ -1034,10 +1042,65 @@ function aktienNeu() {
     aktienEbene.setzeSitzungen(overlayAn('sitzungen'))
     const zahlenAn = overlayAn('zahlen')
     aktienEbene.setzeTermine(zahlenAn ? a.termine : null)
+    zahlenTermine.value = zahlenAn ? a.termine || null : null
+    if (!zahlenTermine.value) zahlenKarte.value = null
     const grund = zahlenAn ? termineGrundSchluessel(a) : null
     if (grund || marktHinweise.value.zahlen) hinweis('zahlen', grund ? t('chart.aktien.termineUnbekannt', { grund: t(grund) }) : null)
 }
-watch(() => [props.panel.symbol, props.panel.markt], () => { ladeAktienKontext(props.panel.symbol) }, { immediate: true })
+
+/*
+ * Karte zu einem Zahlentermin: Klick (oder Tipp) auf sein Schild bzw. den Fuss
+ * seiner Linie. Mit gewähltem Zeichenwerkzeug kommt der Klick gar nicht hier an
+ * (`subscribeClick` oben) — das Werkzeug geht vor. Für Tastatur und
+ * Screenreader stehen dieselben Termine als Knöpfe im Panel (`zahlenTasten`),
+ * sichtbar erst mit Fokus. Zu: ×, Escape, Klick daneben, Symbolwechsel.
+ */
+const zahlenTermine = ref(null)        // was die Ebene gerade zeichnet (null = Schalter aus oder unbekannt)
+const zahlenKarte = ref(null)          // { marke, x, y } im Panel
+let zahlenZu = { zeit: 0, wann: 0 }    // eben geschlossen — derselbe Klick soll sie nicht gleich wieder öffnen
+let zahlenRueckFokus = null            // Knopf, von dem die Tastatur kam — dorthin geht der Fokus beim Schliessen zurück
+// Erst hier, nach den Deklarationen: der Beobachter läuft sofort und schliesst die Karte beim Symbolwechsel.
+watch(() => [props.panel.symbol, props.panel.markt], () => { zahlenKarte.value = null; ladeAktienKontext(props.panel.symbol) }, { immediate: true })
+const zahlenListe = computed(() => (zahlenTermine.value ? zahlenMarken(zahlenTermine.value) : []))
+function oeffneZahlen(marke, x, y) {
+    if (zahlenZu.zeit === marke.zeit && Date.now() - zahlenZu.wann < 400) return
+    kontext.value = null
+    zahlenRueckFokus = null
+    zahlenKarte.value = { marke, x, y }
+}
+function schliesseZahlen(wie) {
+    if (zahlenKarte.value) zahlenZu = { zeit: zahlenKarte.value.marke.zeit, wann: Date.now() }
+    zahlenKarte.value = null
+    // Mit × oder Escape geschlossen: zurück zum Knopf. Nach einem Klick daneben bleibt der Fokus, wo der Klick ihn hinlegt.
+    if (wie !== 'daneben') zahlenRueckFokus?.focus?.()
+    zahlenRueckFokus = null
+}
+/** Von der Tastatur: die Karte steht dann über der Linie des Termins (oder in der Mitte, wenn sie nicht im Bild ist). */
+function oeffneZahlenPerTaste(marke, e) {
+    const el = huelle.value
+    const breite = el?.clientWidth || 600
+    let achseUnten = 0
+    try { achseUnten = chart.value.timeScale().height() } catch { /* ohne Zeitachse */ }
+    const linie = aktienEbene?.marken().find((m) => m.zeit === marke.zeit)?.xLinie
+    const x = linie != null && linie >= 0 && linie <= breite ? linie : breite / 2
+    zahlenZu = { zeit: 0, wann: 0 }
+    oeffneZahlen(marke, x, (el?.clientHeight || 400) - achseUnten - 12)
+    zahlenRueckFokus = e?.currentTarget || null
+}
+const zahlenKarteInfo = computed(() => {
+    const k = zahlenKarte.value
+    const a = aktie.value
+    if (!k || !a) return null
+    const breite = huelle.value?.clientWidth || 600
+    const hoehe = huelle.value?.clientHeight || 400
+    return {
+        marke: k.marke, aktie: a,
+        // Die Schilder stehen am unteren Rand: die Karte wächst vom Klick nach oben.
+        stil: { left: Math.max(8, Math.min(k.x - 20, breite - 278)) + 'px', bottom: Math.max(8, hoehe - k.y + 14) + 'px' },
+        ziel: researchAdresse(researchZiel({ symbol: props.panel.symbol, aktie: a }, appEinstellungen.value)),
+    }
+})
+const zahlenDatum = (ms) => dayjs(ms).tz(tradeZeitzone.value || dayjs.tz.guess()).format('DD.MM.YYYY')
 // Der Aktien-Kontext kommt nach dem Symbol: dann auch die Krypto-Ebenen neu bewerten (sie ruhen bei Aktien).
 watch(aktie, () => { aktienNeu(); ladeLiquidationen(); ladeHebelzonen() })
 
@@ -1419,6 +1482,7 @@ function loescheAuswahl() {
 
 /** Escape: laufende Zeichnung oder Messung verwerfen, sonst Auswahl lösen. */
 function abbrechen() {
+    if (zahlenKarte.value) { schliesseZahlen('taste'); return true }
     if (kiWahl.value) { kiWahl.value = null; return true }
     if (alarmMenue.value) { alarmMenue.value = null; return true }
     if (ebene?.abbrechen()) return true
@@ -2150,6 +2214,16 @@ defineExpose({
             </div>
         </div>
 
+        <!-- Quartalszahlen: dieselben Termine wie die Schilder im Chart, für Tastatur und Screenreader (sichtbar mit Fokus). -->
+        <div v-if="zahlenListe.length" class="zahlenTasten">
+            <button v-for="m in zahlenListe" :key="m.zeit" type="button" @click="oeffneZahlenPerTaste(m, $event)" @mousedown.stop @pointerdown.stop>
+                {{ t(m.kommend ? 'chart.aktien.karte.oeffnenKommend' : 'chart.aktien.karte.oeffnen', { datum: zahlenDatum(m.zeit) }) }}
+            </button>
+        </div>
+        <ZahlenKarte v-if="zahlenKarteInfo" :key="zahlenKarteInfo.marke.zeit" :aktie="zahlenKarteInfo.aktie" :marke="zahlenKarteInfo.marke"
+            :kerzen="kerzen" :intervall-ms="INTERVALL_MS[panel.interval] || 0" :ziel="zahlenKarteInfo.ziel" :style="zahlenKarteInfo.stil"
+            @schliesse="schliesseZahlen" />
+
         <TradeKarte v-if="gewaehlterTrade" :trade="gewaehlterTrade" :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)"
             @schliesse="schliesseTrade" />
 
@@ -2540,6 +2614,43 @@ defineExpose({
     pointer-events: auto;
     background: rgba(0, 0, 0, 0.35);
 }
+/* Zahlentermine als Knöpfe: unsichtbar, bis einer den Fokus hat. */
+.zahlenTasten {
+    position: absolute;
+    left: 8px;
+    bottom: 34px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    pointer-events: none;
+}
+
+.zahlenTasten button {
+    pointer-events: auto;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    padding: 0;
+    border: 0;
+}
+
+.zahlenTasten button:focus-visible {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-klein);
+}
+
 .kiWahl {
     position: absolute;
     z-index: 6;

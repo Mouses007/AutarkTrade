@@ -7,6 +7,9 @@
 import { artDerKerze, sitzungsAbschnitte, zahlenMarken, SITZUNG_BIS_MS } from './chart/sitzungsAbschnitte.js'
 import { OVERLAYS, overlaysFuer, overlayAn } from './chart/overlays/liste.js'
 import { einstiegRegulaer, kerzeBeruehrtRegulaer } from '../../shared/aktien-sitzung.js'
+import { AktienEbene, schildFlaechen, schildTreffer, LINIEN_FUSS } from './chart/overlays/AktienEbene.js'
+import { kursReaktion, zahlenKarteDaten, boersenLage, grosseZahl } from './chart/zahlenKarte.js'
+import { researchZiel, researchAdresse } from './researchZiel.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -182,6 +185,130 @@ console.log('Chart und Schalter «nur reguläre Sitzung» (FUN-H-005, RAS-05)')
     check('ab 1d: der Chart hinterlegt nichts, der Schalter ist nicht anwendbar',
         sitzungsAbschnitte([Date.UTC(2026, 7, 12)], 24 * H).length === 0 && einstiegRegulaer(Date.UTC(2026, 7, 12), 24 * H).anwendbar === false)
 }
+
+console.log('Zahlen-Schilder: Flächen und Treffer')
+{
+    const G = { width: 800, height: 400 }
+    const messe = (text) => text.length * 6
+    const marke = (zeit, xLinie, o = {}) => ({ zeit, kommend: false, geschaetzt: false, tage: null, xLinie, ...o })
+    const text = (m) => (m.kommend ? 'Zahlen in 3 Tagen' : 'Zahlen')
+    const a = marke(1, 100), b = marke(2, 400), k = marke(3, 1200, { kommend: true, geschaetzt: true, tage: 3 })
+    const fl = schildFlaechen([a, b, k], G, text, messe)
+    check('drei Schilder; der kommende Termin rechts ausserhalb steht am Rand mit Pfeil',
+        fl.length === 3 && fl[0].m === k && fl[0].text.endsWith('→') && fl[0].x + fl[0].b === G.width - 4, JSON.stringify(fl.map((f) => [f.text, f.x, f.b])))
+    const fa = fl.find((f) => f.m === a)
+    check('Schild steht rechts der Linie, 16 hoch, 12 über dem Rand', fa.x === 104 && fa.y === 388 && fa.b === 46)
+    check('Treffer mitten im Schild', schildTreffer(fl, [a, b], 120, 388, 400) === a)
+    check('knapp daneben mit Zugabe: Treffer, ohne Zugabe: keiner',
+        schildTreffer(fl, [a, b], fa.x + fa.b + 9, 388, 400, 10) === a && schildTreffer(fl, [a, b], fa.x + fa.b + 9, 388, 400, 3) === null)
+    check('über dem Schild (mitten im Chart): kein Treffer', schildTreffer(fl, [a, b], 120, 200, 400) === null)
+    check('Fuss der Linie zählt, links vom Schild', schildTreffer(fl, [a, b], 98, 400 - LINIEN_FUSS + 2, 400) === a)
+    check('dieselbe Linie weiter oben: kein Treffer', schildTreffer(fl, [a, b], 100, 400 - LINIEN_FUSS - 5, 400) === null)
+    check('unter zwei nahen Linien gewinnt die nähere', schildTreffer([], [marke(7, 300), marke(8, 304)], 303, 395, 400) .zeit === 8)
+    check('kein Zahlenwert: kein Treffer', schildTreffer(fl, [a, b], NaN, 388, 400) === null && schildTreffer(null, null, 1, 1, 400) === null)
+    // Eng: zwei vergangene Termine dicht beieinander — der jüngere behält das Schild, die Linie des älteren bleibt anklickbar
+    const c = marke(5, 300), d = marke(6, 320)
+    const eng = schildFlaechen([c, d], G, text, messe)
+    check('eng: nur der jüngere Termin hat ein Schild', eng.length === 1 && eng[0].m === d)
+    check('eng: die Linie des älteren trifft trotzdem', schildTreffer(eng, [c, d], 299, 395, 400) === c)
+    check('vergangener Termin rechts ausserhalb: kein Schild', schildFlaechen([marke(9, 900)], G, text, messe).length === 0)
+    check('Schild am rechten Rand weicht nach links aus', (() => { const f = schildFlaechen([marke(9, 780)], G, text, messe)[0]; return f.x + f.b === 776 })())
+
+    // Die Ebene selbst, mit Attrappen für Chart und Leinwand: nach dem Zeichnen trifft der Klick
+    const H1 = 3_600_000, T0 = Date.UTC(2026, 7, 24)
+    const kerzen = Array.from({ length: 100 }, (_, i) => ({ t: T0 + i * H1 }))
+    const zeitachse = { logicalToCoordinate: (L) => L * 8, getVisibleLogicalRange: () => ({ from: 0, to: 99 }) }
+    const serie = { attachPrimitive() {}, detachPrimitive() {} }
+    const ebene = new AktienEbene({ chart: { timeScale: () => zeitachse }, serie, farben: { zahlen: '#fff', grund: '#000' },
+        texte: { zahlen: 'Zahlen', heute: 'heute', morgen: 'morgen', inTagen: (n) => `in ${n}`, voraussichtlich: 'vsl.' } })
+    const ctx = new Proxy({ measureText: (t) => ({ width: t.length * 6 }) }, { get: (o, n) => (n in o ? o[n] : () => {}), set: () => true })
+    ebene.setzeKerzen(kerzen, H1)
+    const termin = T0 + 50 * H1 + 20 * 60_000
+    check('vor dem Zeichnen und ohne Termine: kein Treffer', ebene.trefferTest(400, 388) === null && ebene.hitTest(400, 388) === null)
+    ebene.setzeTermine({ naechster: null, vergangene: [termin] })
+    ebene.oben(ctx, G)
+    const f0 = ebene.flaechen[0]
+    check('gezeichnet: ein Schild an der Linie des Termins', ebene.flaechen.length === 1 && f0.m.zeit === termin && Math.abs(f0.x - 4 - ebene.linien[0].xLinie) < 1)
+    const tr = ebene.trefferTest(f0.x + 5, f0.y)
+    check('Treffer liefert die Marke (Zeit, kommend, geschätzt, Tage)', tr && tr.zeit === termin && tr.kommend === false && tr.geschaetzt === false && tr.tage === null)
+    check('Mauszeiger über dem Schild: Zeiger', ebene.hitTest(f0.x + 5, f0.y)?.cursorStyle === 'pointer' && ebene.hitTest(f0.x + 5, 100) === null)
+    ebene.setzeTermine(null)
+    check('Zahlen ausgeschaltet: kein Treffer mehr, auch vor dem nächsten Bild', ebene.trefferTest(f0.x + 5, f0.y) === null)
+}
+
+console.log('Zahlen-Karte: Angaben und Kursreaktion')
+{
+    const H1 = 3_600_000, TAG = 24 * H1
+    // Mittwoch 26.8.2026, Meldung 16:20 New Yorker Zeit (20:20 UTC, Sommerzeit)
+    const termin = Date.UTC(2026, 7, 26, 20, 20)
+    check('16:20 New York: nachbörslich', boersenLage(termin) === 'nach')
+    check('08:00 New York: vorbörslich; 12:00: regulär', boersenLage(Date.UTC(2026, 7, 26, 12)) === 'vor' && boersenLage(Date.UTC(2026, 7, 26, 16)) === 'regulaer')
+    check('Mitternacht oder Samstag: keine Aussage', boersenLage(Date.UTC(2026, 7, 26, 4)) === null && boersenLage(Date.UTC(2026, 7, 29, 15)) === null && boersenLage(NaN) === null)
+
+    const von = Date.UTC(2026, 7, 24), jetzt = Date.UTC(2026, 8, 5)
+    const stunden = Array.from({ length: 24 * 7 }, (_, i) => ({ t: von + i * H1, c: 100 }))
+    // Schluss vor dem Termin: Kerze 19:00–20:00 → 100; Kerze, in der das Fenster endet (Do 20:00–21:00) → 110
+    const iVor = stunden.findIndex((k) => k.t === Date.UTC(2026, 7, 26, 19))
+    const iNach = stunden.findIndex((k) => k.t === Date.UTC(2026, 7, 27, 20))
+    stunden[iVor].c = 100; stunden[iVor + 1].c = 140; stunden[iNach].c = 110; stunden[iNach + 1].c = 55
+    const r = kursReaktion(stunden, termin, H1, jetzt)
+    check('1h: Schluss vor der Meldung → Schluss am Fensterende = +10 %', r && r.vorher === 100 && r.nachher === 110 && Math.abs(r.pct - 10) < 1e-9, JSON.stringify(r))
+    check('…mit den Schlusszeiten beider Kerzen', r.von === Date.UTC(2026, 7, 26, 20) && r.bis === Date.UTC(2026, 7, 27, 21))
+    check('die Kerze, in der die Meldung fällt, ist nicht «vorher»', r.vorher !== 140)
+    check('Fenster noch nicht zu Ende: nichts', kursReaktion(stunden, termin, H1, termin + 3 * H1) === null)
+    check('Kerzen beginnen erst nach dem Termin: nichts', kursReaktion(stunden.slice(iVor + 2), termin, H1, jetzt) === null)
+    check('Kerzen enden vor dem Fensterende: nichts', kursReaktion(stunden.slice(0, iNach - 3), termin, H1, jetzt) === null)
+    check('letzte Kerze enthält das Fensterende: zählt', kursReaktion(stunden.slice(0, iNach + 1), termin, H1, jetzt)?.nachher === 110)
+    const mitLuecke = stunden.filter((k) => k.t < termin - 6 * TAG || k.t > termin)
+    check('Lücke vor dem Termin (älter als vier Tage): nichts', kursReaktion([{ t: termin - 9 * TAG, c: 90 }, ...mitLuecke], termin, H1, jetzt) === null)
+    check('Wochenkerzen: nichts', kursReaktion(stunden, termin, 7 * TAG, jetzt) === null)
+    check('leer oder ohne Zeit: nichts', kursReaktion([], termin, H1, jetzt) === null && kursReaktion(stunden, NaN, H1, jetzt) === null && kursReaktion(null, termin, H1, jetzt) === null)
+    const tage = Array.from({ length: 10 }, (_, i) => ({ t: Date.UTC(2026, 7, 20 + i), c: 100 + i }))
+    const rt = kursReaktion(tage, termin, TAG, jetzt)
+    check('1d: Schluss des Vortags → Schluss des Tags, in dem das Fenster endet', rt && rt.von === Date.UTC(2026, 7, 26) && rt.bis === Date.UTC(2026, 7, 28) && rt.vorher === 105 && rt.nachher === 107, JSON.stringify(rt))
+
+    const termine = {
+        naechster: { zeit: termin + 90 * TAG, geschaetzt: true, epsSchaetzung: 2.47, umsatzSchaetzung: 108_731_903_900 },
+        vergangene: [termin - 98 * TAG, termin],
+        einzelheiten: [{ zeit: termin, quartal: '2Q2026', eps: 2.22, schaetzung: 2.09, ueberraschungPct: 6.16 }],
+    }
+    const verg = zahlenKarteDaten({ zeit: termin, kommend: false, geschaetzt: false, tage: null }, termine, { kerzen: stunden, iv: H1, jetzt })
+    check('vergangener Termin: Quartal, Gewinn je Aktie, Schätzung, Überraschung, Lage, Reaktion',
+        verg.hatEinzelheiten && verg.quartal === '2Q2026' && verg.eps === 2.22 && verg.schaetzung === 2.09 && verg.ueberraschungPct === 6.16 && verg.lage === 'nach' && Math.abs(verg.reaktion.pct - 10) < 1e-9)
+    const alt = zahlenKarteDaten({ zeit: termin - 98 * TAG, kommend: false, geschaetzt: false, tage: null }, termine, { kerzen: stunden, iv: H1, jetzt })
+    check('Termin ohne Einzelheit: sagt es (hatEinzelheiten false), nichts erfunden', alt.hatEinzelheiten === false && alt.eps === null && alt.quartal === null && alt.reaktion === null)
+    const komm = zahlenKarteDaten({ zeit: termin + 90 * TAG, kommend: true, geschaetzt: true, tage: 80 }, termine, { kerzen: stunden, iv: H1, jetzt })
+    check('kommender Termin: geschätzt, EPS- und Umsatzschätzung, keine Reaktion',
+        komm.kommend && komm.geschaetzt && komm.tage === 80 && komm.schaetzung === 2.47 && komm.umsatzSchaetzung === 108_731_903_900 && komm.reaktion === null && komm.eps === null && komm.hatEinzelheiten)
+    // Stand eines älteren Servers: nur Zeitpunkte
+    const altStand = { naechster: { zeit: termin + 90 * TAG, geschaetzt: false }, vergangene: [termin] }
+    const k2 = zahlenKarteDaten({ zeit: termin + 90 * TAG, kommend: true, geschaetzt: false, tage: 80 }, altStand)
+    const v2 = zahlenKarteDaten({ zeit: termin, kommend: false, geschaetzt: false, tage: null }, altStand)
+    check('alter gemerkter Stand ohne Einzelheiten: bricht nichts, Karte sagt «keine Zahlen»', k2.hatEinzelheiten === false && k2.schaetzung === null && v2.hatEinzelheiten === false && v2.reaktion === null)
+    check('Termine ganz unbekannt: bricht nichts', zahlenKarteDaten({ zeit: termin, kommend: false }, null).hatEinzelheiten === false)
+    check('Umsatz kurz: Mrd., Mio., klein, unbekannt',
+        grosseZahl(108_731_903_900).einheit === 'mrd' && Math.abs(grosseZahl(108_731_903_900).wert - 108.7319039) < 1e-6 && grosseZahl(950e6).einheit === 'mio' && grosseZahl(500).einheit === '' && grosseZahl(null) === null)
+}
+
+console.log('Absprung «Im Research öffnen»')
+{
+    const aktien = { modusAktienAn: 1, aktiverMarkt: 'aktien', modusResearchAn: 1 }
+    const krypto = { modusAktienAn: 1, aktiverMarkt: 'krypto', modusResearchAn: 1 }
+    const z = researchZiel({ symbol: 'ACNSTOCKUSDT', aktie: { ticker: 'ACN' } }, aktien)
+    check('Aktien-Future: Titel-Seite mit dem Ticker aus dem Kontext, nicht aus dem Symbol', z?.art === 'aktie' && z.path === '/aktien' && z.query.titel === 'ACN')
+    check('Adresse für den Router ohne das Feld «art»', JSON.stringify(researchAdresse(z)) === '{"path":"/aktien","query":{"titel":"ACN"}}' && researchAdresse(null) === null)
+    const c = researchZiel({ symbol: 'btcusdt', aktie: null }, krypto)
+    check('Coin: Einzelprüfung im Coin-Radar', c?.art === 'coin' && c.path === '/coin-radar' && c.query.symbol === 'BTCUSDT')
+    check('Coin ohne Aktien-Teil (Vorgabe) und mit noch nicht geladenen Einstellungen: Ziel da',
+        researchZiel({ symbol: 'ETHUSDT' }, { modusResearchAn: 1 })?.art === 'coin' && researchZiel({ symbol: 'ETHUSDT' }, null)?.art === 'coin')
+    check('Research ausgeschaltet: kein Ziel', researchZiel({ symbol: 'BTCUSDT' }, { ...krypto, modusResearchAn: 0 }) === null
+        && researchZiel({ symbol: 'NVDAUSDT', aktie: { ticker: 'NVDA' } }, { ...aktien, modusResearchAn: 0 }) === null)
+    check('Coin im Aktien-Markt (kein Coin-Radar dort): kein Ziel', researchZiel({ symbol: 'BTCUSDT', aktie: null }, aktien) === null)
+    check('Aktie ohne brauchbaren Ticker oder Aktien-Teil aus: kein Ziel',
+        researchZiel({ symbol: 'NVDAUSDT', aktie: { ticker: '' } }, aktien) === null && researchZiel({ symbol: 'NVDAUSDT', aktie: { ticker: 'NVDA' } }, { modusResearchAn: 1, modusAktienAn: 0 }) === null)
+    check('kein Symbol oder Sonderzeichen: kein Ziel', researchZiel({ symbol: '' }, krypto) === null && researchZiel({ symbol: 'BTC/USDT?x=1' }, krypto) === null && researchZiel(undefined, krypto) === null)
+}
+
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 process.exit(fehlgeschlagen ? 1 : 0)

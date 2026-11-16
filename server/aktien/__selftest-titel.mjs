@@ -56,8 +56,21 @@ ok(d.eigentum === null || d.eigentum.insider.length === 0, 'ältere Antwort ohne
 const te = termineAus(roh)
 ok(te.naechster.zeit === Date.UTC(2026, 10, 17, 21, 0) && te.naechster.geschaetzt === false, 'nächster Termin mit Uhrzeit')
 ok(te.vergangene.length === 4 && te.vergangene[0] === Date.UTC(2025, 10, 19, 21, 20) && te.vergangene[3] === Date.UTC(2026, 7, 26, 20, 20), 'vier vergangene Termine, aufsteigend')
+// Einzelheiten je Termin für die Karte im Chart — aus derselben Antwort, `vergangene` bleibt ein Zahlen-Array
+ok(te.vergangene.every((z) => typeof z === 'number'), '`vergangene` bleibt eine Liste nackter Zeitpunkte')
+ok(te.einzelheiten.length === 4 && te.einzelheiten.every((e, i) => e.zeit === te.vergangene[i]), 'je vergangenem Termin eine Einzelheit, gleicher Zeitpunkt')
+const e0 = te.einzelheiten[0]
+ok(e0.quartal === '3Q2025' && e0.eps === 1.3 && Math.abs(e0.schaetzung - 1.25647) < 1e-9 && e0.ueberraschungPct === 3.46, 'Quartal, Gewinn je Aktie, Schätzung, Überraschung in %')
+ok(Math.abs(te.naechster.epsSchaetzung - 2.47121) < 1e-9 && te.naechster.umsatzSchaetzung === 108731903900, 'nächster Termin: EPS- und Umsatzschätzung')
+ok(roh.quoteSummary.result[0].earnings.financialsChart === undefined && !('umsatz' in e0), 'Umsatz je Quartal steht nicht in der Antwort — wird nicht erfunden')
+const halb = termineAus({ quoteSummary: { result: [{ calendarEvents: { earnings: { earningsDate: [{ raw: 1794949200 }] } }, earnings: { earningsChart: { quarterly: [
+    { date: '1Q2026', reportedDate: { raw: 1779308400 } },
+    { date: '2Q2026', reportedDate: { raw: 1787775600 }, actual: { raw: 2 }, estimate: { raw: 0 }, surprisePct: '' },
+] } } }] } })
+ok(halb.vergangene.length === 2 && halb.einzelheiten.length === 1 && halb.einzelheiten[0].ueberraschungPct === null, 'Termin ohne Zahlen: Zeitpunkt bleibt, keine Einzelheit; leere Überraschung = null')
+ok(halb.naechster.epsSchaetzung === null && halb.naechster.umsatzSchaetzung === null, 'Schätzungen fehlen: null, nicht 0')
 const ohneTermin = termineAus({ quoteSummary: { result: [{ price: {} }] } })
-ok(ohneTermin.naechster === null && ohneTermin.vergangene.length === 0, 'ETF ohne Termine: leer, kein Fehler')
+ok(ohneTermin.naechster === null && ohneTermin.vergangene.length === 0 && ohneTermin.einzelheiten.length === 0, 'ETF ohne Termine: leer, kein Fehler')
 assert.throws(() => termineAus({}), /leere Antwort/); n++
 
 const kerzen = Array.from({ length: 1001 }, (_, i) => ({ t: i, c: i }))

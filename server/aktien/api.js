@@ -6,7 +6,7 @@
  *   GET  /api/aktien/stamm/stand      Zahlen und letzter Lauf dieses Prozesses
  *   POST /api/aktien/stamm/abgleich   jetzt abgleichen (liest nur öffentliche Listen)
  *   GET  /api/aktien/chart-symbole    Aktien, deren Kerzen der Chart laden kann (Symbol je Börse)
- *   GET  /api/aktien/kontext?symbol=  ist das Symbol ein Aktien-Future? Ticker, Name, Börse und Zahlentermine
+ *   GET  /api/aktien/kontext?symbol=  ist das Symbol ein Aktien-Future? Ticker, Name, Börse und Zahlentermine (mit Einzelheiten je Termin)
  *                                     für den Chart (`{ aktie: null }` = Coin)
  *   GET  /api/aktien/marktlage        Umfeld für Aktien: Index gegen 200-Tage-Linie, VIX, Sektoren, Zinsen,
  *                                     Dollar, Breite im eigenen Feld (Yahoo, 30 min im Speicher)
@@ -188,8 +188,13 @@ export function setupAktienRoutes(app) {
                     symbol, ticker: k.ticker, name: k.name, boerse: k.boerse,
                     // null = unbekannt (Quelle aus, Abruf gescheitert) — der Grund steht daneben
                     termine: k.termine ? {
-                        naechster: k.termine.naechster ? { zeit: k.termine.naechster.zeit, geschaetzt: k.termine.naechster.geschaetzt === true } : null,
+                        naechster: k.termine.naechster ? {
+                            zeit: k.termine.naechster.zeit, geschaetzt: k.termine.naechster.geschaetzt === true,
+                            epsSchaetzung: k.termine.naechster.epsSchaetzung ?? null, umsatzSchaetzung: k.termine.naechster.umsatzSchaetzung ?? null,
+                        } : null,
                         vergangene: k.termine.vergangene || [],
+                        // Was je Termin gemeldet wurde (Karte im Chart). Fehlt bei einem Stand, der vor dieser Fassung gemerkt wurde.
+                        einzelheiten: Array.isArray(k.termine.einzelheiten) ? k.termine.einzelheiten : [],
                     } : null,
                     termineGrund: k.termine ? null : (k.termineGrund || 'abrufFehlgeschlagen'),
                 },

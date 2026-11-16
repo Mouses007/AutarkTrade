@@ -10,6 +10,9 @@
  * Ganz unten: Börsenlinks (BX, BG, PX untereinander) für das Symbol des aktiven
  * Charts — nur wo der Coin als USDT-Perpetual gelistet ist und die Börse unter
  * „Börsenlinks" in den Einstellungen aktiviert ist (wie in der Watchlist).
+ * Darüber «Im Research öffnen»: bei einem Aktien-Future die Titel-Seite, bei
+ * einem Coin die Einzelprüfung im Coin-Radar (`utils/researchZiel.js`) — nur
+ * bei eingeschaltetem Research-Bereich und wenn es im aktiven Markt ein Ziel gibt.
  */
 import { ref, computed } from 'vue'
 import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js'
@@ -20,6 +23,8 @@ import { WERKZEUGE } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { Symbol } from '../basis'
 import { macheRueckgaengig, macheWiederholen, verlaufStand } from '../../stores/chartZeichnungen.js'
 import { fadenkreuzTouch, istTouchGeraet, autoSperre } from '../../stores/chartBedienung.js'
+import { aktieVon } from '../../utils/chart/aktienKontext.js'
+import { researchZiel, researchAdresse } from '../../utils/researchZiel.js'
 
 const props = defineProps({
     symbol: { type: String, default: '' },
@@ -64,6 +69,12 @@ ladeHandelbar()
 const boersen = computed(() => {
     const aktiv = aktivierteBoersen(appEinstellungen.value?.boersenLinks)
     return boersenFuerSymbol(props.symbol, props.markt).filter((b) => aktiv.includes(b.id))
+})
+
+/** Absprung in den Research-Bereich für das Symbol des aktiven Panels — null = kein Knopf. */
+const research = computed(() => {
+    const ziel = researchZiel({ symbol: props.symbol, aktie: aktieVon({ symbol: props.symbol, markt: props.markt }) }, appEinstellungen.value)
+    return ziel ? { adresse: researchAdresse(ziel), titel: t(ziel.art === 'aktie' ? 'chart.researchTitel' : 'chart.researchCoin', { name: ziel.query.titel || ziel.query.symbol }) } : null
 })
 
 const SCHLUESSEL = 'chartWerkzeugeOffen'
@@ -134,8 +145,12 @@ function umschalten() {
             <Symbol name="muell" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.alleLoeschen') }}</span>
         </button>
-        <div v-if="boersen.length" class="boersen">
+        <div v-if="boersen.length || research" class="boersen">
             <hr />
+            <router-link v-if="research" class="w research" :to="research.adresse" :title="research.titel" :aria-label="research.titel">
+                <Symbol name="suche" class="zeichen" />
+                <span v-if="offen" class="name">{{ t('chart.researchOeffnen') }}</span>
+            </router-link>
             <a v-for="b in boersen" :key="b.id" class="w boerse" :class="b.id" :href="b.url" target="_blank" rel="noopener"
                 :title="t('chart.watchlistBoerse', { boerse: b.name })" :aria-label="t('chart.watchlistBoerse', { boerse: b.name })">
                 <span class="kurz zeichen">{{ b.kurz }}</span>
@@ -242,7 +257,8 @@ hr {
     width: 100%;
 }
 
-.boerse {
+.boerse,
+.research {
     text-decoration: none;
 }
 

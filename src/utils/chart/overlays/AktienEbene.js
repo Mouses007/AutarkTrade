@@ -11,7 +11,10 @@
  *                    danach, wie in der Simulation) als schwache Fläche, unten
  *                    ein Schild. Der nächste Termin ist gestrichelt, solange er
  *                    geschätzt ist; liegt er rechts ausserhalb des Bilds, steht
- *                    sein Schild am rechten Rand.
+ *                    sein Schild am rechten Rand. Ein Klick auf ein Schild
+ *                    (oder den Fuss der Linie) öffnet im Panel die Karte zum
+ *                    Termin — die Ebene liefert dafür nur den Treffer
+ *                    (`trefferTest`), die Karte zeichnet `ZahlenKarte.vue`.
  *
  * Die Ebene wird nur für Aktien-Futures angelegt — ein Coin-Chart hat sie nicht.
  * Unbekannte Termine (`null`) zeichnen nichts.
@@ -49,6 +52,9 @@ export class AktienEbene {
         this.merkerIv = 0
         this.abschnitte = []
         this.zukunft = 0             // so viele gedachte Kerzen rechts sind in `abschnitte` enthalten
+        this.flaechen = []           // zuletzt gezeichnete Schilder [{m, text, x, y, b}] — für `trefferTest`
+        this.linien = []             // zuletzt gezeichnete Linien (Marken mit `xLinie` im Bild)
+        this.hoehe = 0
         this.requestUpdate = () => {}
         const ansicht = (z, fn) => ({
             zOrder: () => z,
@@ -78,7 +84,11 @@ export class AktienEbene {
         this.requestUpdate()
     }
     /** `{naechster, vergangene}` — null = unbekannt oder ausgeschaltet. */
-    setzeTermine(termine) { this.termine = termine || null; this.requestUpdate() }
+    setzeTermine(termine) {
+        this.termine = termine || null
+        if (!this.termine) { this.flaechen = []; this.linien = [] }
+        this.requestUpdate()
+    }
 
     /** Abschnitte neu bilden, samt `zukunft` gedachten Kerzen rechts der letzten. */
     rechne(zukunft = this.zukunft) {
@@ -159,30 +169,16 @@ export class AktienEbene {
     }
 
     oben(ctx, groesse) {
+        this.flaechen = []
+        this.linien = []
+        this.hoehe = groesse.height
         if (!this.termine || !this.zeiten.length) return
         ctx.save()
         ctx.font = SCHRIFT
         ctx.textBaseline = 'middle'
-        const y = groesse.height - 12
-        const schilder = []
-        for (const m of this.marken()) {
-            if (m.xLinie == null || m.xLinie < -1) continue
-            const draussen = m.xLinie > groesse.width - 4
-            // Rechts ausserhalb zeigt nur der kommende Termin ein Schild — mit Pfeil, am Rand.
-            if (draussen && !m.kommend) continue
-            const text = this.schildText(m) + (draussen ? ' →' : '')
-            const b = ctx.measureText(text).width + 10
-            let x = draussen ? groesse.width - b - 4 : Math.round(m.xLinie) + 4
-            // Passt das Schild rechts der Linie nicht mehr ins Bild, steht es links davon.
-            if (!draussen && x + b > groesse.width - 2) x = Math.round(m.xLinie) - b - 4
-            schilder.push({ m, text, x, b })
-        }
-        // Wird es eng, gewinnt der kommende Termin, danach der jeweils jüngere.
-        schilder.sort((p, q) => (q.m.kommend - p.m.kommend) || (q.m.zeit - p.m.zeit))
-        const belegt = []
-        for (const { m, text, x, b } of schilder) {
-            if (belegt.some(([von, bis]) => x < bis + 4 && x + b > von - 4)) continue
-            belegt.push([x, x + b])
+        const marken = this.marken()
+        const schilder = schildFlaechen(marken, groesse, (m) => this.schildText(m), (text) => ctx.measureText(text).width)
+        for (const { m, text, x, y, b } of schilder) {
             ctx.globalAlpha = 0.9
             ctx.fillStyle = this.farben.grund
             ctx.fillRect(x, y - 8, b, 16)
@@ -196,5 +192,82 @@ export class AktienEbene {
             ctx.fillText(text, x + 5, y + 0.5)
         }
         ctx.restore()
+        // Für die Trefferabfrage: was eben gezeichnet wurde — Schilder und die Linien im Bild.
+        this.flaechen = schilder
+        this.linien = marken.filter((m) => m.xLinie != null && m.xLinie >= -1 && m.xLinie <= groesse.width + 1)
     }
+
+    /**
+     * Welcher Termin liegt unter dem Punkt (Pixel im Kursfenster)? Erst die
+     * Schilder, dann der Fuss einer Linie. Gilt für das zuletzt gezeichnete Bild.
+     * @param {number} [spiel]  Zugabe um das Schild in Pixeln (Finger brauchen mehr)
+     * @returns {{zeit: number, kommend: boolean, geschaetzt: boolean, tage: number|null}|null}
+     */
+    trefferTest(x, y, spiel = 3) {
+        if (!this.termine) return null
+        const m = schildTreffer(this.flaechen, this.linien, x, y, this.hoehe, spiel)
+        return m ? { zeit: m.zeit, kommend: m.kommend, geschaetzt: m.geschaetzt, tage: m.tage } : null
+    }
+
+    /** Lightweight Charts fragt hier nach dem Mauszeiger: über einem Schild die Hand. */
+    hitTest(x, y) {
+        const m = this.trefferTest(x, y)
+        return m ? { cursorStyle: 'pointer', externalId: 'zahlen:' + m.zeit, zOrder: 'normal' } : null
+    }
+}
+
+/** Höhe des Streifens am unteren Rand, in dem auch die Linie selbst als Treffer zählt. */
+export const LINIEN_FUSS = 26
+
+/**
+ * Wo die Schilder stehen. Rein — `messe(text)` liefert die Textbreite in Pixeln.
+ * Wird es eng, gewinnt der kommende Termin, danach der jeweils jüngere; ein
+ * verdrängtes Schild fehlt in der Liste (seine Linie bleibt anklickbar).
+ *
+ * @param {{zeit: number, kommend: boolean, geschaetzt: boolean, xLinie: number|null}[]} marken
+ * @param {{width: number, height: number}} groesse
+ * @returns {{m: object, text: string, x: number, y: number, b: number}[]}  `y` = Mitte, Höhe 16
+ */
+export function schildFlaechen(marken, groesse, textVon, messe) {
+    const y = groesse.height - 12
+    const schilder = []
+    for (const m of marken) {
+        if (m.xLinie == null || m.xLinie < -1) continue
+        const draussen = m.xLinie > groesse.width - 4
+        // Rechts ausserhalb zeigt nur der kommende Termin ein Schild — mit Pfeil, am Rand.
+        if (draussen && !m.kommend) continue
+        const text = textVon(m) + (draussen ? ' →' : '')
+        const b = messe(text) + 10
+        let x = draussen ? groesse.width - b - 4 : Math.round(m.xLinie) + 4
+        // Passt das Schild rechts der Linie nicht mehr ins Bild, steht es links davon.
+        if (!draussen && x + b > groesse.width - 2) x = Math.round(m.xLinie) - b - 4
+        schilder.push({ m, text, x, y, b })
+    }
+    schilder.sort((p, q) => (q.m.kommend - p.m.kommend) || (q.m.zeit - p.m.zeit))
+    const aus = []
+    for (const s of schilder) {
+        if (aus.some((o) => s.x < o.x + o.b + 4 && s.x + s.b > o.x - 4)) continue
+        aus.push(s)
+    }
+    return aus
+}
+
+/**
+ * Treffer auf ein Schild (mit `spiel` Pixeln Zugabe) oder auf den Fuss einer
+ * Linie (unterste `LINIEN_FUSS` Pixel, ±(spiel + 2) um die Linie). Rein.
+ * Schilder gehen vor; unter mehreren Linien gewinnt die nächste.
+ * @returns {object|null}  die Marke
+ */
+export function schildTreffer(flaechen, linien, x, y, hoehe, spiel = 3) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+    for (const f of flaechen || []) {
+        if (x >= f.x - spiel && x <= f.x + f.b + spiel && y >= f.y - 8 - spiel && y <= f.y + 8 + spiel) return f.m
+    }
+    if (!(hoehe > 0) || y < hoehe - LINIEN_FUSS || y > hoehe) return null
+    let best = null
+    for (const m of linien || []) {
+        const d = Math.abs(x - m.xLinie)
+        if (d <= spiel + 2 && (!best || d < best.d)) best = { m, d }
+    }
+    return best ? best.m : null
 }

@@ -9,7 +9,8 @@
  *
  * Stand je Symbol: `undefined` = noch nicht gefragt, `null` = Coin (oder die
  * Frage liess sich nicht beantworten), sonst
- * `{symbol, ticker, name, boerse, termine: {naechster, vergangene}|null, termineGrund}`.
+ * `{symbol, ticker, name, boerse, termine: {naechster, vergangene, einzelheiten}|null, termineGrund}`
+ * (`einzelheiten` = was je vergangenem Termin gemeldet wurde, für `ZahlenKarte.vue`).
  * `termine: null` heisst UNBEKANNT — der Grund steht daneben.
  */
 import { reactive } from 'vue'

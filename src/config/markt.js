@@ -37,7 +37,7 @@ export function modusImMarkt(modusId, markt) {
 }
 
 /** Ist die Seite unter dieser Adresse in diesem Markt erreichbar (Markt, Modus und Seiten-Schalter)? */
-function erreichbar(pfad, markt, einstellungen) {
+export function erreichbar(pfad, markt, einstellungen) {
     const seite = PAGES.find((p) => p.path === pfad)
     if (!seite || !seiteImMarkt(seite, markt)) return false
     if (seite.mode && !istModusAn(seite.mode, einstellungen)) return false

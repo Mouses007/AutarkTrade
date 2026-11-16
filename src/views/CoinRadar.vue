@@ -1025,7 +1025,7 @@ import Symbol from '@/components/basis/Symbol.vue'
  * Was die Seite ausdrücklich NICHT behauptet: wohin ein Kurs geht. Sie misst
  * einen Zustand.
  */
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
 import { sichereUrl } from '../utils/sanitize.js'
 import { useRoute, useRouter } from 'vue-router'
@@ -1980,7 +1980,26 @@ async function huerdenUmschalten() {
     sortAb.value = ziel
 }
 
+/*
+ * `/coin-radar?symbol=BTCUSDT` (Absprung «Im Research öffnen» aus dem Chart,
+ * `utils/researchZiel.js`): das Symbol steht dann in der Einzelprüfung und wird
+ * gemessen — dasselbe wie Eintippen und «Messen»: öffentliche Marktdaten, kein
+ * Lauf, keine Tiefensuche, keine KI. Nur auf dem Reiter Rangliste (dort steht
+ * die Einzelprüfung).
+ */
+const symbolAusAdresse = () => String(route.query.symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 30)
+async function messeAusAdresse() {
+    const symbol = symbolAusAdresse()
+    if (!symbol || reiter.value !== 'rangliste') return
+    epEingabe.value = symbol
+    await epMessen()
+    await nextTick()
+    epKarte.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+watch(() => route.query.symbol, (neu, alt) => { if (neu && neu !== alt) messeAusAdresse() })
+
 onMounted(async () => {
+    messeAusAdresse()
     await Promise.all([ladeZeilen(), ladeEinstellungen(), ladeFavoriten(), ladeLaeufe()])
 })
 
