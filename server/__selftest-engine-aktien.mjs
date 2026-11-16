@@ -685,12 +685,11 @@ console.log('\nAktien-Modus aus: Aktien-Instanz setzt aus, offene Positionen wer
     }
 }
 
-// ── 5c. Wartungsmarge: der Hebel der Position, nicht der global gedeckelte (RAS-07) ──
-console.log('\nWartungsmarge bei globalem Hebel-Deckel (RAS-07)')
+// ── 5c. Globaler Hebel-Deckel: gebucht wird mit dem gedeckelten Hebel (RAS-07, Entscheid 16.11.2026) ──
+console.log('\nGlobaler Hebel-Deckel in der Papierbuchung (RAS-07)')
 {
-    // Instanz 50×, Deckel 20×: die Papier-Position wird mit 50× gebucht (Marge 2 %), der Deckel begrenzt nur die Grösse.
-    // Die Wartungsmarge muss deshalb nach 50× gedeckelt bleiben (1 %). Nach dem Vorschlag aus dem Review (20× → 2,5 %)
-    // läge sie über der Anfangsmarge, und die Position wäre auf einer flachen Kerze sofort liquidiert.
+    // Instanz 50×, Deckel 20×: die Papier-Position steht mit 20× (Marge 5 %), die Wartungsmarge folgt (2,5 %).
+    // Bis 16.11.2026 begrenzte der Deckel nur die Grösse, gebucht wurde mit 50× (Marge 2 %).
     const D = Date.UTC(2026, 10, 10, 16)
     await leeren()
     await knex('settings').where('id', 1).update({ strategyMaxLeverage: 20 })
@@ -700,15 +699,25 @@ console.log('\nWartungsmarge bei globalem Hebel-Deckel (RAS-07)')
     await knex('strategy_setups').insert(setup('NVDAUSDT', D, { stopLoss: 96, takeProfit: 108 }))
     await engine.tick()
     const eroeffnet = await knex('strategy_positions').where('instanceId', 60).first()
+    pruefe('Instanz 50×, Deckel 20×: die Position steht mit dem gedeckelten Hebel (20×, Marge 5 %)',
+        Number(eroeffnet?.leverage) === 20 && nah(eroeffnet.marginUsdt, Number(eroeffnet.notionalUsdt) / 20, 1e-6), `Hebel ${eroeffnet?.leverage}, Marge ${eroeffnet?.marginUsdt}`)
     engine.resetSymbolCache()
     globalThis.__engineMarkt = markt(D + 3 * H)
     await engine.tick()
-    const p = await knex('strategy_positions').where('instanceId', 60).first()
-    const tr = await knex('strategy_trades').where('instanceId', 60).first()
-    pruefe('Instanz 50×, Deckel 20×: die Position steht mit dem Hebel der Instanz (50×, Marge 2 %)',
-        Number(eroeffnet?.leverage) === 50 && nah(eroeffnet.marginUsdt, Number(eroeffnet.notionalUsdt) / 50, 1e-6), `Hebel ${eroeffnet?.leverage}, Marge ${eroeffnet?.marginUsdt}`)
-    pruefe('…und bleibt auf flachen Kerzen offen: Wartungsmarge nach 50× gedeckelt (1 %), keine Sofort-Liquidation',
+    let p = await knex('strategy_positions').where('instanceId', 60).first()
+    let tr = await knex('strategy_trades').where('instanceId', 60).first()
+    pruefe('…und bleibt auf flachen Kerzen offen: keine Sofort-Liquidation',
         !tr && p?.status === 'open' && Number(p.lastCandleTime) === D + 2 * H, `Trade ${tr?.exitReason} @ ${tr?.exitPrice}, Stand ${p?.lastCandleTime}`)
+    // Altbestand: eine Position, die noch mit 50× gebucht wurde (Marge 2 %), überlebt den Deckel 20× —
+    // die Wartungsmarge richtet sich nach dem Hebel der offenen Position (1 %), nicht nach dem Deckel (2,5 %).
+    await knex('strategy_positions').where('id', p.id).update({ leverage: 50, marginUsdt: Number(p.notionalUsdt) / 50 })
+    engine.resetSymbolCache()
+    globalThis.__engineMarkt = markt(D + 5 * H)
+    await engine.tick()
+    p = await knex('strategy_positions').where('instanceId', 60).first()
+    tr = await knex('strategy_trades').where('instanceId', 60).first()
+    pruefe('Altbestand mit 50× bei Deckel 20×: bleibt offen, Wartungsmarge nach dem Hebel der Position',
+        !tr && p?.status === 'open' && Number(p.lastCandleTime) === D + 4 * H, `Trade ${tr?.exitReason} @ ${tr?.exitPrice}, Stand ${p?.lastCandleTime}`)
     await knex('settings').where('id', 1).update({ strategyMaxLeverage: 25 })
 }
 

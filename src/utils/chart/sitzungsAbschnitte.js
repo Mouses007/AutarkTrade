@@ -29,26 +29,28 @@ export const ART = { vor: 'rand', nach: 'rand', nacht: 'nacht', wochenende: 'zu'
 export const ARTEN = ['rand', 'nacht', 'zu']
 
 /**
- * Art der Fläche hinter einer Kerze — `null`, wenn sie die reguläre Sitzung berührt.
- * Welche Sitzungen eine Kerze überdeckt, sagt `sitzungenDerKerze` — dieselbe
- * Zählung, mit der Backtest und Engine den Schalter «nur reguläre Sitzung»
- * entscheiden (`einstiegRegulaer`, FUN-H-005). Der Schalter ist strenger: er
- * verlangt für ein Limit in der Kerze mindestens die Hälfte in der Sitzung
- * (RAS-05). Jede Kerze, die er zulässt, ist hier frei — nicht umgekehrt.
+ * Art der Fläche hinter einer Kerze — `null`, wenn sie mindestens zur Hälfte
+ * in der regulären Sitzung liegt. Dieselbe Regel wie der Schalter «nur
+ * reguläre Sitzung» für ein Limit in der Kerze (`einstiegRegulaer`, RAS-05):
+ * was hier frei bleibt, lässt der Schalter zu, was hinterlegt ist, sperrt er.
+ * Bis 16.11.2026 genügte es, dass die Kerze die Sitzung berührte — auf 4h
+ * stand dann eine Kerze frei, in der kein Einstieg erlaubt war.
+ * Ausserhalb gilt die Sitzung, in der die Kerze am längsten liegt.
  * @param {number} t      Öffnungszeit in ms
  * @param {number} ivMs   Kerzenlänge in ms
  * @returns {'rand'|'nacht'|'zu'|null}
  */
 export function artDerKerze(t, ivMs) {
+    const liste = sitzungenDerKerze(t, ivMs)
     const zahl = {}
-    let beste = null
-    for (const sitzung of sitzungenDerKerze(t, ivMs)) {
+    let beste = null, regulaer = 0
+    for (const sitzung of liste) {
         const art = ART[sitzung]
-        if (!art) return null
+        if (!art) { regulaer++; continue }
         zahl[art] = (zahl[art] || 0) + 1
         if (!beste || zahl[art] > zahl[beste]) beste = art
     }
-    return beste
+    return 2 * regulaer >= liste.length ? null : beste
 }
 
 /**

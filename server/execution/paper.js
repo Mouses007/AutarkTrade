@@ -65,12 +65,15 @@ export async function getPaperEquity(instance) {
  * Setup läuft in den Unique-Konflikt und öffnet keine zweite Position. Das ist
  * dieselbe Idempotenz-Zusage wie später im Live-Pfad.
  */
-export async function openPaperPosition({ instance, setup, size, entryPrice, entryTime, costs, clientOrderId, abKerze = null }) {
+export async function openPaperPosition({ instance, setup, size, entryPrice, entryTime, costs, clientOrderId, abKerze = null, leverage = null }) {
     const knex = getKnex()
 
     const pos = createPosition({
         setup, qty: size.qty, entryPrice, entryTime,
-        leverage: instance.risk.leverage, costs,
+        // `leverage`: der wirksame Hebel (Instanz, gedeckelt durch `strategyMaxLeverage`).
+        // Bis 16.11.2026 begrenzte der Deckel nur die Grösse; gebucht wurde mit dem
+        // Hebel der Instanz, also mit dessen kleiner Marge und naher Liquidation.
+        leverage: Number(leverage) > 0 ? Number(leverage) : instance.risk.leverage, costs,
     })
 
     const datensatz = {

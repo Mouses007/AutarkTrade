@@ -270,11 +270,10 @@ export function sitzungenDerKerze(t, ivMs) {
 }
 
 /**
- * Berührt die Kerze die reguläre Sitzung? Die Regel des Charts
- * (`src/utils/chart/sitzungsAbschnitte.js`): eine Kerze, die die Eröffnung
- * enthält (1h ab 09:00, 4h ab 12:00 UTC), gehört zur regulären Sitzung.
- * Der Schalter «nur reguläre Sitzung» ist STRENGER (`einstiegRegulaer`): dort
- * muss die Kerze mindestens zur Hälfte in der Sitzung liegen.
+ * Berührt die Kerze die reguläre Sitzung? (1h ab 09:00, 4h ab 12:00 UTC.)
+ * Weder der Chart noch der Schalter «nur reguläre Sitzung» entscheiden noch
+ * danach: beide verlangen, dass die Kerze mindestens zur Hälfte in der
+ * Sitzung liegt (`einstiegRegulaer`, `artDerKerze` im Chart).
  */
 export function kerzeBeruehrtRegulaer(t, ivMs) {
     return sitzungenDerKerze(t, ivMs).includes('regulaer')

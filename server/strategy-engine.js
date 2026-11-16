@@ -666,13 +666,11 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         partialTpPct: p.partialTpPct,
         // Wartungsmarge je Symbol (0 in der Instanz = von der Börse holen),
         // damit Papierbetrieb und Backtest denselben Liquidationspreis rechnen.
-        // Der Hebel der INSTANZ, nicht der global gedeckelte: die Papier-Position
-        // wird mit `instance.risk.leverage` gebucht (`openPaperPosition`), der
-        // Deckel `strategyMaxLeverage` begrenzt nur die Grösse. Mit dem
-        // gedeckelten Hebel (Vorschlag aus Review RAS-07) läge die Wartungsmarge
-        // eines Aktien-Futures über der Anfangsmarge der Position — Instanz 50×,
-        // Deckel 20×: 2,5 % gegen 2 % — und sie wäre sofort liquidiert (FUN-H-002).
-        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: instance.risk.leverage }),
+        // Der WIRKSAME Hebel (Instanz, gedeckelt durch `strategyMaxLeverage`): mit ihm
+        // wird die Papier-Position seit 16.11.2026 auch gebucht (`openPaperPosition`).
+        // Vorher begrenzte der Deckel nur die Grösse, und die Wartungsmarge eines
+        // Aktien-Futures musste dem Hebel der Instanz folgen (Review RAS-07).
+        maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: Math.min(instance.risk.leverage, schalter.maxLeverage) }),
     })
 
     // ── 2. Erkennen ──────────────────────────────────────────────────────
@@ -1064,7 +1062,7 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     if (sameBarStop) {
         const eroeff = await openPaperPosition({
             instance, setup, size, entryPrice: einstiegsPreis(setup, ausloeseKerze),
-            entryTime: now, costs, clientOrderId,
+            entryTime: now, costs, clientOrderId, leverage: risk.leverage,
         }).catch(() => ({ ok: false }))
         if (!eroeff.ok) return beenden('reject_risk', 'duplicate_order', '')
         const zeile = await knex('strategy_positions').where('id', eroeff.positionId).first()
@@ -1092,7 +1090,7 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     let eroeffnet
     try {
         eroeffnet = await openPaperPosition({
-            instance, setup, size,
+            instance, setup, size, leverage: risk.leverage,
             // Eine Stop-Order füllt zur Eröffnung, wenn die Kerze schon
             // jenseits des Niveaus aufmacht — siehe `einstiegsPreis`.
             entryPrice: einstiegsPreis(setup, ausloeseKerze),
@@ -1229,6 +1227,12 @@ async function regelnZumArchiv(knex, row) {
  * Ziel, kein Break-Even mehr. Ein Not-Aus, der laufende Ausstiege stoppt,
  * wäre das Gegenteil von Sicherheit.
  */
+/** Höchster Hebel der offenen Positionen einer Instanz auf einem Symbol; ohne Angabe der Hebel der Instanz. */
+async function hoechsterHebelOffen(knex, instanceId, symbol, sonst) {
+    const z = await knex('strategy_positions').where({ instanceId, symbol, status: 'open' }).max({ h: 'leverage' }).first()
+    return Number(z?.h) > 0 ? Number(z.h) : sonst
+}
+
 async function pflegeOffenePositionen() {
     const knex = getKnex()
     const zeilen = await knex('strategy_positions')
@@ -1288,8 +1292,11 @@ async function pflegeOffenePositionen() {
                 maxHoldMs: ((instance.params.maxHoldCandles ?? regeln?.maxHoldCandles ?? 0) || 0) * timeframeMs(pflegeTf),
                 partialTpR: instance.params.partialTpR,
                 partialTpPct: instance.params.partialTpPct,
-                // Hebel der Instanz — mit ihm ist die Position gebucht (siehe `verarbeiteSymbol`).
-                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: instance.risk.leverage }),
+                // Der Hebel, mit dem die offenen Positionen gebucht SIND (der höchste, falls sie
+                // sich unterscheiden: Altbestand mit dem Hebel der Instanz neben neuen mit dem
+                // Deckel). Der höchste ergibt die kleinste Wartungsmarge — eine alte Position
+                // wird so nie allein deshalb liquidiert, weil der Deckel später gesenkt wurde.
+                maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct, { aktie: Boolean(aktie), hebel: await hoechsterHebelOffen(knex, instance.id, symbol, instance.risk.leverage) }),
             })
         } catch (e) {
             // Ohne Marktdaten steht es schon einmal bei der Instanz im Log (`ausGemeldet`).

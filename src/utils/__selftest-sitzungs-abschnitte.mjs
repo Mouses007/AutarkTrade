@@ -157,24 +157,22 @@ console.log('\nOverlay-Liste: Coins sehen die Aktien-Ebenen nicht')
 console.log('Chart und Schalter «nur reguläre Sitzung» (FUN-H-005, RAS-05)')
 {
     // Drei Wochen samt Zeitumstellung (1.11.2026) und Thanksgiving, jede Zeiteinheit bis 4h
-    // Der Chart hinterlegt nach «berührt», der Schalter verlangt für ein Limit in der Kerze
-    // mindestens die Hälfte in der Sitzung (RAS-05): was er zulässt, ist im Chart frei — nicht umgekehrt.
+    // Chart und Schalter haben dieselbe Regel: eine Kerze ist frei, wenn sie mindestens zur Hälfte
+    // in der regulären Sitzung liegt (RAS-05, Chart nachgezogen am 16.11.2026).
     let abweichung = ''
     let geprueft = 0
-    let freiAberGesperrt = 0
     for (const iv of [5 * MIN, 15 * MIN, 30 * MIN, H, 2 * H, 4 * H]) {
         for (let t = Date.UTC(2026, 9, 26); t < Date.UTC(2026, 10, 30); t += iv) {
-            const frei = artDerKerze(t, iv) === null
             geprueft++
-            const zugelassen = einstiegRegulaer(t, iv, 'kerze').regulaer
-            if (frei && !zugelassen) freiAberGesperrt++
-            // bis 30 Minuten hat eine Kerze genau eine Sitzung: dort sind beide Regeln dieselbe
-            if ((zugelassen && !frei) || frei !== kerzeBeruehrtRegulaer(t, iv) || (iv <= 30 * MIN && frei !== zugelassen)) { abweichung = `${new Date(t).toISOString()} ${iv / MIN}m`; break }
+            if ((artDerKerze(t, iv) === null) !== einstiegRegulaer(t, iv, 'kerze').regulaer) { abweichung = `${new Date(t).toISOString()} ${iv / MIN}m`; break }
         }
     }
-    check(`was der Schalter zulässt, hinterlegt der Chart nicht; bis 30 Minuten sind beide Regeln gleich (${geprueft} Kerzen)`, !abweichung, abweichung)
-    check('ab 1h ist der Schalter strenger: es gibt freie Kerzen, die er sperrt (4h Winter 07–11, 15–19)', freiAberGesperrt > 0
-        && artDerKerze(Date.UTC(2026, 10, 11, 20), 4 * H) === null && !einstiegRegulaer(Date.UTC(2026, 10, 11, 20), 4 * H, 'kerze').regulaer, `${freiAberGesperrt}`)
+    check(`frei im Chart = vom Schalter zugelassen, auf jeder Zeiteinheit bis 4h (${geprueft} Kerzen)`, !abweichung, abweichung)
+    // 4h im Winter (UTC−5): 07–11 und 15–19 New York berühren die Sitzung nur, 11–15 liegt ganz darin
+    check('4h Winter: 15–19 Uhr New York ist hinterlegt, obwohl die Kerze die Sitzung berührt; 11–15 ist frei',
+        artDerKerze(Date.UTC(2026, 10, 11, 20), 4 * H) === 'rand' && kerzeBeruehrtRegulaer(Date.UTC(2026, 10, 11, 20), 4 * H)
+        && artDerKerze(Date.UTC(2026, 10, 11, 16), 4 * H) === null && artDerKerze(Date.UTC(2026, 10, 11, 12), 4 * H) !== null)
+    check('1h ab 09:00 New York (halb vorbörslich, halb regulär) bleibt frei', artDerKerze(Date.UTC(2026, 10, 11, 14), H) === null)
     check('ab 1d: der Chart hinterlegt nichts, der Schalter ist nicht anwendbar',
         sitzungsAbschnitte([Date.UTC(2026, 7, 12)], 24 * H).length === 0 && einstiegRegulaer(Date.UTC(2026, 7, 12), 24 * H).anwendbar === false)
 }
