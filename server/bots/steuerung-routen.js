@@ -39,13 +39,21 @@ import { istTestbetrieb } from '../testbetrieb.js'
 import { logWarn, logInfo } from '../logger.js'
 import { fehlerText } from '../boersen-status.js'
 import { holeBot, holeLaufendeBots, vergesseBot } from './routen.js'
-import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, pruefGrund, sucheMindestEinsatz, rundeEinsatzAuf, minAusPruefung, reduzierAusPruefung, STEUERBAR } from './steuerung.js'
+import { zahl as strengeZahl, baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, pruefGrund, sucheMindestEinsatz, rundeEinsatzAuf, minAusPruefung, reduzierAusPruefung, STEUERBAR } from './steuerung.js'
 import { pionexSpotSymbole } from './pionex-kerzen.js'
 import { PLAN_ID, planBot, pruefePlanEingabe, pruefePlanVariante } from './planer.js'
 import { fetchTickerPrice } from '../pionex-api.js'
 import { FASSUNG, einwilligungsText, einwilligungsTeile, hakenText, warnung, fassungHash, hakenHash, zustimmungGueltig, hakenGueltig } from './einwilligung.js'
 
 const TOKEN_MS = 5 * 60_000
+/** Aktionen, die bei einer Wiederholung doppelt wirken (zweiter Bot, doppelter Betrag, doppelter Verkauf). */
+const DOPPELBAR = new Set(['starten', 'investieren', 'margeDazu', 'reduzieren'])
+/** So lange nach einer unklaren Sendung keine doppelbare Aktion an denselben Bot. */
+const UNKLAR_SPERRE_MS = 10 * 60_000
+/** Erlaubte Abweichung der frei werdenden Investition zwischen Prüfen und Senden (Anteil). */
+const REDUZIER_TOLERANZ = 0.02
+/** Prüfantwort → Schätzungen, oder null, wenn Pionex die Prüfung nicht (mehr) besteht. */
+const pruefungBestandenUndDaten = (antwort) => (pruefungBestanden(antwort) ? reduzierAusPruefung(antwort?.data) : null)
 let SPERRE_MS = 10_000
 let PRUEF_PAUSE_MS = 3_000
 let NACHLESEN_MS = 2_500
@@ -241,6 +249,10 @@ function fehlerAntwort(res, e) {
 }
 
 export function setupBotSteuerungRoutes(app) {
+    // Eine Zeile «laeuft» von vor diesem Start gehört zu einem Prozess, der nicht mehr lebt: ihr Ausgang ist unklar
+    getKnex()('bot_aenderungen').where('zustand', 'laeuft').update({ zustand: 'unklar' })
+        .then((n) => { if (n) logWarn('bots', `${n} Sendung(en) ohne Abschluss aus einem früheren Lauf als «unklar» markiert`) })
+        .catch(() => { /* Tabelle noch nicht da: nichts zu markieren */ })
     app.get('/api/bots/steuerung', async (req, res) => {
         try {
             const z = await zeile()
@@ -383,7 +395,8 @@ export function setupBotSteuerungRoutes(app) {
             // (maxReduceNum) nennt; die umgerechnete Eingabe geht an den Browser zurück und wird so gesendet.
             let stueck
             if (aktion === 'reduzieren' && eingabe.reduceNum == null) {
-                const zahlAus = (v) => Number(String(v ?? '').replace(',', '.'))
+                // strenge Dezimalschreibweise wie überall in der Steuerung (Audit SEC-04/STG-07: «0x19», «2.5e1»)
+                const zahlAus = (v) => { const n = strengeZahl(v); return n == null ? NaN : n }
                 // Eingabe wahlweise als Anteil in % oder als frei werdende Investition in der Margin-Münze
                 const inBetrag = eingabe.einheit === 'betrag'
                 const anteil = inBetrag ? null : zahlAus(eingabe.anteil)
@@ -406,9 +419,12 @@ export function setupBotSteuerungRoutes(app) {
                 let schritte
                 if (inBetrag) {
                     if (!(jeSchritt > 0)) return res.status(400).json({ ok: false, code: 'betragUnbekannt' })
-                    if (wunsch > jeSchritt * (max + 0.5)) return res.status(400).json({ ok: false, code: 'betragZuGross', max: Number((jeSchritt * max).toFixed(2)) })
-                    schritte = Math.min(max, Math.round(wunsch / jeSchritt))
-                    if (schritte < 1) return res.status(400).json({ ok: false, code: 'betragZuKlein', schritt: Number(jeSchritt.toFixed(2)) })
+                    // Münzgerecht nennen: 2 Stellen reichen für USDT, bei Coin-M (Schritt 0.004 SOL) stünde «0» da
+                    const nenne = (x, ab) => (bot.marginCoin === 'USDT' ? Number((ab ? Math.floor(x * 100 + 1e-9) / 100 : x).toFixed(2)) : Number(x.toPrecision(4)))
+                    if (wunsch > jeSchritt * max * 1.001) return res.status(400).json({ ok: false, code: 'betragZuGross', max: nenne(jeSchritt * max, true) })
+                    // ABrunden: beim Betrag nie mehr verkaufen als verlangt (bis 15.11.2026 gerundet: 5.76 → 7.68)
+                    schritte = Math.min(max, Math.floor(wunsch / jeSchritt + 1e-9))
+                    if (schritte < 1) return res.status(400).json({ ok: false, code: 'betragZuKlein', schritt: nenne(jeSchritt) })
                 } else if (teil) {
                     // Audit FUN-R-105: nie stillschweigend auf einen Schritt aufrunden
                     if (anteil / 100 > teil * (max + 0.5)) return res.status(400).json({ ok: false, code: 'anteilZuGross', max: Number((teil * max * 100).toFixed(1)) })
@@ -491,6 +507,33 @@ export function setupBotSteuerungRoutes(app) {
                 return res.status(409).json({ ok: false, code: 'neuPruefen' })
             }
             const th = sha(t)
+            // Audit STG-02: nach einer Sendung mit unklarem Ausgang (Zeitlimit, 5xx) kann Pionex ausgeführt haben.
+            // Wer dann neu prüft und sendet, verdoppelt Start, Investition, Marge oder Verkauf — der Einmal-Token
+            // schützt nur denselben Token. Deshalb für diese Aktionen eine Wartezeit, bis der Stand bei Pionex klar ist.
+            if (DOPPELBAR.has(a.aktion)) {
+                const letzte = await getKnex()('bot_aenderungen').where('botId', bot.id).whereIn('zustand', ['unklar', 'laeuft', 'ausgefuehrt', 'abgelehnt']).orderBy('id', 'desc').first('zustand', 'zeit', 'aktion')
+                if (letzte && ['unklar', 'laeuft'].includes(letzte.zustand) && Date.now() - Number(letzte.zeit) < UNKLAR_SPERRE_MS) {
+                    await protokolliere({ botId: bot.id, aktion: a.aktion, ok: false, zustand: 'abgewiesen', code: 'unklarOffen' })
+                    return res.status(409).json({ ok: false, code: 'unklarOffen', minuten: Math.ceil((UNKLAR_SPERRE_MS - (Date.now() - Number(letzte.zeit))) / 60_000) })
+                }
+            }
+            // Audit STG-01: der Token bindet bei «Reduzieren» nur die Zahl der Schritte, nicht was ein Schritt
+            // bedeutet. Füllt sich zwischen Prüfen und Senden ein Grid oder ändert sich die Investition, verkaufte
+            // derselbe Körper eine andere Menge als angezeigt. Darum unmittelbar vor dem Senden nochmals fragen
+            // und gegen die geprüften Werte halten.
+            let sollNachher = a.nachher
+            if (a.aktion === 'reduzieren') {
+                const geprueft = reduzierAusPruefung(pruefungen.get(th)?.pruefung?.data)
+                const jetzt = pruefungBestandenUndDaten(await frage(k, a.pruefen.pfad, a.pruefen.body))
+                const gleich = (x, y) => x != null && y != null && Math.abs(x - y) <= Math.max(Math.abs(x), Math.abs(y)) * REDUZIER_TOLERANZ
+                if (!geprueft || !jetzt || geprueft.max !== jetzt.max || !gleich(geprueft.einsatz, jetzt.einsatz)) {
+                    await protokolliere({ botId: bot.id, aktion: a.aktion, ok: false, zustand: 'abgewiesen', code: 'neuPruefen' })
+                    return res.status(409).json({ ok: false, code: 'neuPruefen' })
+                }
+                // Soll für den Vergleich nach dem Senden (Audit STG-03): die Investition sinkt um das Freigegebene
+                const heute = Number(bot.einsatz?.aktuell)
+                if (Number.isFinite(heute) && jetzt.einsatz > 0) sollNachher = { ...a.nachher, einsatz: Number((heute - jetzt.einsatz).toFixed(6)) }
+            }
             const vorher = { einstellung: einstellungVon(bot), kurs: bot.kurs, kennzahlen: bot.kennzahlen }
             // Einmal-Token: die Zeile mit eindeutigem Hash entsteht VOR dem Senden.
             let zeileId
@@ -537,7 +580,7 @@ export function setupBotSteuerungRoutes(app) {
             if (s.zustand === 'ausgefuehrt') logInfo('bots', meldung)
             else logWarn('bots', meldung)
             res.json({
-                ok: s.zustand === 'ausgefuehrt', zustand: s.zustand, soll: a.nachher, ist,
+                ok: s.zustand === 'ausgefuehrt', zustand: s.zustand, soll: sollNachher, ist,
                 antwort: { result: s.antwort?.result ?? null, message: s.text || s.antwort?.message || null, data: s.antwort?.data || null },
                 ...(protokollFehler ? { protokollFehler: true } : {}),
             })

@@ -605,3 +605,19 @@ export function planSystemText({ alle = false } = {}) {
         `Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage für diesen Bot", "vorschlaege": [{"id": "${alle ? 'L3' : 'P3'}", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}`,
     ].join('\n')
 }
+
+/**
+ * Freies Guthaben einer Münze aus Pionex' Kontostand (`balances[] = {coin, free, frozen}`), ABGERUNDET auf
+ * die Stellen, die ein Einsatz haben darf (USDT 2, eine Coin 6) — aufgerundet wäre es mehr, als da ist.
+ * Nur `free`: was in offenen Orders oder Bots steckt, lässt sich nicht einsetzen. Rein.
+ */
+export function freiesGuthaben(balances, coin) {
+    const c = String(coin || '').toUpperCase()
+    if (!c || !Array.isArray(balances)) return null
+    const z = balances.find((b) => String(b?.coin || '').toUpperCase() === c)
+    const frei = Number(z?.free)
+    if (!z || !Number.isFinite(frei) || frei < 0) return z ? null : 0
+    const stellen = c === 'USDT' ? 2 : 6
+    const f = 10 ** stellen
+    return Math.floor(frei * f + 1e-9) / f
+}

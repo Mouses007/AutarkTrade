@@ -61,7 +61,11 @@ p('Hinweis liquidiert, keine Lage-Hinweise', ks.hinweise.includes('liquidiert') 
 
 console.log('Beendeter Coin-M-Bot')
 const kn = kennzahlen(neutral, {})
-p('Coin-M beendet: Gewinn aus der Marge', nahe(kn.gewinn.gesamt, neutral.einsatz.marge - (neutral.einsatz.aktuell + (neutral.einsatz.extraMarge || 0))))
+// Audit STG-04: entnommener Gewinn steckt nicht mehr in der Marge, gehört aber zum Ergebnis.
+// Gegenprobe an Pionex' eigenen Feldern: totalRealizedProfit + totalFee + totalFundingFee.
+p('Coin-M beendet: Gewinn aus der Marge plus entnommener Gewinn', nahe(kn.gewinn.gesamt, neutral.einsatz.marge - (neutral.einsatz.aktuell + (neutral.einsatz.extraMarge || 0)) + (neutral.ergebnis.entnommen || 0)))
+p('… und das ist Pionex\' Zahl (Gewinn + Gebühren + Funding)', neutral.ergebnis.entnommen > 0 && Math.abs(kn.gewinn.gesamt - (neutral.ergebnis.gesamt + neutral.ergebnis.gebuehren + neutral.ergebnis.funding)) < 1e-6, `${kn.gewinn.gesamt} / ${neutral.ergebnis.gesamt + neutral.ergebnis.gebuehren + neutral.ergebnis.funding}`)
+p('beendetes Spot-Grid: Ergebnis unbekannt, nicht −100 %', gewinn({ typ: 'spot_grid', laufend: false, einsatz: { basis: 10, marge: 0 }, ergebnis: { gridGewinn: 0.3 } }, null).gesamt === null)
 
 console.log('Bausteine')
 const l = lageImBand(150, 100, 200)

@@ -114,5 +114,14 @@ p('laufender Coin-M-Bot ja', kiMoeglich(bot))
 p('beendeter Bot nein', !kiMoeglich({ ...bot, laufend: false }))
 p('Cross-Margin nein', !kiMoeglich({ ...bot, typ: 'cross_margin_grid' }))
 
+console.log('Planer «alle Richtungen»: einer je Richtung vor dem Deckel (Audit PLN-04)')
+{
+    const kand = ['L1', 'L2', 'L3', 'S1', 'N1'].map((id) => ({ id, titel: id, variante: {}, richtung: { L: 'LONG', S: 'SHORT', N: 'NEUTRAL' }[id[0]] }))
+    const antwort = { lage: '', vorschlaege: kand.map((c) => ({ id: c.id, titel: 'x', begruendung: 'b', risiko: 'r', passtNichtWenn: 'p' })) }
+    const g = pruefeKiAntwort(antwort, { kandidaten: kand, gruppe: (c) => c.richtung })
+    p('L1,L2,L3,S1,N1 → L1, S1, N1', g.vorschlaege.map((v) => v.id).join() === 'L1,S1,N1', g.vorschlaege.map((v) => v.id).join())
+    p('ohne Gruppe bleibt der alte Deckel: die ersten drei', pruefeKiAntwort(antwort, { kandidaten: kand }).vorschlaege.map((v) => v.id).join() === 'L1,L2,L3')
+}
+
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)
 process.exit(fehl ? 1 : 0)

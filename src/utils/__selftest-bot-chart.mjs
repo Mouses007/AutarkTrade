@@ -38,6 +38,8 @@ p('„immer“-Linie kommt auch von weit her auf die Achse', s3.innen(50))
 p('ohne Preise → null', chartSkala([], [], {}) === null)
 p('flache Kerzen: Spanne aus 5 % des Kurses', chartSkala([100, 100], [{ wert: 101 }]).innen(101))
 
+{ const f = chartSkala([100, 100], [], {}); p('eine flache Kerze: Achse hat eine Spanne', f.hi > f.lo) }
+
 console.log('Abstand')
 p('−19.8 %', nahe(abstandProzent(0.721878, 0.8999), (0.721878 / 0.8999 - 1) * 100))
 p('ohne Kurs → null', abstandProzent(1, 0) === null && abstandProzent(null, 1) === null)

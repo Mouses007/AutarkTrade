@@ -121,6 +121,13 @@ try {
     p('Zeitüberschreitung → zustand unklar, ok false', s3.d.zustand === 'unklar' && s3.d.ok === false)
     const zeileUnklar = await knex('bot_aenderungen').where({ zustand: 'unklar' }).first()
     p('im Protokoll als „unklar", nicht als abgelehnt', !!zeileUnklar && !zeileUnklar.ok)
+    // Audit STG-02: nach «unklar» keine zweite Sendung derselben Art, bis der Stand bei Pionex klar sein kann
+    const entsperre = () => knex('bot_aenderungen').whereIn('zustand', ['unklar', 'laeuft']).update({ zeit: Date.now() - 11 * 60_000 })
+    pionex.modus = 'ok'
+    const vorSperre = pionex.sendungen
+    const gesperrt = await sende((await pruefe()).token)
+    p('gleich nach «unklar»: 409 unklarOffen mit Wartezeit, nichts gesendet, als abgewiesen protokolliert', gesperrt.status === 409 && gesperrt.d.code === 'unklarOffen' && gesperrt.d.minuten >= 1 && pionex.sendungen === vorSperre && !!(await knex('bot_aenderungen').where({ zustand: 'abgewiesen', code: 'unklarOffen' }).first()), JSON.stringify(gesperrt.d))
+    await entsperre()
     pionex.modus = 'abgelehnt'
     const s4 = await sende((await pruefe()).token)
     p('Pionex-Fehler → abgelehnt', s4.d.zustand === 'abgelehnt')
@@ -129,6 +136,7 @@ try {
     const vor503 = pionex.sendungen
     const s503 = await sende((await pruefe()).token)
     p('HTTP 503 mit JSON-Körper → unklar, nicht abgelehnt; genau eine Sendung', s503.d.zustand === 'unklar' && s503.d.ok === false && pionex.sendungen === vor503 + 1, JSON.stringify(s503.d))
+    await entsperre()
     const fe = (text, status) => Object.assign(new Error(text), status == null ? {} : { status })
     p('Status 500/503/504 und 408 am Fehler → unklar', [500, 503, 504, 408].every((st) => deuteSendung(null, fe('Pionex API: [X] y', st)).zustand === 'unklar'))
     p('Status 400/401/429 mit Pionex-Text → abgelehnt; 200 mit result false ebenso', [400, 401, 429, 200].every((st) => deuteSendung(null, fe('Pionex API: [BOT_INVALID_ARGUMENT] nein', st)).zustand === 'abgelehnt'))
@@ -192,6 +200,26 @@ try {
         p('Betrag unter einem halben Schritt → 400 betragZuKlein', zuKlein.status === 400 && zuKlein.d.code === 'betragZuKlein', JSON.stringify(zuKlein.d))
         p('Betrag 0 oder leer → 400 betrag', (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '' } })).d.code === 'betrag')
     }
+    {
+        // Audit STG-01: zwischen Prüfen und Senden bedeutet ein Schritt plötzlich etwas anderes → neu prüfen
+        const vorher = pionex.sendungen
+        const g1 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '25' } })).d
+        pionex.jeSchritt = (pionex.investition / 200) * 2
+        const g2 = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion: 'reduzieren', eingabe: { anteil: '25', ...g1.eingabe }, token: g1.token, haken: true, hakenText: haken })
+        pionex.jeSchritt = undefined
+        p('Schritt bedeutet beim Senden das Doppelte → 409 neuPruefen, nichts gesendet', g2.status === 409 && g2.d.code === 'neuPruefen' && pionex.sendungen === vorher, JSON.stringify(g2.d))
+        // Audit STG-03: Soll für den Vergleich nach dem Senden
+        const h1 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '25' } })).d
+        const h2 = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion: 'reduzieren', eingabe: { anteil: '25', ...h1.eingabe }, token: h1.token, haken: true, hakenText: haken })
+        p('Reduzieren: Soll nennt die Investition danach (¾ der heutigen)', h2.d.ok && Math.abs(h2.d.soll?.einsatz - bot.einsatz.aktuell * 0.75) < 1e-6 * bot.einsatz.aktuell, JSON.stringify(h2.d.soll))
+        // Audit STG-05: beim Betrag wird ABgerundet
+        const ab = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: String(pionex.investition / 200 * 1.9) } })).d
+        p('Betrag für 1.9 Schritte → 1 Schritt (nie mehr als verlangt)', ab.eingabe?.reduceNum === '1', JSON.stringify(ab.eingabe))
+        // Audit STG-07: keine Exponential- oder Hex-Schreibweise
+        const hex = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '0x19' } })
+        const exp = await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { einheit: 'betrag', betrag: '2.5e1' } })
+        p('«0x19» und «2.5e1» → 400', hex.status === 400 && exp.status === 400, `${hex.status} ${exp.status}`)
+    }
     p('Anteil 0 oder über 100 → 400', (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '150' } })).status === 400)
     // Audit FUN-R-105: tatsächlicher Anteil zurück, Rundung auf 0 abgelehnt
     p('25 % von 200: tatsächlicher Anteil 25 %', rp.anteil?.gewuenscht === 25 && rp.anteil?.tatsaechlich === 25, JSON.stringify(rp.anteil))
@@ -224,7 +252,9 @@ try {
     await knex.schema.renameTable('bot_aenderungen_weg', 'bot_aenderungen')
     p('Protokoll scheitert nach dem Senden → kein 502, Ausgang der Sendung + protokollFehler', sD.status === 200 && sD.d.zustand === 'ausgefuehrt' && sD.d.ok === true && sD.d.protokollFehler === true && pionex.sendungen === vorD + 1, JSON.stringify(sD))
     const sD2 = await sende(prD.token)
-    p('derselbe Token danach → verbraucht, keine zweite Sendung', sD2.status === 409 && sD2.d.code === 'verbraucht' && pionex.sendungen === vorD + 1, JSON.stringify(sD2.d))
+    // die Zeile blieb auf «laeuft» stehen (Protokoll scheiterte) → die Sperre nach unklarem Ausgang greift vor dem Einmal-Token
+    p('derselbe Token danach → abgewiesen (unklarOffen oder verbraucht), keine zweite Sendung', sD2.status === 409 && ['verbraucht', 'unklarOffen'].includes(sD2.d.code) && pionex.sendungen === vorD + 1, JSON.stringify(sD2.d))
+    await knex('bot_aenderungen').whereIn('zustand', ['unklar', 'laeuft']).update({ zeit: Date.now() - 11 * 60_000 })
     p('ohne Datenbankfehler kein Vermerk', s1.d.protokollFehler === undefined)
 
     console.log('Bot-Planer: Mindesteinsatz')

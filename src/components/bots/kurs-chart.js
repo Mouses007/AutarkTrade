@@ -18,10 +18,13 @@ export function kursChartOption(b, kerzen, t, p = palette()) {
     kandidaten.push({ wert: b.position?.einstieg, name: t('bots.feld.einstieg'), farbe: p.accent, typ: 'dotted', immer: true })
     kandidaten.push({ wert: b.position?.startPreis, name: t('bots.feld.startPreis'), farbe: p.muted, typ: 'dotted', pos: 'insideStartTop' })
     kandidaten.push({ wert: kurs, name: t('bots.feld.kurs'), farbe: p.text, typ: 'solid', immer: true, pos: 'insideStartBottom' })
-    if (b.stops?.stopLoss && /price/.test(b.stops.stopLoss.art || '')) kandidaten.push({ wert: b.stops.stopLoss.wert, name: 'SL', farbe: p.warn })
-    if (b.stops?.takeProfit && /price/.test(b.stops.takeProfit.art || '')) kandidaten.push({ wert: b.stops.takeProfit.wert, name: 'TP', farbe: p.good })
+    if (b.laufend && b.stops?.stopLoss && /price/.test(b.stops.stopLoss.art || '')) kandidaten.push({ wert: b.stops.stopLoss.wert, name: 'SL', farbe: p.warn })
+    if (b.laufend && b.stops?.stopLossOben && /price/.test(b.stops.stopLossOben.art || '')) kandidaten.push({ wert: b.stops.stopLossOben.wert, name: 'SL', farbe: p.warn })
+    if (b.laufend && b.stops?.takeProfit && /price/.test(b.stops.takeProfit.art || '')) kandidaten.push({ wert: b.stops.takeProfit.wert, name: 'TP', farbe: p.good })
     const da = kandidaten.filter((l) => l.wert != null && Number.isFinite(l.wert))
     const skala = chartSkala(kerzen.flatMap((kz) => [kz[2], kz[3]]), da, { unten: b.grid?.unten, oben: b.grid?.oben })
+    // Kerzen ohne brauchbare Zahlen und keine feste Linie: lieber ein leerer Chart als ein TypeError in der Karte
+    if (!skala) return { ...grundOption(p), xAxis: { type: 'category', data: [] }, yAxis: { type: 'value' }, series: [] }
     const { lo, hi } = skala
     const linien = []
     const randOben = [], randUnten = []

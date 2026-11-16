@@ -30,6 +30,27 @@ const alle = computed(() => eingabe.value.richtung === 'ALLE')
 const coins = ref([])
 const coinInfo = computed(() => coins.value.find((c) => c.coin === String(eingabe.value.coin || '').trim().toUpperCase()) || null)
 const einheit = computed(() => (eingabe.value.coinM && !eingabe.value.spot ? String(eingabe.value.coin || '').toUpperCase() || 'Coin' : 'USDT'))
+// «Max»: freies Guthaben bei Pionex in der Einsatz-Münze holen, eintragen und gleich rechnen
+const maxLaedt = ref(false)
+const maxHinweis = ref(null)
+async function setzeMax() {
+    maxLaedt.value = true; maxHinweis.value = null
+    const e = einheit.value
+    try {
+        const { data } = await axios.get('/api/bots/plan/guthaben', { params: { coin: e }, timeout: 20_000 })
+        if (einheit.value !== e) return   // Art oder Coin inzwischen gewechselt: der Betrag gehört zur alten Münze
+        if (!data?.ok) maxHinweis.value = { warn: true, text: t(data?.code === 'keinSchluessel' ? 'bots.plan.maxOhneSchluessel' : 'bots.plan.maxFehler') }
+        else if (!(data.frei > 0)) maxHinweis.value = { warn: true, text: t('bots.plan.maxLeer', { einheit: e }) }
+        else {
+            eingabe.value.einsatz = String(data.frei)
+            maxHinweis.value = { text: t('bots.plan.maxFrei', { betrag: betrag(data.frei, e) }) }
+            if (eingabeOk.value) rechnen()
+        }
+    } catch (err) {
+        maxHinweis.value = { warn: true, text: err?.response?.data?.error || t('bots.plan.maxFehler') }
+    } finally { maxLaedt.value = false }
+}
+watch(einheit, () => { maxHinweis.value = null })
 // Art als ein Feld: USDT-M, Coin-M oder Spot (Spot-Grid: ohne Hebel, nur Long, ohne Stop-Loss beim Start)
 const artWahl = computed({
     get: () => (eingabe.value.spot ? 'spot' : eingabe.value.coinM ? 'coinM' : 'linear'),
@@ -169,11 +190,15 @@ function uebernehmen(v, richtung) {
     planKarte.value?.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
 }
 watch(plan, () => { eigenErg.value = null }, { deep: true })
+// Liquidation und Menge je Grid des eigenen Plans hängen auch an Coin, Art, Einsatz und Hebel (Audit UI-08)
+watch(() => [eingabe.value.coin, eingabe.value.coinM, eingabe.value.spot, eingabe.value.einsatz, eingabe.value.hebel], () => { eigenErg.value = null })
 async function eigenRechnen() {
     eigenLaedt.value = true; eigenFehler.value = ''
     try {
         const d = (await axios.post('/api/bots/plan/rechnen', anfrage({ eigene: [{ ...plan.value, richtung: planRichtung.value }] }), { timeout: 180_000 })).data
-        erg.value = erg.value && erg.value.eingabe?.coin === d.eingabe?.coin ? { ...d } : d
+        erg.value = d
+        // Die Kandidaten sind neu gerechnet (andere IDs möglich): die Pionex-Prüfung der alten gilt nicht mehr (Audit PLN-02)
+        pruefeMindest()
         const e = d.eigene?.[0]
         if (e?.fehler) eigenFehler.value = te(`bots.plan.fehler.${e.fehler}`) ? t(`bots.plan.fehler.${e.fehler}`) : t(`bots.st.fehler.${e.fehler}`)
         else eigenErg.value = e || null
@@ -243,7 +268,12 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                         <option value="NEUTRAL">{{ t('bots.richtung.NEUTRAL') }}</option>
                     </select>
                 </label>
-                <label><span>{{ t('bots.feld.einsatz') }} ({{ einheit }})</span><input v-model="eingabe.einsatz" class="at-feld" inputmode="decimal"></label>
+                <div class="feldMitMax">
+                    <span class="mitMax"><label for="planEinsatz">{{ t('bots.feld.einsatz') }} ({{ einheit }})</label>
+                        <button type="button" class="max" :disabled="maxLaedt" :title="t('bots.plan.maxTitel', { einheit })" @click="setzeMax">{{ t('bots.plan.max') }}</button></span>
+                    <input id="planEinsatz" v-model="eingabe.einsatz" class="at-feld" inputmode="decimal">
+                    <small v-if="maxHinweis" class="maxHinweis" :class="{ warn: maxHinweis.warn }">{{ maxHinweis.text }}</small>
+                </div>
                 <label><span>{{ t('bots.feld.hebel') }}</span><input v-if="spot" class="at-feld" value="1" disabled><input v-else v-model="eingabe.hebel" class="at-feld" inputmode="numeric"></label>
                 <label><span>{{ t('bots.plan.zeitraum') }}</span>
                     <select v-model.number="eingabe.tage" class="at-feld">
@@ -532,7 +562,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
 .warn { color: var(--warn); font-size: 0.85rem; margin: 0; }
 .laedt { text-align: right; color: var(--accent); }
 .felder { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--abstand-2) var(--abstand-3); margin: var(--abstand-2) 0; }
-.felder label { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); min-width: 0; }
+.felder label, .felder .feldMitMax { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); min-width: 0; }
+.felder .feldMitMax label { display: inline; }
 .felder .at-feld::placeholder { color: var(--leise); font-style: italic; opacity: 1; }
 .knoepfe { display: flex; gap: var(--abstand-2); justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .zahlen { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--abstand-2) var(--abstand-3); margin: var(--abstand-2) 0; }
@@ -585,4 +616,10 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
 .richtung.NEUTRAL { color: var(--muted); }
 td.richtung { text-align: left; }
 .grund { margin: 0 0 var(--abstand-2); }
+.mitMax { display: flex; align-items: baseline; justify-content: space-between; gap: var(--abstand-2); }
+.max { border: 0; background: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.78rem; padding: 0; }
+.max:disabled { opacity: 0.5; cursor: default; }
+.max:hover:not(:disabled) { text-decoration: underline; }
+.maxHinweis { color: var(--muted); font-size: 0.75rem; }
+.maxHinweis.warn { color: var(--warn); }
 </style>

@@ -17,6 +17,8 @@ const props = defineProps({
     breite: { type: String, default: '32rem' },
     /** false: Klick neben den Dialog schliesst ihn nicht (z. B. bei Formularen). */
     aussenSchliesst: { type: Boolean, default: true },
+    /** true: der Dialog lässt sich gerade nicht schliessen (Esc, ×, Klick daneben) — z. B. während eine Sendung läuft. */
+    gesperrt: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue', 'zu'])
 
@@ -33,6 +35,7 @@ watch(() => props.modelValue, setze)
 onMounted(() => setze(props.modelValue))
 
 function zu() {
+    if (props.gesperrt) return
     emit('update:modelValue', false)
     emit('zu')
 }
@@ -43,11 +46,11 @@ function klick(e) {
 </script>
 
 <template>
-    <dialog ref="el" class="at-dialog" :style="{ '--dialog-breite': breite }" @close="zu" @click="klick">
+    <dialog ref="el" class="at-dialog" :style="{ '--dialog-breite': breite }" @close="zu" @cancel="(e) => { if (gesperrt) e.preventDefault() }" @click="klick">
         <div class="innen">
             <header class="kopf">
                 <h2>{{ titel }}</h2>
-                <button type="button" class="zu" :aria-label="'Schliessen'" @click="zu">
+                <button type="button" class="zu" :aria-label="'Schliessen'" :disabled="gesperrt" @click="zu">
                     <Symbol name="schliessen" :groesse="18" />
                 </button>
             </header>

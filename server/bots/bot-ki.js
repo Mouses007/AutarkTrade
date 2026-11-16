@@ -257,10 +257,16 @@ export function pruefeKiAntwort(json, gerechnet, eingabe = '') {
         const c = nachId.get(String(v?.id || '').trim().toUpperCase())
         if (!c) { verworfen.push({ id: v?.id, grund: 'unbekannteId' }); continue }
         if (vorschlaege.some((x) => x.id === c.id)) continue
+        // Planer «alle Richtungen»: höchstens einer je Gruppe — VOR dem Deckel, sonst füllen drei Longs die
+        // Plätze und Short/Neutral fehlen ohne Hinweis (Audit PLN-04)
+        if (gerechnet.gruppe) {
+            const g = gerechnet.gruppe(c)
+            if (vorschlaege.some((x) => x.gruppe === g)) { verworfen.push({ id: c.id, grund: 'zweiterJeRichtung' }); continue }
+        }
         const texte = { titel: kuerze(v.titel, 80) || c.titel, begruendung: kuerze(v.begruendung, 600), risiko: kuerze(v.risiko, 300), passtNichtWenn: kuerze(v.passtNichtWenn, 300) }
         if (Object.values(texte).some((t) => VERBOTEN.test(t))) { verworfen.push({ id: c.id, grund: 'wortwahl' }); continue }
-        const unbelegt = eingabe ? unbelegteZahlen(`${texte.begruendung} ${texte.risiko} ${texte.passtNichtWenn}`, eingabe) : []
-        vorschlaege.push({ id: c.id, ...texte, variante: c.variante, codeTitel: c.titel, rueckblick: c.rueckblick, abJetzt: c.abJetzt, unbelegt })
+        const unbelegt = eingabe ? unbelegteZahlen(`${v.titel ? texte.titel : ''} ${texte.begruendung} ${texte.risiko} ${texte.passtNichtWenn}`, eingabe) : []
+        vorschlaege.push({ id: c.id, ...texte, variante: c.variante, codeTitel: c.titel, rueckblick: c.rueckblick, abJetzt: c.abJetzt, unbelegt, ...(gerechnet.gruppe ? { gruppe: gerechnet.gruppe(c) } : {}) })
         if (vorschlaege.length >= MAX_VORSCHLAEGE) break
     }
     let lage = kuerze(json.lage, 900)

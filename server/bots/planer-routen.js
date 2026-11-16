@@ -13,7 +13,7 @@
  * Gestartet wird über die Steuerung (POST /api/bots/plan/aktion/pruefen|senden,
  * steuerung-routen.js) mit allen Planwerten in der Eingabe.
  */
-import { fetchTickerPrice } from '../pionex-api.js'
+import { fetchTickerPrice, getBalances, getDecryptedPionexConfig } from '../pionex-api.js'
 import { holeSymbolTabelle } from '../execution/pionex-meta.js'
 import { fehlerText } from '../boersen-status.js'
 import { logWarn } from '../logger.js'
@@ -31,6 +31,7 @@ import { getKnex } from '../database.js'
 import { baueKandidaten } from '../chart-kandidaten.js'
 import { pionexLetzte, pionexSimKerzen, pionexSpotSymbole } from './pionex-kerzen.js'
 import {
+    freiesGuthaben,
     pruefePlanEingabe, pruefePlanVariante, planKandidaten, planKandidatenAlle, rechnePlan, bauePlanPrompt, planSystemText,
     langfristTrend, chartNiveaus, wochenProfile, MAX_EIGENE, RICHTUNGEN, ALLE, SINNVOLLE_GRIDS, WENIG_GRIDS,
 } from './planer.js'
@@ -216,7 +217,7 @@ async function kiFuer(e, coins, englisch, mindest = {}) {
         system: planSystemText({ alle: e.richtung === ALLE }), user, timeoutMs: 90000,
         zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: `${e.coin}USDT` },
     })
-    const geprueft = pruefeKiAntwort(antwort.json, { kandidaten: gueltig }, user)
+    const geprueft = pruefeKiAntwort(antwort.json, { kandidaten: gueltig, ...(e.richtung === ALLE ? { gruppe: (c) => c.richtung } : {}) }, user)
     if (!geprueft) throw new Error('Die KI hat keine verwertbare Antwort geliefert')
     const nachId = new Map(gueltig.map((c) => [c.id, c]))
     // Alle Richtungen: je Richtung höchstens ein Vorschlag (der erste zählt)
@@ -249,6 +250,23 @@ export function setupBotPlanerRoutes(app) {
             const coins = await holeCoins()
             res.json({ ok: true, coins: [...coins].map(([coin, c]) => ({ coin, linear: c.linear, coinM: c.coinM, spot: !!c.spot })).sort((a, b) => a.coin.localeCompare(b.coin)) })
         } catch (e) { fehler(res, e) }
+    })
+
+    // Freies Guthaben für den Knopf «Max» beim Einsatz: USDT oder (Coin-M) die Coin. Nur lesend,
+    // mit dem Lese-Schlüssel des Journals — die Bot-Steuerung muss dafür nicht freigeschaltet sein.
+    app.get('/api/bots/plan/guthaben', async (req, res) => {
+        try {
+            const coin = String(req.query.coin || 'USDT').toUpperCase()
+            if (!/^[A-Z0-9]{1,15}$/.test(coin)) return res.status(400).json({ ok: false, code: 'coin' })
+            const k = await getDecryptedPionexConfig()
+            if (!k?.apiKey || !k?.secretKey) return res.json({ ok: false, code: 'keinSchluessel' })
+            const antwort = await getBalances(k.apiKey, k.secretKey)
+            const frei = freiesGuthaben(antwort?.data?.balances, coin)
+            if (frei == null) return res.json({ ok: false, code: 'unbekannt' })
+            res.json({ ok: true, coin, frei })
+        } catch (e) {
+            res.status(502).json({ ok: false, error: fehlerText(e) })
+        }
     })
 
     app.post('/api/bots/plan/rechnen', async (req, res) => {

@@ -8,8 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
     planBot, trendFuer, mengeJeGrid, pruefePlanEingabe, pruefePlanVariante, planKandidaten, anzahlFuerSchritt,
     rechnePlanVariante, rechnePlan, bauePlanPrompt, planSystemText, PLAN_ID, MAX_PLAN_GRIDS, MAX_KANDIDATEN,
-    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS, LANG,
-} from './planer.js'
+    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS, LANG, freiesGuthaben } from './planer.js'
 import { normalisiereBot } from './pionex-bots.js'
 import { pruefeKiAntwort } from './bot-ki.js'
 import { baueAktion } from './steuerung.js'
@@ -216,6 +215,15 @@ const { coinsAusTabelle } = await import('./planer-routen.js')
 const tab = JSON.parse(readFileSync(path.join(hier, '..', 'fixtures', 'pionex-symbols-perp.json'), 'utf8')).data.symbols
 const coins = coinsAusTabelle([...tab, { symbol: 'USDT_SOL_PERP', status: 'TRADING', minSizeLimit: '1' }, { symbol: 'SOL_USDT_PERP', status: 'TRADING', minSizeLimit: '0.01' }, { symbol: 'XYZ_USDT_PERP', status: 'OFFLINE' }])
 p('USDT-M und Coin-M getrennt, Mindestmenge je Art, nicht handelbare fehlen', coins.get('SOL')?.linear && coins.get('SOL')?.coinM && coins.get('SOL').minCoinM === 1 && coins.get('SOL').minLinear === 0.01 && !coins.has('XYZ') && coins.get('0G')?.linear && !coins.get('0G')?.coinM)
+
+console.log('Freies Guthaben für «Max»')
+{
+    const b = [{ coin: 'USDT', free: '12.3456', frozen: '5' }, { coin: 'SOL', free: '0.12345678', frozen: '1' }, { coin: 'XRP', free: 'x' }]
+    p('USDT auf 2 Stellen ABgerundet, ohne Gebundenes', freiesGuthaben(b, 'usdt') === 12.34)
+    p('Coin auf 6 Stellen abgerundet', freiesGuthaben(b, 'SOL') === 0.123456)
+    p('Münze nicht im Konto → 0, unlesbar → null, ohne Liste → null', freiesGuthaben(b, 'BTC') === 0 && freiesGuthaben(b, 'XRP') === null && freiesGuthaben(null, 'USDT') === null)
+    p('glatte Werte bleiben (kein Abrunden durch Gleitkomma)', freiesGuthaben([{ coin: 'USDT', free: '9.2' }], 'USDT') === 9.2 && freiesGuthaben([{ coin: 'USDT', free: '0.29' }], 'USDT') === 0.29)
+}
 
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)
 process.exit(fehl ? 1 : 0)

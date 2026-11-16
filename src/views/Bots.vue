@@ -83,8 +83,10 @@ const oeffnen = (id) => router.push(`/bots/${encodeURIComponent(id)}`)
             </template>
         </Seitenkopf>
 
+        <!-- Schlägt nur das Neuladen fehl, bleibt die Seite stehen: sonst verschwände ein offener Dialog mit «unklar» -->
+        <Hinweis v-if="fehler && bots.length && !imPlaner" art="warn" :titel="t('bots.fehler')">{{ fehler }}</Hinweis>
         <BotPlaner v-if="imPlaner" :steuerung="steuerung" @gestartet="lade(true)" />
-        <Hinweis v-else-if="fehler" art="fehler" :titel="t('bots.fehler')">{{ fehler }}</Hinweis>
+        <Hinweis v-else-if="fehler && !bots.length" art="fehler" :titel="t('bots.fehler')">{{ fehler }}</Hinweis>
         <Leerzustand v-else-if="nichtEingerichtet" :titel="t('bots.nichtEingerichtet')" :text="t('bots.nichtEingerichtetText')">
             <Knopf art="haupt" to="/einstellungen/boersen">{{ t('nav.settings') }}</Knopf>
         </Leerzustand>

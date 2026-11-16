@@ -45,7 +45,8 @@ export function chartSkala(preise, linien = [], band = {}) {
     const nah = (v) => ok(v) && v >= lo - NAH * spanne && v <= hi + NAH * spanne
     const kandidaten = [...linien.filter((l) => !l.immer).map((l) => l.wert), band.unten, band.oben].filter(nah)
     for (const v of kandidaten) { lo = Math.min(lo, v); hi = Math.max(hi, v) }
-    const rand = (hi - lo) * 0.04
+    // eine einzige flache Kerze: ohne Ersatzspanne wäre min = max
+    const rand = ((hi - lo) || hi * 0.05 || 1) * 0.04
     lo -= rand; hi += rand
     return { lo, hi, innen: (v) => ok(v) && v >= lo && v <= hi }
 }

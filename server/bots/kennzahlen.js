@@ -36,8 +36,12 @@ export function gewinn(bot, kurs) {
         // 0.2144 gegen Pionex «Gesamt Profit» 0.15 (Marge 16.6706 − 11.52 − 5 = 0.1506); in den gespeicherten
         // Antworten überall dieselbe Lücke in Höhe von totalFee + totalFundingFee (−13.09 statt −13.75,
         // Liquidation −3.18 statt −4.09). Nur ohne Marge bleibt das Feld der Rückfall.
+        // Spot hat keine Marge: ein beendetes Spot-Grid läse sich mit `marginBalance 0` als −100 % (Audit STG-10).
+        // Sein Endstand steht in anderen Feldern, die noch an keiner echten Antwort gemessen sind → unbekannt.
+        if (bot.typ === 'spot_grid') return { realisiert: null, schwebend: 0, gesamt: null, basis: istZahl(basis) ? basis : null }
         if (istZahl(e.marge) && istZahl(basis)) {
-            const g = e.marge - (basis + (e.extraMarge || 0))
+            // Entnommener Gewinn ist nicht mehr in der Marge, aber verdient (Audit STG-04)
+            const g = e.marge - (basis + (e.extraMarge || 0)) + (bot.ergebnis?.entnommen || 0)
             return { realisiert: g, schwebend: 0, gesamt: g, basis }
         }
         const g = bot.ergebnis?.gesamt
@@ -53,7 +57,7 @@ export function gewinn(bot, kurs) {
         return { realisiert, schwebend: realisiert == null ? null : gesamt - realisiert, gesamt, basis }
     }
     if (!istZahl(e.marge) || !istZahl(basis)) return { realisiert: null, schwebend: null, gesamt: null, basis: istZahl(basis) ? basis : null }
-    const realisiert = e.marge - (basis + (e.extraMarge || 0))
+    const realisiert = e.marge - (basis + (e.extraMarge || 0)) + (bot.ergebnis?.entnommen || 0)
     const menge = bot.position?.menge, einstieg = bot.position?.einstieg
     let schwebend = null
     if (istZahl(menge) && istZahl(einstieg) && einstieg > 0 && istZahl(kurs) && kurs > 0) {
@@ -143,7 +147,8 @@ export function kennzahlen(bot, markt = {}, jetzt = Date.now()) {
     if (band?.lage === 'darunter') hinweise.push('unterBand')
     if (band?.lage === 'darueber') hinweise.push('ueberBand')
     if (liq && liq.abstand < LIQ_NAH) hinweise.push('liqNah')
-    if (bot.laufend && bot.hebel > 1 && !bot.stops?.stopLoss) hinweise.push('ohneStop')
+    // ein neutraler Bot kann nur einen oberen Stop haben (`lossStopHigh`) — auch der zählt (Audit UI-05)
+    if (bot.laufend && bot.hebel > 1 && !bot.stops?.stopLoss && !bot.stops?.stopLossOben) hinweise.push('ohneStop')
     if (istZahl(bot.grid?.nettoJeZyklus) && bot.grid.nettoJeZyklus < ZYKLUS_KNAPP) hinweise.push('gridEng')
     // erst ab 24 h Laufzeit — ein 13-h-Bot hat nicht „seit 24 Stunden“ nichts gehandelt
     if (bot.laufend && bot.ergebnis?.trades24h === 0 && !(tage < 1)) hinweise.push('keineTrades24h')

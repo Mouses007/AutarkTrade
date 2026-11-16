@@ -221,7 +221,7 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
                     <dt>{{ t('bots.feld.liqAbstand') }}</dt>
                     <dd>{{ k.liquidation ? prozent(k.liquidation.abstand) : '—' }}<span v-if="k.liquidation?.inAtr != null" class="leise"> · {{ t('bots.feld.inAtr', { n: zahl(k.liquidation.inAtr, 1) }) }}</span></dd>
                     </template>
-                    <dt>{{ t('bots.feld.stopLoss') }}</dt><dd>{{ stopText(bot.stops?.stopLoss) }}</dd>
+                    <dt>{{ t('bots.feld.stopLoss') }}</dt><dd>{{ bot.stops?.stopLossOben ? [bot.stops?.stopLoss, bot.stops.stopLossOben].filter(Boolean).map(stopText).join(' / ') : stopText(bot.stops?.stopLoss) }}</dd>
                     <dt>{{ t('bots.feld.takeProfit') }}</dt><dd>{{ stopText(bot.stops?.takeProfit) }}</dd>
                     <template v-if="istSpot"><dt>{{ t('bots.feld.usdtImBot') }}</dt><dd>{{ betrag(bot.einsatz?.quoteBestand, mc) }}</dd></template>
                     <template v-else>

@@ -8,7 +8,9 @@ const ok = (v) => typeof v === 'number' && Number.isFinite(v)
 export function preis(v) {
     if (!ok(v)) return LEER
     const a = Math.abs(v)
-    const stellen = a >= 1000 ? 1 : a >= 100 ? 2 : a >= 1 ? 4 : 6
+    // unter 1: sechs GÜLTIGE Stellen, nicht sechs Nachkommastellen — 0.00000876 stand sonst als «0.000009»,
+    // 1.2e-7 als «0.00» (Audit UI-06)
+    const stellen = a >= 1000 ? 1 : a >= 100 ? 2 : a >= 1 ? 4 : a > 0 ? Math.min(12, Math.max(6, 5 - Math.floor(Math.log10(a)))) : 6
     return new Intl.NumberFormat('de-CH', { maximumFractionDigits: stellen, minimumFractionDigits: Math.min(2, stellen) }).format(v)
 }
 

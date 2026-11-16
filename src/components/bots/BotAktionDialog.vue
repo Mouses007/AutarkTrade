@@ -72,6 +72,7 @@ function zuruecksetzen() {
     if (props.aktion === 'stops') { e.stopLossWeg = false; e.takeProfitWeg = false }
     eingabe.value = e
     pruefung.value = null; ergebnis.value = null; haken.value = false; fehler.value = ''
+    pruefLauf++   // eine noch laufende Prüfung gehört zum alten Dialog
 }
 watch(() => [props.modelValue, props.aktion], ([auf]) => { if (auf) zuruecksetzen() }, { immediate: true })
 // Jede Änderung an der Eingabe macht eine frühere Prüfung ungültig
@@ -106,28 +107,40 @@ const meldung = (e) => {
 // FUN-R-105: Pionex reduziert nur in ganzen Schritten — weicht der tatsächliche Anteil vom gewünschten ab, sagen
 const anteilAbweichung = computed(() => {
     const a = pruefung.value?.anteil
-    if (!a || a.tatsaechlich == null) return null
-    const tatsaechlich = zahl(a.tatsaechlich, 1)
+    if (!a) return null
+    const tatsaechlich = a.tatsaechlich == null ? '—' : zahl(a.tatsaechlich, 1)
     if (a.betragGewuenscht != null && a.betragTatsaechlich != null) {
         if (Math.abs(a.betragTatsaechlich - a.betragGewuenscht) <= 0.02 * a.betragGewuenscht) return null
         return { text: t('bots.st.betragTatsaechlich', { gewuenscht: betrag(a.betragGewuenscht, mc.value), tatsaechlich: betrag(a.betragTatsaechlich, mc.value), anteil: tatsaechlich, schritt: zahl(a.schritt, 1) }) }
     }
-    if (a.gewuenscht == null) return null
+    if (a.gewuenscht == null || a.tatsaechlich == null) return null
     const gewuenscht = zahl(a.gewuenscht, 1)
     return gewuenscht === tatsaechlich ? null : { text: t('bots.st.anteilTatsaechlich', { gewuenscht, tatsaechlich, schritt: zahl(a.schritt, 1) }) }
 })
 
+// Zwei Anfragen, zwei Merker: «Prüfen» darf nicht laufen, während gesendet wird, und umgekehrt
+const prueft = ref(false)
+const sendet = ref(false)
+let pruefLauf = 0
 async function pruefen() {
-    laedt.value = true; fehler.value = ''; ergebnis.value = null
+    if (sendet.value) return
+    const lauf = ++pruefLauf
+    const gefragt = eingabeFuerServer()
+    const gefragtText = JSON.stringify(gefragt)
+    prueft.value = true; laedt.value = true; fehler.value = ''; ergebnis.value = null
     try {
-        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/aktion/pruefen`, { aktion: props.aktion, eingabe: eingabeFuerServer() }, { timeout: 60_000 })
+        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/aktion/pruefen`, { aktion: props.aktion, eingabe: gefragt }, { timeout: 60_000 })
+        // Die Antwort gilt nur für die Eingabe, die gefragt wurde: wer während der Abfrage das Feld ändert
+        // (oder neu prüft, den Dialog neu öffnet), bekäme sonst eine Prüfung der ALTEN Eingabe mit aktivem
+        // «Senden» — bei «Position reduzieren» ginge dann der alte Wert zum Marktpreis raus (Audit UI-01).
+        if (lauf !== pruefLauf || JSON.stringify(eingabeFuerServer()) !== gefragtText) return
         pruefung.value = data
         haken.value = false
-    } catch (e) { fehler.value = meldung(e) } finally { laedt.value = false }
+    } catch (e) { if (lauf === pruefLauf) fehler.value = meldung(e) } finally { if (lauf === pruefLauf) { prueft.value = false; laedt.value = sendet.value } }
 }
 async function senden() {
-    if (!haken.value || !pruefung.value?.token) return
-    laedt.value = true; fehler.value = ''
+    if (!haken.value || !pruefung.value?.token || sendet.value || prueft.value) return
+    sendet.value = true; laedt.value = true; fehler.value = ''
     try {
         const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/aktion/senden`, {
             // Reduzieren: genau die vom Server umgerechnete Menge senden (an sie ist der Token gebunden)
@@ -140,7 +153,7 @@ async function senden() {
         // Keine Antwort (Zeitlimit, Netz): der Server kann gesendet haben → wie „unklar", nie erneut senden
         if (!e?.response) { ergebnis.value = { ok: false, zustand: 'unklar', antwort: { message: e.message } }; emit('gesendet') }
         else fehler.value = meldung(e)
-    } finally { laedt.value = false }
+    } finally { sendet.value = false; laedt.value = prueft.value }
 }
 
 const vergleich = computed(() => {
@@ -196,28 +209,28 @@ const istZeilen = computed(() => {
 </script>
 
 <template>
-    <Dialog v-model="offen" :titel="t(`bots.st.aktion.${aktion}`)" breite="40rem">
+    <Dialog v-model="offen" :titel="t(`bots.st.aktion.${aktion}`)" breite="40rem" :aussen-schliesst="false" :gesperrt="sendet">
         <div class="dlg">
             <p class="leise">{{ t(`bots.st.aktionText.${aktionTextSchluessel}`) }}</p>
 
             <div v-if="aktion === 'reduzieren'" class="einheit" role="group" :aria-label="t('bots.st.redEinheit')">
                 <span class="leise">{{ t('bots.st.redEinheit') }}</span>
-                <button type="button" class="pille" :class="{ aktiv: einheit === 'anteil' }" :aria-pressed="einheit === 'anteil'" @click="waehleEinheit('anteil')">%</button>
-                <button type="button" class="pille" :class="{ aktiv: einheit === 'betrag' }" :aria-pressed="einheit === 'betrag'" @click="waehleEinheit('betrag')">{{ mc }}</button>
+                <button type="button" class="pille" :class="{ aktiv: einheit === 'anteil' }" :aria-pressed="einheit === 'anteil'" :disabled="laedt" @click="waehleEinheit('anteil')">%</button>
+                <button type="button" class="pille" :class="{ aktiv: einheit === 'betrag' }" :aria-pressed="einheit === 'betrag'" :disabled="laedt" @click="waehleEinheit('betrag')">{{ mc }}</button>
             </div>
             <div v-if="felderFuer.length" class="felder">
                 <label v-for="f in felderFuer" :key="f"><span>{{ feldName(f) }}</span>
-                    <input v-model="eingabe[f]" class="at-feld" inputmode="decimal" :placeholder="platzhalter[f]">
+                    <input v-model="eingabe[f]" class="at-feld" inputmode="decimal" :placeholder="platzhalter[f]" :disabled="laedt">
                 </label>
             </div>
             <div v-if="aktion === 'stops'" class="wegs">
-                <label v-if="bot.stops?.stopLoss"><input v-model="eingabe.stopLossWeg" type="checkbox"> {{ t('bots.st.slEntfernen') }}</label>
-                <label v-if="bot.stops?.takeProfit"><input v-model="eingabe.takeProfitWeg" type="checkbox"> {{ t('bots.st.tpEntfernen') }}</label>
+                <label v-if="bot.stops?.stopLoss"><input v-model="eingabe.stopLossWeg" type="checkbox" :disabled="laedt"> {{ t('bots.st.slEntfernen') }}</label>
+                <label v-if="bot.stops?.takeProfit"><input v-model="eingabe.takeProfitWeg" type="checkbox" :disabled="laedt"> {{ t('bots.st.tpEntfernen') }}</label>
                 <p class="leise">{{ t('bots.st.stopsHinweis') }}</p>
             </div>
 
             <div class="knoepfe">
-                <Knopf art="normal" symbol="suche" :laedt="laedt && !pruefung" @click="pruefen">{{ t('bots.st.pruefen') }}</Knopf>
+                <Knopf art="normal" symbol="suche" :laedt="prueft" :disabled="sendet" @click="pruefen">{{ t('bots.st.pruefen') }}</Knopf>
             </div>
 
             <template v-if="pruefung">
@@ -253,13 +266,13 @@ const istZeilen = computed(() => {
 
                 <Hinweis v-if="pruefung.testbetrieb" art="info">{{ t('bots.st.testbetriebSenden') }}</Hinweis>
                 <label v-else-if="pruefung.bestanden" class="haken">
-                    <input v-model="haken" type="checkbox">
+                    <input v-model="haken" type="checkbox" :disabled="laedt">
                     <span>{{ steuerung?.haken }}</span>
                 </label>
 
                 <div class="knoepfe">
-                    <Knopf art="leise" @click="offen = false">{{ t('bots.st.abbrechen') }}</Knopf>
-                    <Knopf art="gefahr" symbol="hochladen" :laedt="laedt && !!pruefung" :disabled="!kannSenden" @click="senden">{{ t('bots.st.senden') }}</Knopf>
+                    <Knopf art="leise" :disabled="sendet" @click="offen = false">{{ t('bots.st.abbrechen') }}</Knopf>
+                    <Knopf art="gefahr" symbol="hochladen" :laedt="sendet" :disabled="!kannSenden || prueft" @click="senden">{{ t('bots.st.senden') }}</Knopf>
                 </div>
             </template>
 
@@ -303,5 +316,6 @@ const istZeilen = computed(() => {
 .klein { font-size: 0.75rem; margin: var(--abstand-2) 0 0; }
 .einheit { display: flex; align-items: center; gap: var(--abstand-2); }
 .einheit .pille { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px; padding: 2px 12px; cursor: pointer; font: inherit; font-size: 0.85rem; }
+.einheit .pille:disabled { opacity: 0.5; cursor: default; }
 .einheit .pille.aktiv { border-color: var(--accent); background: var(--accent-flaeche); color: var(--accent); }
 </style>

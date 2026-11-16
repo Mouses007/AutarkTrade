@@ -37,7 +37,7 @@ const leer = (v) => v === undefined || v === null || v === ''
  * Zahl aus einer Eingabe: nur Dezimalschreibweise (Komma oder Punkt), sonst NaN.
  * Audit SEC-04: `Number()` nahm „0x10" als 16 und „1e3" als 1000 an.
  */
-const zahl = (v) => {
+export const zahl = (v) => {
     if (leer(v)) return null
     if (typeof v === 'number') return Number.isFinite(v) && v >= 0 ? v : NaN
     const t = String(v).trim()
@@ -312,7 +312,8 @@ export function liqAusPruefung(bot, data) {
 
 /** Hat Pionex die Prüfung bestanden? */
 export function pruefungBestanden(antwort) {
-    if (!antwort || antwort.result === false) return false
+    // Nur ein ausdrückliches `result: true` zählt: eine leere Antwort (`{}`) hat nichts geprüft (Audit STG-09)
+    if (!antwort || antwort.result !== true) return false
     const d = antwort.data
     return !(d && d.checkResult === false)
 }
