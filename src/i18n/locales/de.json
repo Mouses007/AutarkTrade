@@ -7517,6 +7517,7 @@
     "prospekt": "Börsenprospekt (424B4) vom {datum}",
     "fristGerechnet": "Gerechnet: übliche {tage} Tage ab dem ersten Handelstag enden am {datum}. Die wirkliche Haltefrist steht im Prospekt, Abschnitt «Underwriting» bzw. «Shares Eligible for Future Sale».",
     "fund": "Im Prospekt gefunden: {tage} Tage ab Prospektdatum.",
+    "fundHoechstens": "Im Prospekt gefunden: höchstens {tage} Tage ab Prospektdatum, aus einer Sonderabrede. Die allgemeine Haltefrist hat der Leser nicht gefunden.",
     "fundAblauf": "Das wäre etwa der {datum} (gerechnet ab der Einreichung am {eingereicht}; das Prospektdatum liegt meist wenige Tage davor).",
     "fundHinweis": "Automatisch gelesene Textstelle, kein geprüfter Wert. Prospekte nennen oft Ausnahmen und gestaffelte Freigaben; massgebend ist der Wortlaut.",
     "fundAusnahmen": "Automatisch gelesene Textstelle, kein geprüfter Wert. Der Prospekt nennt an dieser Stelle Bedingungen für eine frühere Freigabe; massgebend ist der Wortlaut.",

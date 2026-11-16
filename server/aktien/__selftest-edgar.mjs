@@ -115,6 +115,16 @@ ok(vorzeitig.tage === 180 && vorzeitig.ausnahmen === true, '«180-day lock-up pe
 ok(leseHaltefrist(textAusHtml(`${fuell}<p>The underwriters may exercise their option to purchase additional shares for a period of 30 days from the date of this prospectus.</p>`)) === null, 'nur die Mehrzuteilung: kein Fund')
 ok(leseHaltefrist(`${fuell} Our shares are subject to a lock-up. Details are described under "Underwriting".`) === null && leseHaltefrist('') === null && leseHaltefrist(null) === null, 'nichts Eindeutiges: null')
 ok(leseHaltefrist(`${fuell} The holders have agreed to a lock-up and will not sell shares for a period of 5 days after the date of this prospectus.`) === null, 'unplausible Dauer: kein Fund')
+// Wortlaut der Sonderabrede aus dem ersten echten Lauf (CoreWeave 424B4, von der Karte angezeigt); Hauptklausel NACHGEBAUT.
+const sonder = 'The issuance of these shares to OpenAI will not be registered in this offering and will be subject to a market standoff agreement with us for a period of up to 180 days after the date of this prospectus and lock-up agreement with the underwriters for a period of up to 180 days after the date of this prospectus.'
+const haupt = 'We, our directors and executive officers and the holders of substantially all of our outstanding securities have agreed that we and they will not offer, sell or otherwise dispose of any shares for a period of 180 days after the date of this prospectus.'
+const beide = leseHaltefrist(`${fuell} ${sonder} ${fuell} ${haupt}`)
+ok(beide.tage === 180 && beide.stelle.startsWith('We, our directors') && beide.hoechstens === false && beide.treffer === 1, 'Sonderabrede steht zuerst: gezeigt wird die allgemeine Klausel')
+const abweichend = leseHaltefrist(`${fuell} ${sonder.replaceAll('180', '365')} ${fuell} ${haupt}`)
+ok(abweichend.tage === 180 && abweichend.mehrdeutig === undefined, 'abweichende «bis zu»-Dauer einer Sonderabrede macht die Hauptklausel nicht mehrdeutig')
+const nurSonder = leseHaltefrist(`${fuell} ${sonder}`)
+ok(nurSonder.tage === 180 && nurSonder.hoechstens === true, 'nur die Sonderabrede: Fund als «höchstens»')
+ok(f.hoechstens === false && g.mehrdeutig === true, 'bisherige Fälle unverändert')
 ok(textAusHtml('<style>p{}</style><p>A&amp;B&nbsp;&#8217;s</p><script>x()</script>') === "A&B 's", 'HTML → Text')
 
 // ── Kontaktangabe ──

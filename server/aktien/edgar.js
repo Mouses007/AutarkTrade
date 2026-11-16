@@ -187,7 +187,7 @@ async function baue(eintrag, ua) {
         const { gelesen, fund } = await leseProspekt(wert.prospekt, ua)
         haltefrist = {
             gelesen,
-            fund: fund && fund.tage != null ? { tage: fund.tage, stelle: fund.stelle, ausnahmen: fund.ausnahmen, treffer: fund.treffer } : null,
+            fund: fund && fund.tage != null ? { tage: fund.tage, stelle: fund.stelle, ausnahmen: fund.ausnahmen, treffer: fund.treffer, hoechstens: !!fund.hoechstens } : null,
             mehrdeutig: fund?.mehrdeutig ? { werte: fund.werte, stelle: fund.stelle } : null,
         }
     }

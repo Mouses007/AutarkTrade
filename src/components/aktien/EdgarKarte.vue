@@ -124,7 +124,7 @@ const fundAblauf = computed(() => (fund.value && d.value?.prospekt ? d.value.pro
                 <a class="haupt" :href="d.prospekt.link" target="_blank" rel="noopener noreferrer">{{ t('edgar.prospekt', { datum: tag(d.prospekt.zeit) }) }}</a>
                 <p v-if="gerechnet" class="klein">{{ t('edgar.fristGerechnet', { tage: HALTEFRIST_TAGE, datum: tag(gerechnet) }) }}</p>
                 <div v-if="fund" class="fund" data-edgar-fund>
-                    <p><b>{{ t('edgar.fund', { tage: fund.tage }) }}</b> {{ t('edgar.fundAblauf', { datum: tag(fundAblauf), eingereicht: tag(d.prospekt.zeit) }) }}</p>
+                    <p><b>{{ t(fund.hoechstens ? 'edgar.fundHoechstens' : 'edgar.fund', { tage: fund.tage }) }}</b> {{ t('edgar.fundAblauf', { datum: tag(fundAblauf), eingereicht: tag(d.prospekt.zeit) }) }}</p>
                     <blockquote lang="en">{{ fund.stelle }}</blockquote>
                     <p class="klein">{{ t(fund.ausnahmen ? 'edgar.fundAusnahmen' : 'edgar.fundHinweis') }}</p>
                 </div>

@@ -7517,6 +7517,7 @@
     "prospekt": "IPO prospectus (424B4) of {datum}",
     "fristGerechnet": "Calculated: the usual {tage} days from the first trading day end on {datum}. The actual lock-up is in the prospectus, section “Underwriting” or “Shares Eligible for Future Sale”.",
     "fund": "Found in the prospectus: {tage} days from the prospectus date.",
+    "fundHoechstens": "Found in the prospectus: up to {tage} days from the prospectus date, from a special arrangement. The reader did not find the general lock-up.",
     "fundAblauf": "That would be about {datum} (calculated from the filing on {eingereicht}; the prospectus date is usually a few days earlier).",
     "fundHinweis": "Passage read automatically, not a verified value. Prospectuses often name exceptions and staggered releases; the wording is what counts.",
     "fundAusnahmen": "Passage read automatically, not a verified value. At this point the prospectus names conditions for an earlier release; the wording is what counts.",

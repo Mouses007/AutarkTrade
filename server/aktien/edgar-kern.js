@@ -255,6 +255,10 @@ const SPERRE_RE = /lock-?\s?up|market stand-?off|restricted period|not to (?:off
 const ANDERES_RE = /option to purchase additional|over-?allotment|all dealers|dealers that (?:effect|buy|sell)|prospectus delivery/i
 const VORZEITIG_RE = /early release|earlier of|released? (?:early|from the lock)|waive|blackout|earnings release/i
 const UMFELD = 420
+// Die allgemeine Klausel nennt, wen sie bindet (Gesellschaft, Organe, im Wesentlichen alle Inhaber) …
+const HAUPT_RE = /directors|executive officers|officers and|substantially all|all of our|holders of (?:substantially|all|our)|\bwe(?:,| and) (?:our|they|each)|lock-?up agreements/i
+// … eine Sonderabrede sagt «bis zu» (erster echter Lauf, CoreWeave: Aktien an OpenAI, «up to 180 days»).
+const HOECHSTENS_RE = /\bup\s+to\s+(?:the\s+)?\(?$/i
 
 /**
  * Dauer der Haltefrist aus dem Text eines Börsenprospekts — nur ein eindeutiger Fund zählt.
@@ -279,15 +283,22 @@ export function leseHaltefrist(text) {
         const ab = m.index - (saetze.at(-1) || '').length
         const ende = danach.search(/[.;](?:\s|$)/)
         const stelle = (t.slice(Math.max(0, ab), m.index + m[0].length) + (ende >= 0 ? danach.slice(0, ende + 1) : '')).trim()
-        funde.push({ tage, stelle: stelle.length > 480 ? '… ' + stelle.slice(-480) : stelle, ausnahmen: VORZEITIG_RE.test(nah + ' ' + danach) })
+        // Rang 2: allgemeine Klausel, 1: Sperrfrist ohne genannten Kreis, 0: «bis zu» (Sonderabrede).
+        const rang = HOECHSTENS_RE.test(davor) ? 0 : HAUPT_RE.test(saetze.at(-1) || '') ? 2 : 1
+        funde.push({ tage, rang, stelle: stelle.length > 480 ? '… ' + stelle.slice(-480) : stelle, ausnahmen: VORZEITIG_RE.test(nah + ' ' + danach) })
     }
     if (!funde.length) return null
+    // Sonderabreden zählen nur, wenn der Prospekt sonst keine Frist nennt — dann als «höchstens».
+    const fest = funde.filter((f) => f.rang > 0)
+    const hoechstens = !fest.length
+    if (!hoechstens) funde.splice(0, funde.length, ...fest)
     // «eligible for sale beginning 181 days after …» ist dieselbe Frist wie 180 Tage, vom Folgetag her gesagt.
     const genannt = new Set(funde.map((f) => f.tage))
     const werte = [...genannt].filter((v) => !genannt.has(v - 1)).sort((a, b) => a - b)
-    funde.sort((a, b) => (a.tage === werte[0] ? 0 : 1) - (b.tage === werte[0] ? 0 : 1))
+    // Gezeigt wird die Stelle mit dem höchsten Rang, nicht die erste im Text.
+    funde.sort((a, b) => (a.tage === werte[0] ? 0 : 1) - (b.tage === werte[0] ? 0 : 1) || b.rang - a.rang)
     if (werte.length > 1) return { tage: null, mehrdeutig: true, werte, stelle: funde[0].stelle }
-    return { tage: werte[0], stelle: funde[0].stelle, treffer: funde.filter((f) => f.tage === werte[0]).length, ausnahmen: funde.some((f) => f.ausnahmen) }
+    return { tage: werte[0], stelle: funde[0].stelle, treffer: funde.filter((f) => f.tage === werte[0]).length, ausnahmen: funde.some((f) => f.ausnahmen), hoechstens }
 }
 
 // ── Kontaktangabe ─────────────────────────────────────────────────────────
