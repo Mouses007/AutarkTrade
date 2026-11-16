@@ -16,10 +16,14 @@
  * schreibenden Werkzeuge wie nach einem Fremdtext-Werkzeug, und die Route
  * hält es für das Gespräch fest (SEC-R-207, `FREMDTEXT_MARKE` in ai-agent.js).
  *
+ * Dazu kommt seit 16.11.2026 der sichtbare Text der Seite (`pruefeSeitenText`):
+ * der Coach soll JEDE Seite kennen, auch eine ohne eigenes Werkzeug. Bis dahin
+ * antwortete er auf der Bots-Seite „ich sehe den Vorschlag nicht".
+ *
  * Rein: keine Datenbank, kein Netz. Selbsttest `__selftest-ki-seitenstand.mjs`.
  */
 
-import { zitatZeile } from './fremdtext.js'
+import { zitatZeile, entschaerfe } from './fremdtext.js'
 
 const WORT = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/
 const BOERSEN_SYMBOL = /^[A-Z0-9]{2,20}$/
@@ -115,4 +119,41 @@ export function pruefeSeitenStand(roh) {
         if (teile.length) aus.zeilen.push(`Filter: ${teile.join('; ')}`)
     }
     return aus
+}
+
+/** Höchstlänge des Seitentexts im Auftrag (Zeichen). Rund 3000 bis 4000 Tokens je Frage. */
+export const SEITENTEXT_MAX = 12000
+
+/**
+ * Seiten, deren sichtbarer Text nur eigene Daten zeigt (eigene Instanzen,
+ * Börsensymbole, Kennzahlen): ihr Text sperrt die schreibenden Werkzeuge
+ * nicht — sonst liesse sich auf der Strategien-Seite kein Backtest mehr
+ * anstossen. Jede andere Seite kann fremde Namen und Texte zeigen.
+ */
+const SEITEN_EIGENTEXT = new Set(['strategieBibliothek', 'strategieLabor', 'strategieInstanzen'])
+
+/**
+ * Prüft den sichtbaren Seitentext aus dem Browser (`src/utils/seitenText.js`).
+ *
+ * Der Text ist, was auf der Seite steht — also auch Token-Namen, Schlagzeilen
+ * und alles, was eine fremde Quelle liefern kann. Er wird deshalb gesäubert
+ * (Steuer- und unsichtbare Zeichen weg, Zitatmarken entschärft), gekürzt und
+ * vom Aufrufer als Zitatblock in den Auftrag gelegt; `fremd` sagt, ob er die
+ * schreibenden Werkzeuge sperrt.
+ *
+ * @param {unknown} roh
+ * @param {string} [seitenId]
+ * @returns {{ text: string, fremd: boolean }|null}
+ */
+export function pruefeSeitenText(roh, seitenId = '') {
+    if (typeof roh !== 'string') return null
+    let text = roh.slice(0, SEITENTEXT_MAX * 2)
+        .replace(/\r/g, '')
+        .replace(/[\p{Zl}\p{Zp}]/gu, '\n')
+        .replace(/[^\S\n]+/g, ' ')
+        .replace(/[\p{Cf}\p{Co}\p{Cn}]|[^\P{Cc}\n]/gu, '')
+        .split('\n').map((z) => z.trim()).filter(Boolean).join('\n')
+    if (!text) return null
+    if (text.length > SEITENTEXT_MAX) text = `${text.slice(0, SEITENTEXT_MAX)}\n(abgeschnitten)`
+    return { text: entschaerfe(text), fremd: !SEITEN_EIGENTEXT.has(String(seitenId)) }
 }

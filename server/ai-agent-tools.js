@@ -40,6 +40,13 @@
  *      eine gespeicherte Werkzeug-Zeile von einem Fremdtext-Werkzeug stammt
  *      (`istFremdtextWerkzeug`). Ein neues Gespräch ist wieder frei.
  *
+ *   4. Seit 16.11.2026 geht mit jeder Frage der sichtbare Text der offenen
+ *      Seite mit (`src/utils/seitenText.js` → `pruefeSeitenText`), als
+ *      Zitatblock im Systemprompt. Er kann alles enthalten, was eine Seite
+ *      zeigt, und sperrt deshalb wie ein Fremdtext-Werkzeug — ausser auf den
+ *      Strategie-Seiten (`SEITEN_EIGENTEXT`), die nur Eigenes zeigen und auf
+ *      denen Backtest und Vorschlag gebraucht werden.
+ *
  * Die Markierung ist keine Mauer (siehe `server/fremdtext.js`); die Mauer ist
  * Punkt 3. Wer ein schreibendes Werkzeug ergänzt, trägt es in
  * `SCHREIBENDE_WERKZEUGE` ein — `__selftest-ki-werkzeuge.mjs` prüft die Sperre
@@ -371,7 +378,7 @@ export async function executeTool(toolName, params, knex, lauf = null) {
         return { error: `Unknown tool: ${toolName}` }
     }
     if (lauf?.fremdtextGesehen && SCHREIBENDE_WERKZEUGE.has(toolName)) {
-        return { error: 'In diesem Gespräch wurde bereits Fremdtext gelesen (Token- oder Firmennamen oder der Lagebericht). Danach sind Backtest und Parametervorschlag gesperrt. Der Nutzer kann die Frage in einem neuen Gespräch stellen.' }
+        return { error: 'In diesem Gespräch wurde bereits Fremdtext gelesen (Token- oder Firmennamen, der Lagebericht oder der sichtbare Inhalt einer Seite). Danach sind Backtest und Parametervorschlag gesperrt. Der Nutzer kann die Frage in einem neuen Gespräch stellen.' }
     }
 
     try {

@@ -24,6 +24,7 @@ import {
     kiCoachOffen, kiCoachBreite, kiCoachSitzung, kiCoachFrage, schliesseKiCoach, setzeKiCoachBreite, setzeKiCoachSitzung,
     leseSeitenStand, merkeKiLauf, kiLaufUnterbrochen, KI_BREITE_MIN, KI_BREITE_MAX,
 } from '@/stores/app/kiCoach.js'
+import { leseSeitenText } from '@/utils/seitenText.js'
 import { ebeneAuf, ebeneZu } from '@/composables/useZurueckGeste.js'
 
 const { t, te } = useI18n()
@@ -37,7 +38,12 @@ const status = ref({ provider: '', model: '', bereit: true })
 
 function kontext() {
     const { stand, chart } = leseSeitenStand()
-    return { seite: { id: seitenId.value || route.name || '', stand }, ...(chart ? { chart } : {}) }
+    // Der sichtbare Inhalt der Seite geht immer mit — so kennt der Coach auch Seiten ohne
+    // eigenes Werkzeug. Einstellungen und Einrichtung ohne Eingabefelder (Schlüssel).
+    const mitFeldern = !/einstellung|setup|update/i.test(`${route.path} ${String(route.name || '')}`)
+    let text = ''
+    try { text = leseSeitenText({ mitFeldern }) } catch { text = '' }
+    return { seite: { id: seitenId.value || route.name || '', stand, text }, ...(chart ? { chart } : {}) }
 }
 
 const gespraech = useKiGespraech({

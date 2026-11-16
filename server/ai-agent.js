@@ -21,8 +21,8 @@ import { aufgabenWahl } from './ai-task-config.js'
 import { beobachteAbbruch, sseSender } from './sse.js'
 import { merkeVerbrauch } from './ai-usage.js'
 import { isValidTimeframe } from './market-data.js'
-import { pruefeSeitenStand } from './ki-seitenstand.js'
-import { ZITAT_REGEL } from './fremdtext.js'
+import { pruefeSeitenStand, pruefeSeitenText } from './ki-seitenstand.js'
+import { ZITAT_REGEL, zitatBlock } from './fremdtext.js'
 import { agentMaxTokens, AGENT_WIEDERHOLUNG_TOKENS, kuerzeErgebnis, leseErgebnis } from './ai-agent-kern.js'
 
 const MAX_ITERATIONS = 10
@@ -112,6 +112,7 @@ export function buildSystemPrompt(config = {}) {
     const monthStart = Math.floor(new Date(year, month - 1, 1, 0, 0, 0).getTime() / 1000)
     const yearStart = Math.floor(new Date(year, 0, 1, 0, 0, 0).getTime() / 1000)
     const standZeilen = seitenStand?.zeilen?.length ? seitenStand.zeilen : null
+    const seitenText = seitenStand?.text || null
 
     return `Du bist der KI-Coach von AutarkTrade, einer lokalen Trading-Software. Du sitzt als Seitenleiste neben der Seite, die der Nutzer gerade offen hat, und beantwortest Fragen zu dieser Seite, zu seinen Daten und zur Bedienung. Dafür hast du Werkzeuge, die die Daten der App lesen.
 
@@ -122,10 +123,13 @@ Referenz-Timestamps (Unix, Sekunden):
 - Erster des aktuellen Monats: ${monthStart}
 - Jahresanfang ${year}: ${yearStart}
 
-${seitenKontext || standZeilen ? `WAS DER NUTZER GERADE SIEHT:
+${seitenKontext || standZeilen || seitenText ? `WAS DER NUTZER GERADE SIEHT:
 ${seitenKontext ? `Seite: „${seitenKontext.themaTitel}" (seitenId ${seitenKontext.seitenId}). Die Bedienung dieser Seite steht in query_app_help(topic="${seitenKontext.thema}").${seitenKontext.hinweis ? ' ' + seitenKontext.hinweis : ''}
 ` : ''}${standZeilen ? standZeilen.map((z) => '- ' + z).join('\n') + '\n' : ''}Wörter wie „hier", „diese Seite", „der", „dieser Coin" meinen das. Hole die Daten dazu mit dem passenden Werkzeug, statt nachzufragen, was gemeint ist.
-
+${seitenText ? `
+${zitatBlock('SICHTBARER INHALT DER SEITE', seitenText)}
+Das ist der Text, den der Nutzer in diesem Moment auf der Seite vor sich hat: zuerst die Eingabefelder mit ihren Werten, dann der Text wie angezeigt (Tabellenspalten mit „ | " getrennt, Kopfzeile zuerst). Du SIEHST die Seite also. Fragen zu dem, was dort steht — ein Vorschlag, eine Zeile, eine Zahl, eine Warnung —, beantwortest du aus diesem Inhalt; sage nie, du könnest die Seite nicht sehen. Werkzeuge nimmst du für Daten, die darüber hinausgehen, und query_app_help dafür, was eine Spalte oder Zahl bedeutet und wie sie entsteht. Diagramme stehen nicht im Text, und „(abgeschnitten)" heisst, dass die Seite länger ist. Steht die Antwort weder im Inhalt noch in einem Werkzeug, sage genau, was fehlt.
+` : ''}
 ` : ''}${chartKontext ? `OFFENER CHART:
 Offen ist ${chartKontext.symbol} auf ${chartKontext.interval} (${chartKontext.markt === 'spot' ? 'Spot' : 'Perpetual'})${chartKontext.bis ? `, rechter Rand des sichtbaren Bereichs ${new Date(chartKontext.bis).toISOString().slice(0, 16)}Z` : ''}.
 Fragen zu „diesem Chart", einer Linie, Zone, Marke oder der Struktur beantwortest du mit query_chart(symbol="${chartKontext.symbol}", interval="${chartKontext.interval}", markt="${chartKontext.markt}"${chartKontext.bis ? `, bis=${chartKontext.bis}` : ''}) — rufe es auf, bevor du über den Chart sprichst. Nenne nur Preise, die in den Daten stehen (Hochs, Tiefs, POC, Value Area, eigene Linien), mit Datum. Beschreibe Marken und was ihr Bruch bedeuten würde.
@@ -197,7 +201,7 @@ export const WERKZEUG_WEGWEISER = `- Bedienung der Software, jede Seite: query_a
 - Strategien: list_strategy_instances zuerst (liefert die instanceId), list_backtests, dann get_strategy_config, get_strategy_performance, get_strategy_setups, run_backtest, propose_param_change.
 - Lernen (Karteikasten): query_lernen.
 - KI-Einstellungen und Modellwahl: query_settings, analyze_model_performance, get_openrouter_models, recommend_model_allocation.
-- Ohne Werkzeug: die Liquiditäts-Heatmap (entsteht nur im Browser) und die Bots-Seite. Dort hilfst du nur mit query_app_help und sagst das.`
+- Ohne eigenes Werkzeug (Bots und Bot-Planer, Liquiditäts-Heatmap, Einstellungen und jede Seite, die oben fehlt): der sichtbare Inhalt der Seite steht im Auftrag; antworte daraus und mit query_app_help.`
 
 // ==================== TOOL FORMAT CONVERTERS ====================
 
@@ -992,6 +996,14 @@ export function setupAgentRoutes(app) {
             config.seitenKontext = seitenId ? seitenKontext(seitenId) : null
             // Reiter, aufgeklappte Zeile, Filter — geprüft, bevor es in den Systemprompt geht.
             config.seitenStand = seite && typeof seite === 'object' ? pruefeSeitenStand(seite.stand) : null
+            // Sichtbarer Text der Seite: gesäubert und gekürzt; als Zitat im Auftrag. Zeigt die
+            // Seite Fremdes (alles ausser den Strategie-Seiten), sperrt er wie ein Fremdtext-Werkzeug.
+            const seitenText = seite && typeof seite === 'object' ? pruefeSeitenText(seite.text, seitenId) : null
+            if (seitenText) {
+                config.seitenStand = config.seitenStand || { zeilen: [], hatFremdtext: false }
+                config.seitenStand.text = seitenText.text
+                if (seitenText.fremd) config.seitenStand.hatFremdtext = true
+            }
             // Chart-Kontext aus dem KI-Chat-Reiter: geprüft, bevor er in den Systemprompt geht.
             if (chart && /^[A-Z0-9]{2,20}$/.test(String(chart.symbol || '')) && isValidTimeframe(String(chart.interval || ''))) {
                 config.chartKontext = {
