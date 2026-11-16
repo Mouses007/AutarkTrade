@@ -118,7 +118,7 @@ function botInstrument(o) {
  * Flacht eine Bot-Order auf ein einheitliches Objekt ab, das das Frontend-Mapping
  * (createPionexTradeObj) konsumiert. positionId = buOrderId (stabil, eindeutig).
  */
-function normalizeBotOrder(o) {
+export function normalizeBotOrder(o) {
     if (!o) return null
     const d = o.buOrderData || {}
     const buOrderId = String(o.buOrderId ?? d.buOrderId ?? '')
@@ -157,7 +157,9 @@ function normalizeBotOrder(o) {
         // Investment bleibt das aktuelle (ohne extra). extraMargin=0 → unverändert.
         const investSolBase = investSol + parseFloat(d.extraMargin ?? 0)
         investUsdt = investSol * entryQuoteP
-        pnlUsdt = (marginBal && closeQuoteP) ? (marginBal * closeQuoteP - investSolBase * entryQuoteP) : 0
+        // dazu Gewinn, der den Bot schon verlassen hat (shared/botNetto.js), zum Schlusskurs
+        const ausserhalb = (parseFloat(d.profitExited ?? 0) || 0) + (parseFloat(d.profitWithdrawn ?? 0) || 0)
+        pnlUsdt = (marginBal && closeQuoteP) ? ((marginBal + ausserhalb) * closeQuoteP - investSolBase * entryQuoteP) : 0
     } else {
         investUsdt = parseFloat(d.usdtInvestment ?? d.initUsdtInvestment ?? 0)
         // linear: schon USDT. Futures-Grid: aus der Marge (nach Gebühren und Funding), nicht

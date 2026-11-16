@@ -9,6 +9,7 @@ import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { eingerichteteBoersen, pruefeNichtEingerichtet } from './boersenZugang.js'
 import { istGewinn } from '../../shared/gewinn.js'
 import { nettoAusGewinn } from '../../shared/botNetto.js'
+import { tradeInUsdt } from '../../shared/coinM.js'
 import i18n from '../i18n'
 import { holeNeueBewertungen } from './tradePopups.js'
 
@@ -568,6 +569,19 @@ async function createTradeFromClosedPosition(histPos, incoming, skipMetadata = f
         if (!histPos.spotGrid && Number.isFinite(parseFloat(histPos.nettoBot))) tradeObj.nettoAusPionex = true
         if (histPos.setLeverage) tradeObj.leverage = parseFloat(histPos.setLeverage)
         if (histPos.initQuoteInvestment) tradeObj.investment = parseFloat(histPos.initQuoteInvestment)
+        // Coin-M: Beträge kommen in der Coin (SOL) und müssen in USDT umgeschrieben werden — wie im
+        // Schnell-Import (quickImport.js). Bis 16.11.2026 fehlte das hier: ein SOL-Bot mit −3.53 SOL stand
+        // als «−3.53 USDT» im Journal, wahr waren rund −411 USDT.
+        tradeObj.gridProfit = parseFloat(histPos.gridProfit ?? 0)
+        tradeObj.coinM = !!histPos.coinM
+        tradeObj.marginCoin = histPos.marginCoin || 'USDT'
+        tradeObj.pnlUsdt = parseFloat(histPos.pnlUsdt ?? 0)
+        tradeObj.investUsdt = parseFloat(histPos.investUsdt ?? 0)
+        tradeObj.quoteCloseP = parseFloat(histPos.quoteCloseP ?? 0)
+        tradeObj.coinMGeprueft = true   // Marke für server/bot-netto-abgleich.js
+        Object.assign(tradeObj, tradeInUsdt(tradeObj))
+        // die Tagessummen weiter unten rechnen mit diesen drei
+        grossPL = tradeObj.grossProceeds; netPL = tradeObj.netProceeds; fee = tradeObj.commission
     } else {
         tradeObj.category = 'futures'
     }

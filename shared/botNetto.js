@@ -24,7 +24,7 @@
  * Rein, ohne Netz und Datenbank. Selbsttest: `shared/__selftest-bot-netto.mjs`.
  */
 import { istGewinn } from './gewinn.js'
-import { tagesSummen } from './coinM.js'
+import { tagesSummen, tradeInUsdt } from './coinM.js'
 
 const zahl = (v) => { if (v === null || v === undefined || v === '') return null; const n = parseFloat(v); return Number.isFinite(n) ? n : null }
 
@@ -131,15 +131,40 @@ export function tradeAusPionex(t, netto) {
     return { ...t, ...geldFelder(t, brutto, netto), ...(t.pnlUsdt !== undefined ? { pnlUsdt: netto } : {}), nettoNachGebuehren: true, nettoAusPionex: true }
 }
 
+/** Fehlt diesem Bot-Trade noch die Prüfung, ob er ein Coin-M-Bot ist? */
+export function brauchtCoinMPruefung(t) {
+    return !!t && t.category === 'bot' && !istSpotBot(t.botType) && !t.coinMGeprueft
+}
+
 /**
- * Eine Tageszeile mit Pionex abgleichen. `nettoNachBot`: Map buOrderId → Netto (Margin-Münze).
+ * Coin-M nachtragen: Über «Pendente Trades» erfasste Bots trugen bis 16.11.2026 weder `coinM` noch den
+ * USDT-Wert — ein SOL-Bot mit −3.53 SOL stand als «−3.53 USDT» im Journal (wahr: rund −411 USDT).
+ * `info` kommt aus Pionex' Rohdaten ({coinM, marginCoin, pnlUsdt, investUsdt, quoteCloseP}); null = Pionex
+ * kennt den Bot nicht mehr. Danach rechnet `tradeInUsdt` (shared/coinM.js) wie beim Schnell-Import um.
+ */
+export function tradeCoinMNachtrag(t, info) {
+    if (!brauchtCoinMPruefung(t)) return t
+    if (!info) return { ...t, coinMGeprueft: 'unbekannt' }
+    if (!info.coinM || t.coinM || t.einheitUsdt) return { ...t, coinMGeprueft: true }
+    return tradeInUsdt({ ...t, coinM: true, marginCoin: info.marginCoin || 'Coin', pnlUsdt: info.pnlUsdt, investUsdt: info.investUsdt, quoteCloseP: info.quoteCloseP, coinMGeprueft: true })
+}
+
+/**
+ * Eine Tageszeile mit Pionex abgleichen. `nettoNachBot`: Map buOrderId → Netto (Margin-Münze);
+ * `infoNachBot` (optional): Map buOrderId → Coin-M-Angaben für `tradeCoinMNachtrag`.
  * `geaendert: false` = nichts zu tun.
  */
-export function tagAusPionex(zeile, nettoNachBot) {
+export function tagAusPionex(zeile, nettoNachBot, infoNachBot = null) {
     const trades = Array.isArray(zeile?.trades) ? zeile.trades : []
-    if (!trades.some(brauchtPionexAbgleich)) return { geaendert: false }
-    const neu = (t) => (brauchtPionexAbgleich(t) ? tradeAusPionex(t, nettoNachBot.get(botIdAusTradeId(t.trade ?? t.id)) ?? null) : t)
-    const neueTrades = trades.map((t) => (brauchtPionexAbgleich(t) ? tradeAusPionex(t, nettoNachBot.get(botIdAusTradeId(t.id)) ?? null) : t))
+    const offen = (t) => brauchtPionexAbgleich(t) || (infoNachBot && brauchtCoinMPruefung(t))
+    if (!trades.some(offen)) return { geaendert: false }
+    const neu = (t) => {
+        const id = botIdAusTradeId(t.trade ?? t.id)
+        let x = brauchtPionexAbgleich(t) ? tradeAusPionex(t, nettoNachBot.get(id) ?? null) : t
+        if (infoNachBot && brauchtCoinMPruefung(x)) x = tradeCoinMNachtrag(x, infoNachBot.get(id) ?? null)
+        return x
+    }
+    const neueTrades = trades.map(neu)
     const executions = Array.isArray(zeile.executions) ? zeile.executions.map(neu) : zeile.executions
     return { geaendert: true, trades: neueTrades, executions, ...tagesSummen(neueTrades) }
 }

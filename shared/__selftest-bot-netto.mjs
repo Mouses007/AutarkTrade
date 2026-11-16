@@ -63,7 +63,7 @@ p('Zeile ohne offenen Bot-Trade: nichts zu tun', tagNettoKorrigiert({ trades: [f
 
 console.log('Exakter Abgleich mit Pionex')
 {
-    const id = '6f9d3fb2-08d9-4113-b52a-4f1205936fb2'
+    const id = '11111111-2222-4333-8444-555555555555'
     p('Bot-Kennung aus der Trade-ID', botIdAusTradeId(`t1794700800_3_${id}`) === id && botIdAusTradeId('t1_2') === null && botIdAusTradeId('t1_0_px_42') === 'px_42')
     // liquidierter MYX-Bot: die Näherung der Migration (−177.90) war zu streng, eingezahlt und verloren sind 143.57
     const genaehert = { id: `t1_0_${id}`, category: 'bot', botType: 'futures_grid', symbol: 'MYXUSDT', buyQuantity: 1, netProceeds: -177.9, netSharePL: -177.9, grossProceeds: -93.64, commission: 84.74, tradingFee: 84.74, fundingFee: 0.48, pnlUsdt: -177.9, nettoNachGebuehren: true }

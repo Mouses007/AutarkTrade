@@ -27,7 +27,7 @@ gleich([seiteImMarkt({ markt: 'aktien' }, 'krypto'), seiteImMarkt({ markt: 'akti
 const research = pagesForMode('research')
 gleich(research.filter((s) => seiteImMarkt(s, 'krypto')).map((s) => s.id),
     ['hypeRadar', 'hypeFrueh', 'hypeBoersen', 'hypeBerichte', 'coinRadar', 'coinVerlauf', 'coinAbverkauf', 'coinFavoriten'], 'Research im Markt Krypto (seit 16.11.2026 mit Favoriten)')
-gleich(research.filter((s) => seiteImMarkt(s, 'aktien')).map((s) => s.id), ['newcomerRadar', 'aktienRadar', 'aktienFavoriten', 'aktienMarktlage', 'aktienStamm'], 'Research im Markt Aktien')
+gleich(research.filter((s) => seiteImMarkt(s, 'aktien')).map((s) => s.id), ['aktienMarktlage', 'aktienRadar', 'aktienStamm', 'newcomerRadar', 'aktienFavoriten'], 'Research im Markt Aktien (Reihenfolge 16.11.2026: Marktlage, Aktien-Radar, Aktien, Newcomer-Radar, Favoriten)')
 // Jede Aktien-Seite hängt am Schalter, sonst stünde sie nach dem Abschalten noch im Menü
 gleich(PAGES.filter((s) => s.markt === 'aktien' && s.flag !== 'modusAktienAn').map((s) => s.id), [], 'Aktien-Seiten tragen das Flag')
 // Ausserhalb von Research ist nur die Live-Analyse marktgebunden — und zwar ganz: jede ihrer Seiten ist Krypto

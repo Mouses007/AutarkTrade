@@ -515,6 +515,7 @@ function createPionexTradeObj(pos, i) {
         if (istBotOrder) obj.nettoNachGebuehren = true
         // …und schon exakt aus Pionex' Rohdaten (server/bot-netto-abgleich.js fasst ihn nicht mehr an)
         if (istBotOrder && Number.isFinite(parseFloat(pos.nettoBot))) obj.nettoAusPionex = true
+        if (isBot) obj.coinMGeprueft = true   // Coin-M-Angaben kommen hier immer vom Server
     } else {
         obj.category = 'futures'
     }

@@ -129,14 +129,14 @@ export const PAGES = [
      * Handelsplätzen als Aktie kaufbar ist, Spot oder Future. Nur mit
      * `modusAktienAn` und nur im Markt «Aktien».
      */
-    // Newcomer-Radar zuerst: er ist die Frage, der Stamm das Nachschlagewerk dazu.
-    { id: 'newcomerRadar', mode: 'research', path: '/newcomer-radar', symbol: 'entdecken', titleKey: 'nav.newcomerRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
+    // Reihenfolge nach Wunsch des Entwicklers (16.11.2026): vom Umfeld zum Einzeltitel — Marktlage, Aktien-Radar,
+    // Aktien (Stamm), Newcomer-Radar, Favoriten. Die Startseite des Modus bleibt `homeJeMarkt` (MODES unten).
+    { id: 'aktienMarktlage', mode: 'research', path: '/aktien-marktlage', symbol: 'tacho', titleKey: 'nav.aktienMarktlage', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/marktradar' } },
     { id: 'aktienRadar', mode: 'research', path: '/aktien-radar', symbol: 'listeNummer', titleKey: 'nav.aktienRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/coin-radar' } },
+    { id: 'aktienStamm', mode: 'research', path: '/aktien', symbol: 'gebaeude', titleKey: 'nav.aktienStamm', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
+    { id: 'newcomerRadar', mode: 'research', path: '/newcomer-radar', symbol: 'entdecken', titleKey: 'nav.newcomerRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
     // Die eigene Merkliste: bleibt stehen, auch wenn der Radar einen Titel nicht bewertet (`server/aktien/favoriten.js`).
     { id: 'aktienFavoriten', mode: 'research', path: '/aktien-favoriten', symbol: 'stern', titleKey: 'nav.aktienFavoriten', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/coin-radar/favoriten' } },
-    // Das Umfeld (Index, Schwankung, Sektoren) — nach den Radaren, damit der Newcomer-Radar die Startseite bleibt.
-    { id: 'aktienMarktlage', mode: 'research', path: '/aktien-marktlage', symbol: 'tacho', titleKey: 'nav.aktienMarktlage', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/marktradar' } },
-    { id: 'aktienStamm', mode: 'research', path: '/aktien', symbol: 'gebaeude', titleKey: 'nav.aktienStamm', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
 
     // ── Strategien ──────────────────────────────────────────
     // In der Reihenfolge der Arbeit: Strategie → prüfen → laufen lassen.
