@@ -1,36 +1,7 @@
-# AutarkTrade
+# AutarkTrade — features and configuration in detail
 
-Trading journal and analysis workstation for **crypto futures** on **Bitunix**, **Bitget** and **Pionex**.
-Runs locally or via Docker — no cloud, no account.
-Vue 3 + Express, SQLite or PostgreSQL.
-
-> **Status:** 4.3.6 (beta) — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
-> (redesign, rebuilt code, AGPL-3.0). Origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
-
-> **AutarkTrade does not trade by itself.** It reads trades, positions and balances from your
-> exchange for the journal, but sends no orders. Strategies run as a simulation only (paper and
-> shadow mode). Live trading is not part of this release.
-
-> The user interface is available in **German** (default) and **English**.
-
-## Screenshots
-
-*All screenshots show a demo installation with synthetic trades — no real account data.*
-
-![Chart workspace — coin tabs, VWAP Vector, Momentum Radar, watchlist and indicator switches](assets/screenshots/chart.png)
-
-![Journal dashboard — P&L, win rate, fees, cumulative P&L](assets/screenshots/dashboard.png)
-
-![Marktradar — Fear & Greed, altcoin season, market overview, market mechanics, funding](assets/screenshots/marktradar.png)
-
-![Calendar — daily results](assets/screenshots/kalender.png)
-
-<p>
-  <img src="assets/screenshots/mobil-chart.png" alt="Chart on the phone" width="260">
-  <img src="assets/screenshots/mobil-vollbild.png" alt="Phone full screen — swipe in the Momentum Radar" width="260">
-</p>
-
----
+This is the long version: every area of the app, the companion apps, installation variants, updates and
+configuration. For a short overview see the [README](README.md).
 
 ## Features
 
@@ -691,4 +662,4 @@ Starts the Vite dev server with Hot Module Replacement on port 39482, proxied th
 
 Free software under the **GNU Affero General Public License v3.0 or later** — [`LICENSE`](LICENSE) (SPDX `AGPL-3.0-or-later`). Copyright (C) 2026 Mouses007. Provided WITHOUT ANY WARRANTY; on first start (and for every new version) the app asks you to accept the disclaimer [`HAFTUNGSAUSSCHLUSS.md`](HAFTUNGSAUSSCHLUSS.md) (dialog "Rechtliches", `server/rechtliches.js`). If you run a modified version for other users over a network, the AGPL requires you to offer them its source code. The name "AutarkTrade" and the logo are not covered by the licence.
 
-If AutarkTrade is useful to you, a donation keeps it going (side menu › Donate, or the coffee icon at the top right).
+If AutarkTrade is useful to you, a donation keeps it going (side menu › Buy me a coffee, or the coffee icon at the top right).

@@ -188,7 +188,8 @@
     "vite": "Name einer Bibliotheks- oder Fremd-API (vue-i18n, Quill, Vite, Vue, ECharts, SortableJS, DOM, dayjs, Databento)",
     "wins": "Allerweltswort bzw. übliche Variablenbildung; in unserem Code in eigenem Zusammenhang (Börsen-APIs, Radar, Server)",
     "yAxis": "Name einer Bibliotheks- oder Fremd-API (vue-i18n, Quill, Vite, Vue, ECharts, SortableJS, DOM, dayjs, Databento)",
-    "year": "Allerweltswort bzw. übliche Variablenbildung; in unserem Code in eigenem Zusammenhang (Börsen-APIs, Radar, Server)"
+    "year": "Allerweltswort bzw. übliche Variablenbildung; in unserem Code in eigenem Zusammenhang (Börsen-APIs, Radar, Server)",
+    "startServer": "Allerweltswort bzw. übliche Variablenbildung; in unserem Code in eigenem Zusammenhang (Börsen-APIs, Radar, Server)"
   },
   "laeufe": {
     "index.mjs|d855295a22aa": "Folge von Konsolenmeldungen",
@@ -210,7 +211,6 @@
     "server/bitunix-api.js|7f0a6c5a6eb8": "Optionen weiterreichen (if (x.a) y.a = x.a, je Feld eine Zeile)",
     "server/chart-api.js|78a809cb21bb": "Express-Route mit Fehlerantwort (Gerüst von Express)",
     "server/coin-radar-api.js|dbfd6a8056d8": "Express-Route mit Fehlerantwort (Gerüst von Express)",
-    "server/database.js|99b592e6d087": "Literal-Liste",
     "server/database.js|c009931d528d": "Folge von Konsolenmeldungen",
     "server/fill-simulator.js|2246e7c8085d": "Hoch/Tief über Kerzen (Max/Min-Schleife, einzige Form; A3-04)",
     "server/hype-radar-api.js|892eef044712": "Express-Route mit Fehlerantwort (Gerüst von Express)",
@@ -364,7 +364,6 @@
     "src/components/strategien/RegelEditor.vue|3949ae252ecb": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/strategien/instanz/ChartReiter.vue|3c8aec033eed": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/strategien/labor/LaeufeReiter.vue|84ce054f67a7": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/components/strategien/labor/TestReiter.vue|ff15edf26bfa": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/strategien/labor/VieleCoins.vue|ebe3a220be60": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/strategien/labor/VieleCoins.vue|012d205489da": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/StrategieBibliothek.vue|34275ebcca59": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
@@ -379,6 +378,27 @@
     "src/components/bots/BotSimulation.vue|cbd0519d9ca9": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/bots/BotAktionDialog.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/bots/BotKi.vue|5dbe7d0069c0": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/components/bots/BotKi.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
+    "server/aktien/splits.js|1431c5483a2f": "Zählschleife mit Elementzugriff und Bedingung (übliche Form)",
+    "server/ausstiege.js|a6849150c949": "Zählschleife mit Elementzugriff und Bedingung (übliche Form)",
+    "server/chart-alarme.js|8ccb2de42224": "Express-Route mit Fehlerantwort (Gerüst von Express)",
+    "server/esp32-api.js|944bd204c07f": "Express-Route mit Fehlerantwort (Gerüst von Express)",
+    "server/sprache-api.js|c6dc8609a35e": "Express-Route mit Fehlerantwort (Gerüst von Express)",
+    "server/database.js|4f7c149873a1": "Literal-Liste",
+    "src/components/radar/KachelBewertung.vue|a07310d13c15": "Optionen von ECharts (dokumentierte Schlüssel)",
+    "src/components/aktien/AktienRadarGuete.vue|cbd0519d9ca9": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/aktien/Kaufzettel.vue|2f3a57efa83f": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotKi.vue|cc2cae9151b4": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotPlaner.vue|0c2db34d54db": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotPlaner.vue|cc2cae9151b4": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotSimulation.vue|f806f5bb9ab7": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/coinradar/CoinFavoriten.vue|30a356d7a611": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/strategien/labor/AusstiegsPruefung.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/strategien/labor/AusstiegsPruefung.vue|5c11a459cf71": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/strategien/labor/AusstiegsPruefung.vue|cbd0519d9ca9": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/strategien/labor/AusstiegsPruefung.vue|d066c35ae85a": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/strategien/labor/TestReiter.vue|386210bfa88a": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/views/AktienFavoriten.vue|8c086a2ae621": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/views/AktienRadar.vue|30a356d7a611": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/views/NewcomerRadar.vue|30a356d7a611": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
   }
 }
