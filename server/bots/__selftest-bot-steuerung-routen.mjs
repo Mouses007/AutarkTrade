@@ -177,6 +177,34 @@ try {
     const anders = await post('/api/bots/plan/aktion/senden', { aktion: 'starten', eingabe: { ...plan, hebel: '5' }, token: (await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: plan })).d.token, haken: true, hakenText: haken })
     p('anderer Hebel als geprüft → 409 neuPruefen', anders.status === 409 && anders.d.code === 'neuPruefen')
 
+    console.log('Jede Aktion einmal bis zum gesendeten Körper (Audit STG-14)')
+    {
+        const SPERRE = 10_500   // Pause je Bot zwischen zwei Sendungen
+        const faelle = [
+            ['band', { unten: '90', oben: '210', anzahl: '300' }, /\/adjustParams$/, (b) => b.type === 'adjust_params' && b.row === 300 && b.keepInvestment === true],
+            ['investieren', { betrag: '0.5' }, /\/adjustParams$/, (b) => b.type === 'invest_in' && b.quoteInvestment === 0.5],
+            ['margeWeg', { betrag: '0.1' }, /\/reduceMargin$/, (b) => b.amount === 0.1 && b.coin === bot.marginCoin],
+            ['stops', { stopLoss: '70', takeProfit: '250' }, /\/updateTriggerProfitLoss$/, (b) => Array.isArray(b.list) && b.list.length >= 1 && b.bu_order_id === bot.id],
+            ['pausieren', {}, /\/pause$/, (b) => b.mode === 'immediate' && b.stopLossEnabled === true],
+            ['beenden', {}, /\/cancel$/, (b) => b.closeSellModel === 'TO_QUOTE' && b.buOrderId === bot.id],
+        ]
+        pionex.modus = 'ok'
+        for (const [aktion, eingabe, pfad, koerperOk] of faelle) {
+            // die Sperre «zuSchnell» und «unklarOffen» gehören nicht zu diesem Test
+            await knex('bot_aenderungen').whereIn('zustand', ['unklar', 'laeuft']).update({ zeit: Date.now() - 11 * 60_000 })
+            const pr = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion, eingabe })).d
+            let se
+            for (let i = 0; i < 3; i++) {
+                se = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion, eingabe, token: pr.token, haken: true, hakenText: haken })
+                if (se.d.code !== 'zuSchnell') break
+                await new Promise((ok) => setTimeout(ok, SPERRE / 3))
+            }
+            p(`${aktion}: geprüft${pr.ohnePruefung ? ' (ohne Prüfabfrage)' : ''}, gesendet an ${String(pfad).replace(/[\\/$]/g, '')} mit dem gebundenen Körper`,
+                !!pr.token && se.d.ok === true && pfad.test(pionex.letzte?.pfad || '') && koerperOk(pionex.letzte.body) && JSON.stringify(pionex.letzte.body) === JSON.stringify({ ...pr.anfrage.body, openPrice: pionex.letzte.body.openPrice }),
+                JSON.stringify({ code: se.d.code, pfad: pionex.letzte?.pfad, body: pionex.letzte?.body }))
+        }
+    }
+
     console.log('Position reduzieren')
     // Der Nachbau gibt je Schritt 1/Höchstmenge der heutigen Investition frei (Anteil = Schritte / Höchstmenge)
     pionex.investition = bot.einsatz.aktuell

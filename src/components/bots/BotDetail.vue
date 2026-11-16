@@ -17,7 +17,7 @@ import Hinweis from '@/components/basis/Hinweis.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import { palette, tooltipStil, schrift, grundOption, wertAchse } from '@/utils/journal/diagramme/gestaltung.js'
-import { preis, betrag, prozent, zahl, datum, dauer, ton } from './format.js'
+import { preis, betrag, prozent, zahl, menge, mengenEinheit, datum, dauer, laufzeitTage, ton } from './format.js'
 import BotSimulation from './BotSimulation.vue'
 import BotKi from './BotKi.vue'
 import BotAktionen from './BotAktionen.vue'
@@ -36,6 +36,8 @@ const { t, te } = useI18n()
 const emit = defineEmits(['gesendet'])
 const istSpot = computed(() => props.bot.typ === 'spot_grid')
 const steuerungAktiv = computed(() => !!(props.steuerung?.schluessel && props.steuerung?.freigeschaltet && ['futures_grid', 'coinm_grid', 'spot_grid'].includes(props.bot.typ)))
+// Spot kann über die App nur starten und beenden: «Umsetzen» (Band, Investition, Stops) gibt es dort nicht (Audit UI-09)
+const umsetzbar = computed(() => steuerungAktiv.value && !istSpot.value)
 const vorschlag = ref(null)
 const aktKarte = ref(null)
 function umsetzen(v) {
@@ -63,12 +65,25 @@ const k = computed(() => markt.value?.kennzahlen || props.bot.kennzahlen || {})
 const mc = computed(() => props.bot.marginCoin)
 const text = (pfad, wert) => (wert && te(`${pfad}.${wert}`) ? t(`${pfad}.${wert}`) : (wert || '—'))
 
+const einheit = computed(() => mengenEinheit(props.bot))
+
 function stopText(s) {
     if (!s || s.wert == null) return t('bots.feld.keiner')
     if (/price/.test(s.art || '')) return preis(s.wert)
     if (s.art === 'profit_ratio') return prozent(s.wert)
     return `${zahl(s.wert, 4)} (${s.art})`
 }
+/** Liquidation: mehrere Werte mit «unten»/«oben» beschriftet (neutrale Bots haben beide); einer allein steht für sich. */
+const liqText = computed(() => {
+    const l = props.bot.liquidation || {}
+    const teile = []
+    if (l.unten != null) teile.push([t('bots.feld.liqUnten'), l.unten])
+    if (l.oben != null) teile.push([t('bots.feld.liqOben'), l.oben])
+    // Pionex' eigener Einzelwert nur, wenn er nicht schon als unten/oben dasteht
+    if (l.preis != null && l.preis !== l.unten && l.preis !== l.oben) teile.push(['Pionex', l.preis])
+    if (teile.length === 1) return preis(teile[0][1])
+    return teile.map(([name, wert]) => `${name} ${preis(wert)}`).join(' · ')
+})
 
 async function ladeMarkt() {
     laedt.value = true
@@ -82,6 +97,9 @@ async function ladeMarkt() {
         zeichne()
     } catch (e) {
         marktFehler.value = e?.response?.data?.error || e.message
+        // Die Kennzahlen aus der alten Marktantwort passen nicht mehr zum Bot: auf die der Bot-Liste
+        // zurückfallen (die Kerzen bleiben stehen, der Fehler steht in der Chart-Karte) — Audit UI-11
+        if (markt.value) markt.value = { ...markt.value, kennzahlen: null }
     } finally {
         laedt.value = false
     }
@@ -91,7 +109,7 @@ function zeichne() {
     if (!chartEl.value || !markt.value?.kerzen?.length) return
     const p = palette()
     if (!chart) chart = echarts.init(chartEl.value)
-    chart.setOption(kursChartOption(props.bot, markt.value.kerzen, t, p), true)
+    chart.setOption(kursChartOption(props.bot, markt.value.kerzen, t, p, { breite: chart.getWidth(), hoehe: chart.getHeight() }), true)
 }
 
 async function ladeVerlauf() {
@@ -118,12 +136,14 @@ function zeichneVerlauf() {
         series: [
             { name: t('bots.feld.gewinn'), type: 'line', showSymbol: false, data: reihe('gesamt'), lineStyle: { color: p.accent }, itemStyle: { color: p.accent } },
             { name: t('bots.feld.gridGewinn'), type: 'line', showSymbol: false, data: reihe('gridGewinn'), lineStyle: { color: p.good }, itemStyle: { color: p.good } },
-            { name: t('bots.feld.funding'), type: 'line', showSymbol: false, data: reihe('funding'), lineStyle: { color: p.warn, type: 'dashed' }, itemStyle: { color: p.warn } },
+            // Spot kennt kein Funding: die Reihe wäre eine Nulllinie mit Legendeneintrag
+            ...(istSpot.value ? [] : [{ name: t('bots.feld.funding'), type: 'line', showSymbol: false, data: reihe('funding'), lineStyle: { color: p.warn, type: 'dashed' }, itemStyle: { color: p.warn } }]),
         ],
     }, true)
 }
 
-function groesse() { chart?.resize(); verlaufChart?.resize() }
+// neu zeichnen, nicht nur skalieren: die Plätze der Linien-Beschriftungen hängen an der Breite
+function groesse() { chart?.resize(); zeichne(); verlaufChart?.resize() }
 onMounted(() => { ladeMarkt(); ladeVerlauf(); window.addEventListener('resize', groesse) })
 onBeforeUnmount(() => {
     window.removeEventListener('resize', groesse)
@@ -133,15 +153,29 @@ onBeforeUnmount(() => {
 watch(() => props.bot.id, () => { markt.value = null; chart?.clear(); verlaufChart?.clear(); ladeMarkt(); ladeVerlauf() })
 // Derselbe Bot mit neuen Werten (nach einer Aktion oder «Aktualisieren»): Kennzahlen
 // und Chart-Linien hängen an Liquidation, Band, Stops und Kurs — neu holen und zeichnen.
-const botStand = computed(() => JSON.stringify([props.bot.liquidation, props.bot.grid?.unten, props.bot.grid?.oben, props.bot.grid?.anzahl, props.bot.stops, props.bot.position?.einstieg, props.bot.kurs, props.bot.einsatz]))
+// Auch Positionsmenge, Status und Ergebnis: bei unverändertem Kurs blieben die Gewinnzahlen sonst alt (Audit UI-11).
+const botStand = computed(() => JSON.stringify([props.bot.liquidation, props.bot.grid?.unten, props.bot.grid?.oben, props.bot.grid?.anzahl, props.bot.stops, props.bot.position?.einstieg, props.bot.position?.menge, props.bot.kurs, props.bot.einsatz, props.bot.status, props.bot.laufend, props.bot.ergebnis]))
 watch(botStand, (neu, alt) => { if (alt && neu !== alt && markt.value) ladeMarkt() })
+// Nur was eine Aktion ändert (nicht Kurs, Ergebnis, Füllstand — die wechseln bei jedem «Aktualisieren»):
+// daran hängt, ob die KI-Vorschläge noch zum Bot passen.
+const einstellungStand = computed(() => JSON.stringify([props.bot.grid?.unten, props.bot.grid?.oben, props.bot.grid?.anzahl, props.bot.stops, props.bot.einsatz?.basis, props.bot.einsatz?.extraMarge, props.bot.hebel, props.bot.status]))
 
 const roh = ref(null)
-async function ladeRoh(e) {
-    if (!e?.target?.open || roh.value) return
-    try { roh.value = (await axios.get(`/api/bots/${encodeURIComponent(props.bot.id)}/roh`)).data?.roh || {} } catch { roh.value = {} }
+const rohOffen = ref(false)
+let rohLauf = 0
+async function holeRoh() {
+    const lauf = ++rohLauf
+    let neu
+    try { neu = (await axios.get(`/api/bots/${encodeURIComponent(props.bot.id)}/roh`)).data?.roh || {} } catch { neu = {} }
+    if (lauf === rohLauf) roh.value = neu   // eine späte Antwort des alten Bots/Stands zählt nicht
 }
-watch(() => props.bot.id, () => { roh.value = null })
+function ladeRoh(e) {
+    rohOffen.value = !!e?.target?.open
+    if (rohOffen.value && !roh.value) holeRoh()
+}
+watch(() => props.bot.id, () => { rohLauf++; roh.value = null; if (rohOffen.value) holeRoh() })
+// Nach einer Aktion oder «Aktualisieren»: offene Rohfelder neu holen, zugeklappte beim nächsten Öffnen
+watch(botStand, (neu, alt) => { if (!alt || neu === alt) return; if (rohOffen.value) holeRoh(); else { rohLauf++; roh.value = null } })
 const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {})
     .filter(([, v]) => v !== null && v !== '' && typeof v !== 'object')
     .sort(([a], [b]) => a.localeCompare(b)))
@@ -165,40 +199,40 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
             <Karte :titel="t('bots.abschnitt.grid')">
                 <dl class="liste">
                     <dt>{{ t('bots.feld.band') }}</dt><dd>{{ preis(bot.grid?.unten) }} – {{ preis(bot.grid?.oben) }}</dd>
-                    <dt>{{ t('bots.feld.grids') }}</dt><dd>{{ zahl(bot.grid?.anzahl) }} · {{ bot.grid?.art || '—' }}</dd>
+                    <dt>{{ t('bots.feld.grids') }}</dt><dd>{{ zahl(bot.grid?.anzahl) }} · {{ text('bots.gridArt', bot.grid?.art) }}</dd>
                     <dt>{{ t('bots.feld.abstand') }}</dt>
                     <dd>
                         <template v-if="bot.grid?.abstand">{{ prozent(bot.grid.abstand.unten, { stellen: 2 }) }} – {{ prozent(bot.grid.abstand.oben, { stellen: 2 }) }}</template>
                         <template v-else>—</template>
                     </dd>
                     <dt>{{ t('bots.feld.nettoZyklus') }}</dt><dd>{{ prozent(bot.grid?.nettoJeZyklus, { stellen: 3 }) }}</dd>
-                    <dt>{{ t('bots.feld.mengeJeGrid') }}</dt><dd>{{ zahl(bot.grid?.mengeJeGrid, 6) }}</dd>
+                    <dt>{{ t('bots.feld.mengeJeGrid') }}</dt><dd>{{ menge(bot.grid?.mengeJeGrid, einheit) }}</dd>
                     <dt>{{ t('bots.feld.bandInAtr') }}</dt><dd>{{ k.bandInAtr != null ? t('bots.feld.inAtr', { n: zahl(k.bandInAtr, 1) }) : '—' }}</dd>
                     <dt>{{ t('bots.feld.zeitImBand') }}</dt>
                     <dd>{{ k.zeitImBand ? t('bots.zeitImBandText', { innen: prozent(k.zeitImBand.innen, { stellen: 0 }), darunter: prozent(k.zeitImBand.darunter, { stellen: 0 }), darueber: prozent(k.zeitImBand.darueber, { stellen: 0 }) }) : '—' }}</dd>
                     <dt>{{ t('bots.feld.trigger') }}</dt><dd>{{ bot.trigger ? preis(bot.trigger.preis) : t('bots.feld.keiner') }}</dd>
-                    <dt>{{ t('bots.feld.trailing') }}</dt><dd>{{ bot.trailing ? `${bot.trailing.art} ${preis(bot.trailing.unten)} – ${preis(bot.trailing.oben)}` : t('bots.feld.keiner') }}</dd>
+                    <dt>{{ t('bots.feld.trailing') }}</dt><dd>{{ bot.trailing ? `${text('bots.trailingArt', bot.trailing.art)} ${preis(bot.trailing.unten)} – ${preis(bot.trailing.oben)}` : t('bots.feld.keiner') }}</dd>
                 </dl>
             </Karte>
 
             <Karte :titel="t('bots.abschnitt.ergebnis')">
                 <dl class="liste">
                     <dt>{{ t('bots.feld.gewinn') }}</dt>
-                    <dd :class="ton(k.gewinn?.gesamt)">{{ betrag(k.gewinn?.gesamt, mc, { vorzeichen: true }) }} <span class="leise">{{ prozent(k.rendite?.gesamt, { vorzeichen: true }) }}</span></dd>
+                    <dd :class="ton(k.gewinn?.gesamt, mc)">{{ betrag(k.gewinn?.gesamt, mc, { vorzeichen: true }) }} <span class="leise">{{ prozent(k.rendite?.gesamt, { vorzeichen: true }) }}</span></dd>
                     <template v-if="bot.laufend">
                         <dt class="ein">{{ t('bots.feld.realisiert') }}</dt><dd>{{ betrag(k.gewinn?.realisiert, mc, { vorzeichen: true }) }}</dd>
                         <dt class="ein">{{ t('bots.feld.schwebend') }}</dt><dd>{{ betrag(k.gewinn?.schwebend, mc, { vorzeichen: true }) }}</dd>
                     </template>
-                    <dt>{{ t('bots.feld.gridGewinn') }}</dt><dd :class="ton(bot.ergebnis?.gridGewinn)">{{ betrag(bot.ergebnis?.gridGewinn, mc, { vorzeichen: true }) }}</dd>
-                    <dt>{{ t('bots.feld.gridGewinn24h') }}</dt><dd>{{ betrag(bot.ergebnis?.gridGewinn24h, mc, { vorzeichen: true }) }}</dd>
-                    <template v-if="!istSpot"><dt>{{ t('bots.feld.funding') }}</dt><dd :class="ton(bot.ergebnis?.funding)">{{ betrag(bot.ergebnis?.funding, mc, { vorzeichen: true }) }}</dd></template>
+                    <dt>{{ t('bots.feld.gridGewinn') }}</dt><dd :class="ton(bot.ergebnis?.gridGewinn, mc)">{{ betrag(bot.ergebnis?.gridGewinn, mc, { vorzeichen: true }) }}</dd>
+                    <template v-if="bot.laufend"><dt>{{ t('bots.feld.gridGewinn24h') }}</dt><dd>{{ betrag(bot.ergebnis?.gridGewinn24h, mc, { vorzeichen: true }) }}</dd></template>
+                    <template v-if="!istSpot"><dt>{{ t('bots.feld.funding') }}</dt><dd :class="ton(bot.ergebnis?.funding, mc)">{{ betrag(bot.ergebnis?.funding, mc, { vorzeichen: true }) }}</dd></template>
                     <dt>{{ t('bots.feld.gebuehren') }}</dt><dd>{{ betrag(bot.ergebnis?.gebuehren, mc) }}</dd>
                     <dt>{{ t('bots.feld.renditeJahr') }}</dt><dd>{{ prozent(k.rendite?.jahr, { vorzeichen: true }) }}</dd>
                     <dt>{{ t('bots.feld.gridRenditeJahr') }}</dt><dd>{{ prozent(k.gridRendite?.jahr, { vorzeichen: true }) }}</dd>
                     <dt>{{ t('bots.feld.zyklen') }}</dt><dd>{{ zahl(bot.ergebnis?.zyklen) }} <span class="leise">({{ zahl(k.zyklenProTag, 1) }} / d)</span></dd>
-                    <dt>{{ t('bots.feld.trades24h') }}</dt><dd>{{ zahl(bot.ergebnis?.trades24h) }}</dd>
+                    <template v-if="bot.laufend"><dt>{{ t('bots.feld.trades24h') }}</dt><dd>{{ zahl(bot.ergebnis?.trades24h) }}</dd></template>
                     <dt>{{ t('bots.feld.einsatz') }}</dt><dd>{{ betrag(k.gewinn?.basis, mc) }}</dd>
-                    <dt>{{ t('bots.feld.laufzeit') }}</dt><dd>{{ dauer(k.tage) }} <span class="leise">{{ datum(bot.erstellt) }}<template v-if="bot.beendet"> – {{ datum(bot.beendet) }}</template></span></dd>
+                    <dt>{{ t('bots.feld.laufzeit') }}</dt><dd>{{ dauer(laufzeitTage(bot, k.tage)) }} <span class="leise">{{ datum(bot.erstellt) }}<template v-if="bot.beendet"> – {{ datum(bot.beendet) }}</template></span></dd>
                 </dl>
             </Karte>
 
@@ -206,17 +240,14 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
                 <dl class="liste">
                     <dt>{{ t('bots.feld.kurs') }}</dt>
                     <dd>{{ bot.laufend ? preis(bot.kurs) : '—' }} <span v-if="k.band" class="leise">{{ t(`bots.lage.${k.band.lage}`) }}</span></dd>
-                    <dt>{{ t('bots.feld.position') }}</dt><dd>{{ zahl(bot.position?.menge, 4) }}<span v-if="istSpot && bot.position?.menge != null" class="leise"> {{ bot.coin }}</span></dd>
+                    <dt>{{ t('bots.feld.position') }}</dt><dd>{{ menge(bot.position?.menge, einheit) }}</dd>
                     <dt>{{ t('bots.feld.einstieg') }}</dt><dd>{{ preis(bot.position?.einstieg) }}</dd>
                     <dt>{{ t('bots.feld.startPreis') }}</dt><dd>{{ preis(bot.position?.startPreis) }}</dd>
                     <dt v-if="!bot.laufend">{{ t('bots.feld.schlussPreis') }}</dt><dd v-if="!bot.laufend">{{ preis(bot.position?.schlussPreis) }}</dd>
                     <template v-if="!istSpot">
                     <dt>{{ t('bots.feld.liquidation') }}</dt>
                     <dd>
-                        <template v-if="bot.liquidation?.unten != null || bot.liquidation?.oben != null || bot.liquidation?.preis != null">
-                            {{ [bot.liquidation.unten, bot.liquidation.preis, bot.liquidation.oben].filter((v) => v != null).map(preis).join(' / ') }}
-                        </template>
-                        <template v-else>—</template>
+                        {{ liqText || '—' }}
                     </dd>
                     <dt>{{ t('bots.feld.liqAbstand') }}</dt>
                     <dd>{{ k.liquidation ? prozent(k.liquidation.abstand) : '—' }}<span v-if="k.liquidation?.inAtr != null" class="leise"> · {{ t('bots.feld.inAtr', { n: zahl(k.liquidation.inAtr, 1) }) }}</span></dd>
@@ -227,7 +258,7 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
                     <template v-else>
                     <dt>{{ t('bots.feld.marge') }}</dt><dd>{{ betrag(bot.einsatz?.marge, mc) }}</dd>
                     <dt>{{ t('bots.feld.extraMarge') }}</dt><dd>{{ betrag(bot.einsatz?.extraMarge, mc) }}</dd>
-                    <template v-if="bot.laufend"><dt>{{ t('bots.feld.risiko') }}</dt><dd>{{ bot.risikoStatus || '—' }}</dd></template>
+                    <template v-if="bot.laufend"><dt>{{ t('bots.feld.risiko') }}</dt><dd>{{ text('bots.risikoStatus', bot.risikoStatus) }}</dd></template>
                     </template>
                     <dt>{{ t('bots.feld.atrTag') }}</dt><dd>{{ preis(markt?.atrTag) }}</dd>
                 </dl>
@@ -238,8 +269,10 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
             <div v-if="laedt" class="mitte"><Kreisel :groesse="24" /></div>
             <Hinweis v-else-if="marktAus" art="info">{{ t('bots.marktAus') }}</Hinweis>
             <Hinweis v-else-if="marktFehler" art="fehler">{{ marktFehler }}</Hinweis>
+            <!-- solange keine Kerzen da sind, sagt die Karte das — sie stand sonst leer da -->
+            <p v-if="!laedt && !marktAus && !marktFehler && !markt?.kerzen?.length" class="fuss">{{ t('bots.chartLeer') }}</p>
             <div v-show="markt?.kerzen?.length" ref="chartEl" class="chart"></div>
-            <p v-if="markt?.zeitrahmen" class="fuss">{{ t('bots.chartHinweis', { tf: markt.zeitrahmen }) }}</p>
+            <p v-if="markt?.zeitrahmen && markt?.kerzen?.length" class="fuss">{{ t(istSpot ? 'bots.chartHinweisSpot' : 'bots.chartHinweis', { tf: markt.zeitrahmen }) }}</p>
         </Karte>
 
         <Karte v-if="steuerungAktiv" ref="aktKarte" :titel="t('bots.abschnitt.aktionen')">
@@ -247,11 +280,11 @@ const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {}
         </Karte>
 
         <Karte v-if="bot.laufend && ['futures_grid', 'coinm_grid', 'spot_grid'].includes(bot.typ)" :titel="t('bots.abschnitt.ki')">
-            <BotKi :bot="bot" :steuerung-aktiv="steuerungAktiv" @in-simulation="inSimulation" @umsetzen="umsetzen" />
+            <BotKi :bot="bot" :stand="einstellungStand" :steuerung-aktiv="umsetzbar" @in-simulation="inSimulation" @umsetzen="umsetzen" />
         </Karte>
 
         <Karte v-if="SIMULIERBAR.includes(bot.typ)" ref="simKarte" :titel="t('bots.abschnitt.simulation')">
-            <BotSimulation ref="simulation" :bot="bot" :steuerung-aktiv="steuerungAktiv && bot.laufend" @umsetzen="umsetzen" />
+            <BotSimulation ref="simulation" :bot="bot" :steuerung-aktiv="umsetzbar && bot.laufend" @umsetzen="umsetzen" />
         </Karte>
 
         <Karte v-if="bot.laufend || verlauf.length" :titel="t('bots.abschnitt.verlauf')">

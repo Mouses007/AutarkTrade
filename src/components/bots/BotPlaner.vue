@@ -13,7 +13,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Pille from '@/components/basis/Pille.vue'
 import BotAktionDialog from './BotAktionDialog.vue'
-import { preis, betrag, prozent, zahl, datum, ton } from './format.js'
+import { preis, betrag, prozent, zahl, datum, ton, tonProzent } from './format.js'
 
 const props = defineProps({ steuerung: { type: Object, default: null } })
 const emit = defineEmits(['gestartet'])
@@ -162,7 +162,7 @@ async function pruefeMindest() {
             }
         }
         if (lauf !== mindestLauf) return
-        mindest.value = { ...mindest.value, [c.id]: r || { fehler: '429' } }
+        mindest.value = { ...mindest.value, [c.id]: r || { fehler: t('bots.plan.minZuViele') } }
         if (r?.min) letzte = { min: r.min, anzahl: c.variante.anzahl }
     }
 }
@@ -295,8 +295,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
             <dl class="zahlen">
                 <div><dt>{{ t('bots.feld.kurs') }}</dt><dd>{{ preis(erg.kurs) }}</dd></div>
                 <div><dt>{{ t('bots.feld.atrTag') }}</dt><dd>{{ preis(erg.markt?.atr) }} <span class="leise">({{ prozent(erg.markt?.atr && erg.kurs ? erg.markt.atr / erg.kurs : null) }})</span></dd></div>
-                <div><dt>{{ t('bots.plan.tage7') }}</dt><dd :class="ton(erg.markt?.aenderung7)">{{ prozent(erg.markt?.aenderung7, { vorzeichen: true }) }}</dd></div>
-                <div><dt>{{ t('bots.plan.tage30') }}</dt><dd :class="ton(erg.markt?.aenderung30)">{{ prozent(erg.markt?.aenderung30, { vorzeichen: true }) }}</dd></div>
+                <div><dt>{{ t('bots.plan.tage7') }}</dt><dd :class="tonProzent(erg.markt?.aenderung7)">{{ prozent(erg.markt?.aenderung7, { vorzeichen: true }) }}</dd></div>
+                <div><dt>{{ t('bots.plan.tage30') }}</dt><dd :class="tonProzent(erg.markt?.aenderung30)">{{ prozent(erg.markt?.aenderung30, { vorzeichen: true }) }}</dd></div>
                 <div><dt>{{ t('bots.plan.spanne30') }}</dt><dd>{{ preis(erg.markt?.tief30) }} – {{ preis(erg.markt?.hoch30) }}</dd></div>
             </dl>
             <div class="trend">
@@ -370,8 +370,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                             <td>{{ z.anzahl }}</td>
                             <template v-if="z.beste">
                                 <td class="text">{{ z.beste.id }} · {{ z.beste.titel }}</td>
-                                <td :class="ton(z.beste.rueckblick.gesamt)">{{ betrag(z.beste.rueckblick.gesamt, erg.einheit, { vorzeichen: true }) }} <span class="leise">{{ prozent(ergebnisPct(z.beste), { vorzeichen: true }) }}</span></td>
-                                <td :class="ton(z.beste.rueckblick.maxVerlust)">{{ betrag(z.beste.rueckblick.maxVerlust, erg.einheit) }}</td>
+                                <td :class="ton(z.beste.rueckblick.gesamt, erg.einheit)">{{ betrag(z.beste.rueckblick.gesamt, erg.einheit, { vorzeichen: true }) }} <span class="leise">{{ prozent(ergebnisPct(z.beste), { vorzeichen: true }) }}</span></td>
+                                <td :class="ton(z.beste.rueckblick.maxVerlust, erg.einheit)">{{ betrag(z.beste.rueckblick.maxVerlust, erg.einheit) }}</td>
                                 <td>{{ prozent(z.beste.start?.liqAbstand, { stellen: 0 }) }}</td>
                             </template>
                             <td v-else colspan="4" class="leise text">{{ t('bots.plan.kurzKeine') }}</td>
@@ -419,12 +419,12 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                             <td>{{ preis(c.variante.unten) }} – {{ preis(c.variante.oben) }}</td>
                             <td>{{ zahl(c.variante.anzahl) }}</td>
                             <td>{{ prozent(c.start?.nettoJeZyklus, { stellen: 2 }) }}</td>
-                            <td :class="ton(c.rueckblick?.gesamt)">{{ betrag(c.rueckblick?.gesamt, erg.einheit, { vorzeichen: true }) }} <span class="leise">{{ prozent(ergebnisPct(c), { vorzeichen: true }) }}</span></td>
-                            <td :class="ton(c.rueckblick?.maxVerlust)">{{ betrag(c.rueckblick?.maxVerlust, erg.einheit) }}</td>
+                            <td :class="ton(c.rueckblick?.gesamt, erg.einheit)">{{ betrag(c.rueckblick?.gesamt, erg.einheit, { vorzeichen: true }) }} <span class="leise">{{ prozent(ergebnisPct(c), { vorzeichen: true }) }}</span></td>
+                            <td :class="ton(c.rueckblick?.maxVerlust, erg.einheit)">{{ betrag(c.rueckblick?.maxVerlust, erg.einheit) }}</td>
                             <td :class="{ schlecht: c.rueckblick?.liquidation }">{{ ende(c.rueckblick) }}</td>
                             <td>{{ prozent(c.rueckblick?.zeitImBand, { stellen: 0 }) }}</td>
                             <td>{{ preis(c.start?.liq) }} <span class="leise">{{ prozent(c.start?.liqAbstand, { stellen: 0 }) }}</span></td>
-                            <td :class="c.start?.verlustRand?.liquidiert ? 'schlecht' : ton(c.start?.verlustRand?.betrag)" :title="c.start?.verlustRand ? t('bots.plan.randZeile', { preis: preis(c.start.verlustRand.preis) }) : ''">
+                            <td :class="c.start?.verlustRand?.liquidiert ? 'schlecht' : ton(c.start?.verlustRand?.betrag, erg.einheit)" :title="c.start?.verlustRand ? t('bots.plan.randZeile', { preis: preis(c.start.verlustRand.preis) }) : ''">
                                 <template v-if="c.start?.verlustRand">{{ betrag(c.start.verlustRand.betrag, erg.einheit, { vorzeichen: true }) }} <span class="leise">{{ c.start.verlustRand.liquidiert ? t('bots.sim.liquidiert') : '@ ' + preis(c.start.verlustRand.preis) }}</span></template>
                                 <span v-else class="leise">—</span>
                             </td>
@@ -433,6 +433,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                                 <span v-else-if="mindest[c.id]?.reichtAus === true" class="gut">✓</span>
                                 <span v-else-if="mindest[c.id]?.reichtAus === false" class="schlecht">{{ mindest[c.id].min ? t('bots.plan.minAb', { betrag: betrag(mindest[c.id].min, erg.einheit) }) : t('bots.plan.minZuKlein') }}</span>
                                 <span v-else class="leise">—</span>
+                                <!-- der Grund stand nur im title und war per Touch nicht erreichbar (Audit UI-16) -->
+                                <span v-if="mindest[c.id]?.fehler" class="minFehler">{{ t('bots.plan.minFehler', { grund: mindest[c.id].fehler }) }}</span>
                             </td>
                             <td><Knopf art="leise" klein @click="uebernehmen(c.variante, c.richtung)">{{ t('bots.plan.uebernehmen') }}</Knopf></td>
                         </tr>
@@ -488,8 +490,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                                 <dd v-else-if="mindest[v.id]?.min" class="schlecht">{{ t('bots.plan.minAb', { betrag: betrag(mindest[v.id].min, erg.einheit) }) }}</dd>
                                 <dd v-else class="leise">—</dd>
                             </div>
-                            <div v-if="v.start?.verlustRand"><dt>{{ t('bots.plan.randSpalte') }}</dt><dd :class="ton(v.start.verlustRand.betrag)">{{ betrag(v.start.verlustRand.betrag, erg.einheit, { vorzeichen: true }) }} <span class="leise">@ {{ preis(v.start.verlustRand.preis) }}</span></dd></div>
-                            <div><dt>{{ t('bots.plan.rueckblick') }}</dt><dd :class="ton(v.rueckblick?.gesamt)">{{ betrag(v.rueckblick?.gesamt, erg.einheit, { vorzeichen: true }) }}</dd></div>
+                            <div v-if="v.start?.verlustRand"><dt>{{ t('bots.plan.randSpalte') }}</dt><dd :class="ton(v.start.verlustRand.betrag, erg.einheit)">{{ betrag(v.start.verlustRand.betrag, erg.einheit, { vorzeichen: true }) }} <span class="leise">@ {{ preis(v.start.verlustRand.preis) }}</span></dd></div>
+                            <div><dt>{{ t('bots.plan.rueckblick') }}</dt><dd :class="ton(v.rueckblick?.gesamt, erg.einheit)">{{ betrag(v.rueckblick?.gesamt, erg.einheit, { vorzeichen: true }) }}</dd></div>
                         </dl>
                         <p>{{ v.begruendung }}</p>
                         <p class="risiko"><strong>{{ t('bots.ki.risiko') }}:</strong> {{ v.risiko }}</p>
@@ -540,8 +542,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 <div><dt>{{ t('bots.feld.mengeJeGrid') }}</dt><dd>{{ zahl(eigenErg.start?.menge, 4) }}</dd></div>
                 <div><dt>{{ t('bots.plan.startPosition') }}</dt><dd>{{ zahl(eigenErg.start?.nominalUsd, 0) }} USD</dd></div>
                 <div><dt>{{ t('bots.plan.liqStart') }}</dt><dd>{{ preis(eigenErg.start?.liq) }} <span class="leise">({{ prozent(eigenErg.start?.liqAbstand) }})</span></dd></div>
-                <div><dt>{{ t('bots.plan.rueckblick') }}</dt><dd :class="ton(eigenErg.rueckblick?.gesamt)">{{ betrag(eigenErg.rueckblick?.gesamt, erg?.einheit || einheit, { vorzeichen: true }) }} <span class="leise">{{ prozent(ergebnisPct(eigenErg), { vorzeichen: true }) }}</span></dd></div>
-                <div><dt>{{ t('bots.sim.maxVerlust') }}</dt><dd :class="ton(eigenErg.rueckblick?.maxVerlust)">{{ betrag(eigenErg.rueckblick?.maxVerlust, erg?.einheit || einheit) }}</dd></div>
+                <div><dt>{{ t('bots.plan.rueckblick') }}</dt><dd :class="ton(eigenErg.rueckblick?.gesamt, erg?.einheit || einheit)">{{ betrag(eigenErg.rueckblick?.gesamt, erg?.einheit || einheit, { vorzeichen: true }) }} <span class="leise">{{ prozent(ergebnisPct(eigenErg), { vorzeichen: true }) }}</span></dd></div>
+                <div><dt>{{ t('bots.sim.maxVerlust') }}</dt><dd :class="ton(eigenErg.rueckblick?.maxVerlust, erg?.einheit || einheit)">{{ betrag(eigenErg.rueckblick?.maxVerlust, erg?.einheit || einheit) }}</dd></div>
                 <div><dt>{{ t('bots.sim.ende') }}</dt><dd>{{ ende(eigenErg.rueckblick) }}</dd></div>
                 <div><dt>{{ t('bots.feld.zeitImBand') }}</dt><dd>{{ prozent(eigenErg.rueckblick?.zeitImBand, { stellen: 0 }) }}</dd></div>
                 <div><dt>{{ t('bots.feld.zyklen') }}</dt><dd>{{ zahl(eigenErg.rueckblick?.zyklen) }}</dd></div>
@@ -599,6 +601,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
 .vorschlag p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 .risiko { color: var(--muted); }
 .min { white-space: nowrap; }
+.minFehler { display: block; color: var(--warn); font-size: 0.72rem; white-space: normal; max-width: 12rem; }
 .blass { opacity: 0.5; }
 .kurzTrend { margin: 0 0 var(--abstand-2); font-weight: 600; }
 .spannung { margin: var(--abstand-2) 0 0; color: var(--warn); font-size: 0.88rem; line-height: 1.5; }

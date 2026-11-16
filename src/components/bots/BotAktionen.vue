@@ -51,7 +51,9 @@ const schritte = computed(() => {
     if (v.einsatz != null && v.einsatz > einsatzHeute) s.push({ aktion: 'investieren', vorgabe: { betrag: Number((v.einsatz - einsatzHeute).toPrecision(6)) }, text: t('bots.st.schrittInvest', { betrag: betrag(v.einsatz - einsatzHeute, props.bot.marginCoin) }) })
     if (v.unten != null || v.oben != null || v.anzahl != null) s.push({ aktion: 'band', vorgabe: { unten: v.unten, oben: v.oben, anzahl: v.anzahl }, text: t('bots.st.schrittBand', { unten: preis(v.unten ?? props.bot.grid?.unten), oben: preis(v.oben ?? props.bot.grid?.oben), anzahl: v.anzahl ?? props.bot.grid?.anzahl }) })
     if (v.stopLoss != null || v.takeProfit != null) s.push({ aktion: 'stops', vorgabe: { stopLoss: v.stopLoss, takeProfit: v.takeProfit }, text: t('bots.st.schrittStops', { sl: preis(v.stopLoss), tp: preis(v.takeProfit) }) })
-    return s
+    // Was dieser Bot über die App nicht kann (Spot: nur starten und beenden), bleibt als Schritt stehen,
+    // aber ohne Knopf — sonst meldet erst die Prüfung «nicht für Spot» (Audit UI-09)
+    return s.map((x) => (x.aktion && !AKTIONEN.value.includes(x.aktion) ? { text: x.text } : x))
 })
 
 async function ladeProtokoll() {
@@ -59,7 +61,8 @@ async function ladeProtokoll() {
 }
 onMounted(ladeProtokoll)
 watch(() => props.bot.id, ladeProtokoll)
-function gesendet() { ladeProtokoll(); emit('gesendet') }
+// Das Protokoll lädt `versucht` (nach jedem Sendeversuch, auch einem abgelehnten — Audit UI-11)
+function gesendet() { emit('gesendet') }
 </script>
 
 <template>
@@ -97,7 +100,7 @@ function gesendet() { ladeProtokoll(); emit('gesendet') }
             </ul>
         </details>
 
-        <BotAktionDialog v-model="dialog" :bot="bot" :aktion="aktion" :vorgabe="vorgabe" :steuerung="steuerung" @gesendet="gesendet" />
+        <BotAktionDialog v-model="dialog" :bot="bot" :aktion="aktion" :vorgabe="vorgabe" :steuerung="steuerung" @gesendet="gesendet" @versucht="ladeProtokoll" />
     </div>
 </template>
 

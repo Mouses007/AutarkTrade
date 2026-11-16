@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
-import { preis, betrag, prozent, zahl, dauer, ton } from './format.js'
+import { preis, betrag, prozent, menge, dauer, laufzeitTage, ton } from './format.js'
 
 const props = defineProps({ bot: { type: Object, required: true } })
 const emit = defineEmits(['oeffnen'])
@@ -50,18 +50,18 @@ const richtungTon = computed(() => ({ LONG: 'gut', SHORT: 'schlecht' }[props.bot
             </div>
             <div>
                 <dt>{{ t('bots.feld.gewinn') }}</dt>
-                <dd :class="ton(k.gewinn?.gesamt)">
+                <dd :class="ton(k.gewinn?.gesamt, bot.marginCoin)">
                     {{ betrag(k.gewinn?.gesamt, bot.marginCoin, { vorzeichen: true }) }}
                     <span class="leise">{{ prozent(k.rendite?.gesamt, { vorzeichen: true }) }}</span>
                 </dd>
             </div>
             <div>
                 <dt>{{ t('bots.feld.gridGewinn') }}</dt>
-                <dd :class="ton(bot.ergebnis?.gridGewinn)">{{ betrag(bot.ergebnis?.gridGewinn, bot.marginCoin, { vorzeichen: true }) }}</dd>
+                <dd :class="ton(bot.ergebnis?.gridGewinn, bot.marginCoin)">{{ betrag(bot.ergebnis?.gridGewinn, bot.marginCoin, { vorzeichen: true }) }}</dd>
             </div>
             <div v-if="bot.laufend && bot.typ === 'spot_grid'">
                 <dt>{{ t('bots.feld.position') }}</dt>
-                <dd>{{ zahl(bot.position?.menge, 4) }} <span class="leise">{{ bot.coin }}</span></dd>
+                <dd>{{ menge(bot.position?.menge, bot.coin) }}</dd>
             </div>
             <div v-else-if="bot.laufend">
                 <dt>{{ t('bots.feld.liqAbstand') }}</dt>
@@ -69,7 +69,7 @@ const richtungTon = computed(() => ({ LONG: 'gut', SHORT: 'schlecht' }[props.bot
             </div>
             <div>
                 <dt>{{ t('bots.feld.laufzeit') }}</dt>
-                <dd>{{ dauer(k.tage) }}</dd>
+                <dd>{{ dauer(laufzeitTage(bot, k.tage)) }}</dd>
             </div>
         </dl>
 

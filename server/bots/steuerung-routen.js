@@ -336,7 +336,8 @@ export function setupBotSteuerungRoutes(app) {
             const k = await schluessel()
             if (!k) return res.status(403).json({ ok: false, code: 'keinSchluessel' })
             const eingabe = req.body?.eingabe || {}
-            const einsatz = Number(eingabe.einsatz)
+            // dieselbe strenge Schreibweise wie die Eingabeprüfung (Komma erlaubt, kein «1e3»)
+            const einsatz = strengeZahl(eingabe.einsatz) ?? NaN
             const schluesselPlan = JSON.stringify(['coin', 'coinM', 'spot', 'richtung', 'hebel', 'unten', 'oben', 'anzahl', 'art'].map((f) => String(eingabe[f] ?? '')))
             const gemerkt = mindestCache.get(schluesselPlan)
             if (gemerkt && Date.now() - gemerkt.zeit < MIN_CACHE_MS) return res.json({ ok: true, min: gemerkt.min, reichtAus: einsatz >= (gemerkt.genau ?? gemerkt.min) })
@@ -364,6 +365,7 @@ export function setupBotSteuerungRoutes(app) {
                 const m = await mindestEinsatzFuer(k, bot, eingabe, stellen, { lo: einsatz, start: schaetzung > einsatz ? schaetzung : einsatz * 2 })
                 // Suche ohne Ergebnis: nicht „zu klein" behaupten, sondern unbekannt
                 if (m.min == null) return res.json({ ok: true, min: null, reichtAus: null, text: `Mindesteinsatz nicht ermittelt (${m.fehler || 'unbekannt'})` })
+                if (m.unsicher) return res.json({ ok: true, min: m.min, reichtAus: null, text: 'Mindesteinsatz nur grob eingegrenzt (Pionex antwortete zwischendurch nicht eindeutig) — höchstens dieser Betrag' })
                 mindestCache.set(schluesselPlan, { min: m.min, genau: m.genau ?? m.min, zeit: Date.now() })
                 for (const [s2, w] of mindestCache) if (Date.now() - w.zeit > MIN_CACHE_MS) mindestCache.delete(s2)
                 res.json({ ok: true, min: m.min, reichtAus: false })

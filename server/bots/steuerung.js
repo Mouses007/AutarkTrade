@@ -100,12 +100,16 @@ function seitenPruefung(bot, sl, tp, kurs) {
     return null
 }
 
+/** Preis eines Stops, oder null, wenn er keiner ist (Quote, Betrag) oder fehlt. */
+export const stopPreis = (stop) => (stop && /price/.test(String(stop.art || '')) && stop.wert != null ? stop.wert : null)
+
 /** Heutige Einstellung in Anzeigeform (USD je Coin, Margin-Münze). */
 export function einstellungVon(bot) {
     return {
         unten: bot.grid?.unten ?? null, oben: bot.grid?.oben ?? null, anzahl: bot.grid?.anzahl ?? null, art: bot.grid?.art ?? null,
         hebel: bot.hebel ?? null, einsatz: bot.einsatz?.basis ?? bot.einsatz?.aktuell ?? null, extraMarge: bot.einsatz?.extraMarge ?? null,
-        stopLoss: bot.stops?.stopLoss?.wert ?? null, takeProfit: bot.stops?.takeProfit?.wert ?? null,
+        // nur Preis-Stops sind ein Preis: ein Stop als Quote (`profit_ratio` −0.2) stand sonst als «−0.2 USD» da (Audit STG-11)
+        stopLoss: stopPreis(bot.stops?.stopLoss), takeProfit: stopPreis(bot.stops?.takeProfit),
         status: bot.status, liquidation: liqRisiko(bot.richtung, bot.liquidation, bot.kurs),
     }
 }
@@ -123,6 +127,8 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     const warnungen = []
     const ip = (usd) => instrumentPreis(bot, usd, stellen)
     const openPrice = istZahl(kurs) && kurs > 0 ? Number(ip(kurs)) : null
+    // als Text in Dezimalschreibweise: `String(7e-7)` wäre «7e-7» (Audit STG-12)
+    const openPriceText = openPrice == null ? null : ip(kurs)
     const basis = bot.einsatz?.basis ?? bot.einsatz?.aktuell ?? null
 
     if (aktion === 'reduzieren') {
@@ -132,7 +138,7 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
         const n = zahl(eingabe.reduceNum)
         if (!Number.isInteger(n) || n < 1) return { fehler: 'betrag' }
         if (openPrice == null) return { fehler: 'kurs' }
-        const body = { buOrderId: id, openPrice: String(openPrice), reduceNum: n }
+        const body = { buOrderId: id, openPrice: openPriceText, reduceNum: n }
         return { aktion, pruefen: { pfad: `${PFAD}/reduceCheck`, body }, senden: { pfad: `${PFAD}/reduce`, body }, nachher: { reduceNum: n }, warnungen: ['marktpreis', 'teilverkauf'] }
     }
 
@@ -360,14 +366,14 @@ export function rundeEinsatzAuf(x) {
  * Ergebnis: {min, genau, schritte} oder {fehler: 'anders'|'grenze'|'schritte', schritte}.
  */
 export async function sucheMindestEinsatz(pruefe, { start, lo = null, hi = null, max = 100_000, genau = 0.05, maxSchritte = 14 } = {}) {
-    let n = 0
+    let n = 0, unsicher = false
     let x = start > 0 ? start : lo > 0 ? lo * 2 : 10
     while (lo == null || hi == null) {
         if (n >= maxSchritte) return { fehler: 'schritte', schritte: n }
         if (x > max) return { fehler: 'grenze', schritte: n }
         const r = await pruefe(x); n++
         if (r === 'ok') hi = x
-        else if (r === 'zuKlein' || (r === 'anders' && hi != null)) lo = x
+        else if (r === 'zuKlein' || (r === 'anders' && hi != null)) { lo = x; if (r === 'anders') unsicher = true }
         else return { fehler: 'anders', schritte: n }
         if (hi == null) x = x * 2
         else if (lo == null) {
@@ -380,7 +386,9 @@ export async function sucheMindestEinsatz(pruefe, { start, lo = null, hi = null,
         const mitte = Number(Math.sqrt(lo * hi).toPrecision(4))
         if (!(mitte > lo && mitte < hi)) break
         const r = await pruefe(mitte); n++
-        if (r === 'ok') hi = mitte; else lo = mitte
+        if (r === 'ok') hi = mitte; else { lo = mitte; if (r === 'anders') unsicher = true }
     }
-    return { min: rundeEinsatzAuf(hi), genau: hi, schritte: n }
+    // `unsicher`: eine Antwort war weder «ok» noch «zu klein» (Pionex' Bremse, anderer Fehler) und zählte als
+    // «zu klein» — der Wert kann viel zu hoch sein (Audit PLN-13) und wird darum nicht gemerkt.
+    return { min: rundeEinsatzAuf(hi), genau: hi, schritte: n, ...(unsicher ? { unsicher: true } : {}) }
 }

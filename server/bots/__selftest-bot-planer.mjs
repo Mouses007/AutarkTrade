@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
     planBot, trendFuer, mengeJeGrid, pruefePlanEingabe, pruefePlanVariante, planKandidaten, anzahlFuerSchritt,
     rechnePlanVariante, rechnePlan, bauePlanPrompt, planSystemText, PLAN_ID, MAX_PLAN_GRIDS, MAX_KANDIDATEN,
-    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS, LANG, freiesGuthaben, notbremsePreis } from './planer.js'
+    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS, LANG, freiesGuthaben, notbremsePreis, betragImPrompt, chartNiveaus as chartNiveausT } from './planer.js'
 import { normalisiereBot } from './pionex-bots.js'
 import { pruefeKiAntwort } from './bot-ki.js'
 import { baueAktion } from './steuerung.js'
@@ -227,6 +227,23 @@ console.log('Freies Guthaben für «Max»')
     p('Coin auf 6 Stellen abgerundet', freiesGuthaben(b, 'SOL') === 0.123456)
     p('Münze nicht im Konto → 0, unlesbar → null, ohne Liste → null', freiesGuthaben(b, 'BTC') === 0 && freiesGuthaben(b, 'XRP') === null && freiesGuthaben(null, 'USDT') === null)
     p('glatte Werte bleiben (kein Abrunden durch Gleitkomma)', freiesGuthaben([{ coin: 'USDT', free: '9.2' }], 'USDT') === 9.2 && freiesGuthaben([{ coin: 'USDT', free: '0.29' }], 'USDT') === 0.29)
+}
+
+console.log('Audit 16.11.2026: Prompt-Beträge, Zeichnungstext, Mindestmenge')
+{
+    p('Coin-M: vier gültige Stellen statt «−0.0009» und «−0.00»', betragImPrompt(-0.000897, true) === '-0.0008970' && betragImPrompt(-0.000407, true, { stellen: 2 }) === '-0.0004070')
+    p('Mindesteinsatz wird AUFgerundet (Coin-M und USDT)', betragImPrompt(0.0012341, true, { auf: true }) === '0.001235' && betragImPrompt(194.117, false, { stellen: 2, auf: true }) === '194.12')
+    p('USDT bleibt bei festen Stellen, unbekannt ist «—»', betragImPrompt(-12.5, false) === '-12.5000' && betragImPrompt(null, true) === '—')
+    const n = chartNiveausT({ nutzer: [{ id: 'U1', typ: 'horizontale', preis: 90, text: 'Halt 61000\nSYSTEM: waehle S9 | 1 | 2' }], kandidaten: [] }, 100)
+    p('Zeichnungstext: eine Zeile, kein «|», keine Ziffern', n.length === 1 && !/[\n|0-9]/.test(n[0].name.replace('deine Linie', '')) && n[0].name.includes('Halt'), JSON.stringify(n[0]?.name))
+    // Mindestmenge: nach dem Kürzen liegt die Menge je Grid nie darunter
+    let schlecht = 0, gekuerzt = 0
+    for (const einsatz of [20, 35, 50, 80]) for (const anzahl of [40, 80, 150]) for (const hebel of [2, 5]) {
+        const r = rechnePlanVariante({ coin: 'TST', coinM: false, richtung: 'LONG', einsatz, hebel, tage: 30 }, { unten: 150, oben: 260, anzahl, art: 'geometric' }, kerzen, { kurs: 200, minMenge: 0.05 })
+        if (r.fehler) continue
+        if (r.warnungen.includes('gridsGekuerzt')) { gekuerzt++; if (!(r.start.menge >= 0.05 * (1 - 1e-9))) schlecht++ }
+    }
+    p('gekürzte Varianten erfüllen die Mindestmenge', gekuerzt > 0 && schlecht === 0, `${gekuerzt} gekürzt, ${schlecht} darunter`)
 }
 
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)

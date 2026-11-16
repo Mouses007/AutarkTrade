@@ -22,7 +22,8 @@ const props = defineProps({
     // Bot-Planer: feste Planwerte (Coin, Coin-M, Richtung, Art), gehen mit jeder Anfrage mit
     feste: { type: Object, default: null },
 })
-const emit = defineEmits(['update:modelValue', 'gesendet'])
+// `versucht`: nach JEDEM Sendeversuch (auch abgelehnt) — das Protokoll hat dann einen neuen Eintrag
+const emit = defineEmits(['update:modelValue', 'gesendet', 'versucht'])
 const { t, te } = useI18n()
 
 const FELDER = {
@@ -41,6 +42,7 @@ const ergebnis = ref(null)
 const haken = ref(false)
 const laedt = ref(false)
 const fehler = ref('')
+const stufenInfo = ref(null)   // Reduzieren: {schritt, hoechstens} in % aus der letzten Prüfung
 // Spot-Grid hat keinen Hebel
 // Reduzieren: Eingabe wahlweise in % der Position oder als Betrag; die Wahl bleibt gemerkt
 const EINHEIT_SCHLUESSEL = 'at.bots.reduzierenEinheit'
@@ -71,7 +73,7 @@ function zuruecksetzen() {
     for (const f of felderFuer.value) e[f] = props.vorgabe?.[f] != null ? String(props.vorgabe[f]) : ''
     if (props.aktion === 'stops') { e.stopLossWeg = false; e.takeProfitWeg = false }
     eingabe.value = e
-    pruefung.value = null; ergebnis.value = null; haken.value = false; fehler.value = ''
+    pruefung.value = null; ergebnis.value = null; haken.value = false; fehler.value = ''; stufenInfo.value = null
     pruefLauf++   // eine noch laufende Prüfung gehört zum alten Dialog
 }
 watch(() => [props.modelValue, props.aktion], ([auf]) => { if (auf) zuruecksetzen() }, { immediate: true })
@@ -81,9 +83,15 @@ watch(eingabe, () => { pruefung.value = null; haken.value = false }, { deep: tru
 const platzhalter = computed(() => ({
     unten: preis(props.bot.grid?.unten), oben: preis(props.bot.grid?.oben), anzahl: String(props.bot.grid?.anzahl ?? ''),
     hebel: String(props.bot.hebel ?? ''), einsatz: String(props.bot.einsatz?.basis ?? props.bot.einsatz?.aktuell ?? ''), betrag: '0',
-    stopLoss: props.bot.stops?.stopLoss?.wert != null ? preis(props.bot.stops.stopLoss.wert) : t('bots.feld.keiner'),
-    takeProfit: props.bot.stops?.takeProfit?.wert != null ? preis(props.bot.stops.takeProfit.wert) : t('bots.feld.keiner'),
+    stopLoss: stopPlatzhalter(props.bot.stops?.stopLoss),
+    takeProfit: stopPlatzhalter(props.bot.stops?.takeProfit),
 }))
+// Nur Preis-Stops als Preis zeigen: ein Stop nach Gewinnquote (`profit_ratio`, Wert −0.2) stand sonst
+// als «Preis −0.20» im Feld (Audit STG-11)
+function stopPlatzhalter(s) {
+    if (!s || s.wert == null) return t('bots.feld.keiner')
+    return /price/.test(s.art || '') ? preis(s.wert) : `${s.wert} (${s.art || '?'})`
+}
 const feldName = (f) => ({ unten: t('bots.sim.unten'), oben: t('bots.sim.oben'), anzahl: t('bots.feld.grids'), hebel: t('bots.feld.hebel'), einsatz: `${t('bots.feld.einsatz')} (${mc.value})`, betrag: props.aktion === 'reduzieren' ? `${t('bots.st.redBetrag')} (${mc.value})` : `${t('bots.st.betrag')} (${mc.value})`, anteil: t('bots.st.anteil'), stopLoss: t('bots.feld.stopLoss'), takeProfit: t('bots.feld.takeProfit') }[f])
 
 /** Eingabe für den Server: Stops „leer" heisst entfernen nur, wenn das Feld angefasst wurde. */
@@ -102,7 +110,11 @@ function eingabeFuerServer() {
 const meldung = (e) => {
     const d = e?.response?.data
     // Platzhalter (z. B. {schritt} bei anteilZuKlein) kommen aus der Antwort des Servers
-    return d?.code && te(`bots.st.fehler.${d.code}`) ? t(`bots.st.fehler.${d.code}`, d) : (d?.error || e.message)
+    if (!(d?.code && te(`bots.st.fehler.${d.code}`))) return d?.error || e.message
+    // Der Server nennt Beträge als nackte Zahl: die Margin-Münze gehört dazu (Audit UI-15)
+    const werte = { ...d }
+    if (d.code === 'betragZuGross' || d.code === 'betragZuKlein') for (const f of ['max', 'schritt']) if (typeof d[f] === 'number') werte[f] = `${d[f]} ${mc.value}`
+    return t(`bots.st.fehler.${d.code}`, werte)
 }
 // FUN-R-105: Pionex reduziert nur in ganzen Schritten — weicht der tatsächliche Anteil vom gewünschten ab, sagen
 const anteilAbweichung = computed(() => {
@@ -117,6 +129,31 @@ const anteilAbweichung = computed(() => {
     const gewuenscht = zahl(a.gewuenscht, 1)
     return gewuenscht === tatsaechlich ? null : { text: t('bots.st.anteilTatsaechlich', { gewuenscht, tatsaechlich, schritt: zahl(a.schritt, 1) }) }
 })
+
+// Position reduzieren: Pionex nimmt nur ganze Schritte. Nach der ersten Prüfung ist bekannt, wie gross
+// einer ist und wie viele gehen — die möglichen Anteile stehen dann als Knöpfe unter dem Feld.
+// Bleibt über Eingaben hinweg stehen (die Prüfung selbst wird bei jeder Änderung verworfen).
+const stufen = computed(() => {
+    const a = stufenInfo.value
+    if (props.aktion !== 'reduzieren' || !(a?.schritt > 0) || !(a?.hoechstens > 0)) return []
+    const n = Math.min(200, Math.round(a.hoechstens / a.schritt))
+    if (n < 1) return []
+    const alle = Array.from({ length: n }, (_, i) => (i + 1 === n ? a.hoechstens : (i + 1) * a.schritt))
+    // höchstens 6 Knöpfe: die ersten fünf und der grösste
+    const gezeigt = alle.length > 6 ? [...alle.slice(0, 5), alle[alle.length - 1]] : alle
+    // ganze Prozent, wenn das die Stufen noch unterscheidet («33 %», «67 %»), sonst eine Stelle
+    const ganz = new Set(alle.map((x) => Math.round(x))).size === alle.length
+    return gezeigt.map((wert, i) => ({ wert, text: `${zahl(wert, ganz ? 0 : 1)} %`, luecke: alle.length > 6 && i === 5 }))
+})
+const istStufe = (wert) => einheit.value === 'anteil' && Math.abs(Number(String(eingabe.value.anteil ?? '').replace(',', '.')) - wert) < 0.05
+function waehleStufe(wert) {
+    if (laedt.value) return
+    einheit.value = 'anteil'
+    try { localStorage.setItem(EINHEIT_SCHLUESSEL, 'anteil') } catch { /* privater Modus */ }
+    eingabe.value = { anteil: String(Number(wert.toFixed(2))) }
+    ergebnis.value = null
+    pruefen()
+}
 
 // Zwei Anfragen, zwei Merker: «Prüfen» darf nicht laufen, während gesendet wird, und umgekehrt
 const prueft = ref(false)
@@ -136,6 +173,7 @@ async function pruefen() {
         if (lauf !== pruefLauf || JSON.stringify(eingabeFuerServer()) !== gefragtText) return
         pruefung.value = data
         haken.value = false
+        if (data?.anteil?.schritt > 0 && data.anteil.hoechstens > 0) stufenInfo.value = { schritt: data.anteil.schritt, hoechstens: data.anteil.hoechstens }
     } catch (e) { if (lauf === pruefLauf) fehler.value = meldung(e) } finally { if (lauf === pruefLauf) { prueft.value = false; laedt.value = sendet.value } }
 }
 async function senden() {
@@ -153,7 +191,7 @@ async function senden() {
         // Keine Antwort (Zeitlimit, Netz): der Server kann gesendet haben → wie „unklar", nie erneut senden
         if (!e?.response) { ergebnis.value = { ok: false, zustand: 'unklar', antwort: { message: e.message } }; emit('gesendet') }
         else fehler.value = meldung(e)
-    } finally { sendet.value = false; laedt.value = prueft.value }
+    } finally { sendet.value = false; laedt.value = prueft.value; emit('versucht') }
 }
 
 const vergleich = computed(() => {
@@ -199,7 +237,7 @@ const istZeilen = computed(() => {
     const r = ergebnis.value
     if (!r?.ist || r.ist.fehler || r.ist.status === 'nichtMehrLaufend' || r.ist.status === 'nichtGefunden') return []
     const soll = r.soll || {}
-    const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['status', 'Status', (x) => (te(`bots.status.${x}`) ? t(`bots.status.${x}`) : x)]]
+    const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['status', t('bots.feld.status'), (x) => (te(`bots.status.${x}`) ? t(`bots.status.${x}`) : x)]]
     return felder.filter(([k]) => soll[k] !== undefined).map(([k, titel, f]) => {
         const s = soll[k], i = r.ist[k]
         const gleich = k === 'status' && ENDE.includes(String(s)) && ENDE.includes(String(i)) ? true : s == null ? i == null : (typeof s === 'number' && typeof i === 'number' ? Math.abs(s - i) <= Math.abs(s) * 0.001 : String(s) === String(i))
@@ -222,6 +260,13 @@ const istZeilen = computed(() => {
                 <label v-for="f in felderFuer" :key="f"><span>{{ feldName(f) }}</span>
                     <input v-model="eingabe[f]" class="at-feld" inputmode="decimal" :placeholder="platzhalter[f]" :disabled="laedt">
                 </label>
+            </div>
+            <div v-if="stufen.length" class="stufen" role="group" :aria-label="t('bots.st.stufen')">
+                <span class="leise">{{ t('bots.st.stufen') }}</span>
+                <template v-for="s in stufen" :key="s.wert">
+                    <span v-if="s.luecke" class="leise" aria-hidden="true">…</span>
+                    <button type="button" class="pille" :class="{ aktiv: istStufe(s.wert) }" :aria-pressed="istStufe(s.wert)" :disabled="laedt" @click="waehleStufe(s.wert)">{{ s.text }}</button>
+                </template>
             </div>
             <div v-if="aktion === 'stops'" class="wegs">
                 <label v-if="bot.stops?.stopLoss"><input v-model="eingabe.stopLossWeg" type="checkbox" :disabled="laedt"> {{ t('bots.st.slEntfernen') }}</label>
@@ -314,8 +359,8 @@ const istZeilen = computed(() => {
 .haken input { margin-top: 3px; }
 .grund { margin: 0 0 var(--abstand-2); }
 .klein { font-size: 0.75rem; margin: var(--abstand-2) 0 0; }
-.einheit { display: flex; align-items: center; gap: var(--abstand-2); }
-.einheit .pille { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px; padding: 2px 12px; cursor: pointer; font: inherit; font-size: 0.85rem; }
-.einheit .pille:disabled { opacity: 0.5; cursor: default; }
-.einheit .pille.aktiv { border-color: var(--accent); background: var(--accent-flaeche); color: var(--accent); }
+.einheit, .stufen { display: flex; align-items: center; gap: var(--abstand-2); flex-wrap: wrap; }
+.einheit .pille, .stufen .pille { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px; padding: 2px 12px; cursor: pointer; font: inherit; font-size: 0.85rem; }
+.einheit .pille:disabled, .stufen .pille:disabled { opacity: 0.5; cursor: default; }
+.einheit .pille.aktiv, .stufen .pille.aktiv { border-color: var(--accent); background: var(--accent-flaeche); color: var(--accent); }
 </style>

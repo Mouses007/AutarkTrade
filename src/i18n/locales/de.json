@@ -8551,7 +8551,10 @@
       "endGrund": "Ende durch",
       "keiner": "keiner",
       "mengeJeGrid": "Menge je Grid",
-      "volumen": "Volumen"
+      "volumen": "Volumen",
+      "liqUnten": "unten",
+      "liqOben": "oben",
+      "status": "Status"
     },
     "lage": {
       "innen": "im Band",
@@ -8596,7 +8599,7 @@
     },
     "chartBandOben": "Band oben",
     "chartBandUnten": "Band unten",
-    "chartHinweis": "Kerzen {tf} der eingestellten Marktdatenquelle, nicht von Pionex. Band und Liquidation wie oben.",
+    "chartHinweis": "Kerzen {tf} der eingestellten Marktdatenquelle, nicht von Pionex. Linien: Band, Grids, Kurs, Ø Einstieg, Startpreis, Stops und Liquidation; was weit weg liegt, steht als Hinweis am Rand. Zoomen mit Strg + Mausrad oder zwei Fingern.",
     "marktAus": "Ohne Marktdaten-Quelle kein Kursverlauf.",
     "rohAufklappen": "Rohdaten anzeigen",
     "imJournal": "Zur Bot-Seite",
@@ -8645,7 +8648,8 @@
         "stopLoss": "Variante {n}: Stop-Loss muss auf der Verlustseite des Kurses liegen.",
         "takeProfit": "Variante {n}: Take-Profit muss auf der Gewinnseite des Kurses liegen.",
         "neutralStop": "Variante {n}: Stop-Loss und Take-Profit kann die Simulation bei Neutral-Bots nicht abbilden.",
-        "extraMarge": "Variante {n}: Extra-Marge darf nicht negativ sein."
+        "extraMarge": "Variante {n}: Extra-Marge darf nicht negativ sein.",
+        "keineZahl": "Mindestens ein Feld enthält keine gültige Zahl. Nichts gerechnet – bitte die markierten Felder korrigieren oder leeren."
       },
       "wieHeute": "wie heute",
       "einstellung": "Einstellung",
@@ -8670,7 +8674,11 @@
       "extraMargePlus": "Extra-Marge dazu",
       "margeKurz": "Marge",
       "umsetzen": "Variante {n} umsetzen …",
-      "fundingGenaehert": "(Coin-M: Funding-Sätze des linearen Kontrakts, genähert)"
+      "fundingGenaehert": "(Coin-M: Funding-Sätze des linearen Kontrakts, genähert)",
+      "geoKurz": "geo",
+      "keineZahl": "Die markierten Felder enthalten keine Zahl.",
+      "mengeHinweisSpot": "Bei anderem Band oder anderen Grids bleibt der Einsatz gleich; mehr Einsatz vergrössert die Menge je Grid im selben Verhältnis. Spot-Grids haben weder Hebel noch Funding noch Liquidation.",
+      "abJetztHinweisSpot": "Beim Umstellen wird die Position zum Marktpreis auf die neue Einstellung gebracht; der verkaufte Teil realisiert seinen Anteil am schwebenden Ergebnis. Ein Spot-Grid lässt sich über die App nicht ändern, nur beenden und neu starten."
     },
     "ki": {
       "warnTitel": "Bevor du KI-Vorschläge nutzt",
@@ -8703,7 +8711,8 @@
       "zrErklaerung": "Die KI bekommt zusätzlich die Lage auf 1w, 1d und 4h: Struktur, letzter Bruch, Lage in der Spanne, Momentum und die nächsten Niveaus. Untergrenzen und Stop-Loss werden auch knapp jenseits dieser Niveaus durchgerechnet.",
       "warten": "Bitte {s} Sekunden warten — jeder Aufruf kostet.",
       "unbelegt": "Diese Zahlen stehen nicht in den gerechneten Daten — nachprüfen: {zahlen}",
-      "titelPlan": "KI-Auswahl"
+      "titelPlan": "KI-Auswahl",
+      "veraltet": "Diese Vorschläge wurden für eine frühere Einstellung des Bots gerechnet. Seither hat sich der Bot geändert – bitte neu erzeugen, bevor du etwas umsetzt."
     },
     "st": {
       "titel": "Bot-Steuerung (Pionex)",
@@ -8890,7 +8899,8 @@
       "redPnl": "Realisierter Gewinn/Verlust (Schätzung Pionex)",
       "redGrid": "Davon Grid-Gewinn (Schätzung Pionex)",
       "redEinsatz": "Frei werdende Investition (Schätzung Pionex)",
-      "redGebuehr": "Gebühr (Schätzung Pionex)"
+      "redGebuehr": "Gebühr (Schätzung Pionex)",
+      "stufen": "Mögliche Stufen"
     },
     "plan": {
       "knopf": "Neuen Bot planen",
@@ -9031,8 +9041,19 @@
       "kerzenPionex": "Die Kerzen kommen hier direkt von Pionex, weil die Marktdatenquelle diese Coin nicht führt (etwa tokenisierte Aktien). Darum ohne Funding, und der Satz oben «der Marktdatenquelle» gilt für diesen Rückblick nicht.",
       "minKarte": "Mindesteinsatz bei Pionex",
       "minReicht": "reicht ({betrag})",
-      "minPruefe": "wird geprüft …"
-    }
+      "minPruefe": "wird geprüft …",
+      "minFehler": "Nicht geprüft: {grund}",
+      "minZuViele": "zu viele Abfragen bei Pionex – später neu rechnen"
+    },
+    "gridArt": {
+      "arithmetic": "gleich in Preis (arithmetisch)",
+      "geometric": "gleich in Prozent (geometrisch)"
+    },
+    "risikoStatus": {
+      "TRADING": "normal (handelt)"
+    },
+    "chartHinweisSpot": "Kerzen {tf} der eingestellten Marktdatenquelle, nicht von Pionex. Linien: Band, Grids, Kurs, Ø Einstieg, Startpreis und Stops; was weit weg liegt, steht als Hinweis am Rand. Zoomen mit Strg + Mausrad oder zwei Fingern.",
+    "chartLeer": "Für die Laufzeit dieses Bots liegen noch keine Kerzen vor. Der Chart erscheint, sobald die Marktdatenquelle welche liefert."
   },
   "aktienTrennung": {
     "offenAndererMarkt": "Im Markt {markt}: {n} offene Position(en) – hier ausgeblendet.",

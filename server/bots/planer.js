@@ -256,7 +256,11 @@ export function chartNiveaus(paket, kurs, { max = 4 } = {}) {
     const liste = []
     const dazu = (id, quelle, name, preis, zusatz = {}) => { if (istZahl(preis) && preis > 0) liste.push({ id, quelle, name, preis: runde(preis, 6), ...zusatz }) }
     for (const u of paket.nutzer || []) {
-        const text = u.text ? ` „${String(u.text).slice(0, 40)}"` : ''
+        // Beschriftung der Zeichnung geht in Titel und KI-Prompt: auf eine Zeile, ohne Spaltentrenner und
+        // Steuerzeichen, ohne Ziffern (sonst gälte eine Zahl aus dem Text als «vom Code gemessen»; übernommene
+        // KI-Zeichnungen tragen Beschriftungen, die nicht vom Nutzer stammen — Audit PLN-12)
+        const roh = String(u.text || '').replace(/[\u0000-\u001f\u007f|]+/g, ' ').replace(/\d+([.,']\d+)*/g, '').replace(/\s+/g, ' ').trim().slice(0, 40)
+        const text = roh ? ` „${roh}"` : ''
         if (u.typ === 'volprofil' && istZahl(u.poc)) {
             dazu(`${u.id}-VAL`, 'zeichnung', `VAL deines Volumenprofils${text}`, u.val)
             dazu(`${u.id}-POC`, 'zeichnung', `POC deines Volumenprofils${text}`, u.poc)
@@ -310,6 +314,8 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
     // +40 % bzw. zum nächsten grossen Widerstand; geometrisch, weil die Prozentabstände über
     // so eine Spanne sonst unten doppelt so gross wären wie oben. Gerichtet ohne Stop und mit
     // einer Notbremse knapp vor der Liquidation (rechnePlan, `stopNahLiq`).
+    // Titel nennen, was das Band wirklich ist: «−35 % bis +25 %» stand auch über 50–125 (Audit PLN-11)
+    const vomKurs = (x) => `${x >= kurs ? '+' : '−'}${Math.round(Math.abs(x / kurs - 1) * 100)} %`
     const tiefe = [...(chart || []), ...((zr?.marken || []).filter((m) => m.tf === '1w').map((m) => ({ name: `${m.id} (1w)`, preis: m.preis })))]
     const unterstuetzung = tiefe.filter((n) => n.preis < kurs * LANG.abstand_min_unten).sort((x, y) => y.preis - x.preis)
     const widerstand = tiefe.filter((n) => n.preis > kurs * LANG.abstand_min_oben).sort((x, y) => x.preis - y.preis)
@@ -318,17 +324,17 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
         const ziele = unterstuetzung.slice(0, 2)
         const o = Math.max(kurs * LANG.oben, (grossOben(LANG.oben_max)?.preis ?? 0) + 0.5 * a)
         for (const nu of ziele) band(`Langfrist ab ${nu.name}`, nu.preis - 0.5 * a, o, true)
-        if (!ziele.length) band('Langfrist −25 % bis +40 %', kurs * 0.75, o, true)
+        if (!ziele.length) band(`Langfrist ${vomKurs(kurs * 0.75)} bis ${vomKurs(o)}`, kurs * 0.75, o, true)
     } else if (neutral) {
         const u = unterstuetzung[0] ? unterstuetzung[0].preis - 0.5 * a : kurs * 0.75
         const o = widerstand[0] ? widerstand[0].preis + 0.5 * a : kurs * 1.3
-        band(`Langfrist ${unterstuetzung[0]?.name || '−25 %'} bis ${widerstand[0]?.name || '+30 %'}`, u, Math.max(o, kurs * 1.15), true)
+        band(`Langfrist ${unterstuetzung[0]?.name || vomKurs(u)} bis ${widerstand[0]?.name || vomKurs(Math.max(o, kurs * 1.15))}`, u, Math.max(o, kurs * 1.15), true)
     } else {
         const ziele = widerstand.slice(0, 2)
         const tiefst = unterstuetzung.filter((n) => n.preis >= kurs * 0.5).at(-1)
         const u = Math.min(kurs * 0.65, tiefst ? tiefst.preis - 0.5 * a : Infinity)
         for (const no of ziele) band(`Langfrist bis ${no.name}`, u, no.preis + 0.5 * a, true)
-        if (!ziele.length) band('Langfrist −35 % bis +25 %', u, kurs * 1.25, true)
+        if (!ziele.length) band(`Langfrist ${vomKurs(u)} bis ${vomKurs(kurs * 1.25)}`, u, kurs * 1.25, true)
     }
     // An Chart-Niveaus (Volumenprofile 1w, eigene Zeichnungen): Long mit der Untergrenze knapp
     // unter einer Unterstützung (der Stop-Loss liegt dann 1 Tages-ATR unter der Grenze, also
@@ -473,12 +479,20 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
     if (e.spot && anzahl > SPOT_MAX_GRIDS) { anzahl = SPOT_MAX_GRIDS; warnungen.push('spotMax') }
     // Pionex verlangt eine Mindestmenge je Order: zu viele Grids für den Einsatz → weniger Grids
     if (istZahl(minMenge) && minMenge > 0) {
-        const probe = planBot({ ...e, ...v, anzahl, startKurs: kurs, kurs })
-        const q = probe.grid.mengeJeGrid
-        if (istZahl(q) && q < minMenge) {
-            const neu = Math.floor(anzahl * q / minMenge)
+        // Nach dem Kürzen verschieben sich die Linien und damit die Menge je Grid — ein Schritt reichte in
+        // 30 von 495 Fällen nicht (bis 3,3 % unter der Mindestmenge, Audit PLN-06). Darum nachmessen.
+        let gekuerzt = false
+        for (let i = 0; i < 12; i++) {
+            const q = planBot({ ...e, ...v, anzahl, startKurs: kurs, kurs }).grid.mengeJeGrid
+            if (!istZahl(q) || q >= minMenge) break
+            const neu = Math.min(anzahl - 1, Math.floor(anzahl * q / minMenge))
             if (neu < 2) return { fehler: 'einsatzZuKlein' }
             anzahl = neu
+            gekuerzt = true
+        }
+        if (gekuerzt) {
+            const q = planBot({ ...e, ...v, anzahl, startKurs: kurs, kurs }).grid.mengeJeGrid
+            if (istZahl(q) && q < minMenge) return { fehler: 'einsatzZuKlein' }
             warnungen.push('gridsGekuerzt')
         }
     }
@@ -570,6 +584,19 @@ export function rechnePlan(e, kerzen, liste, opt = {}) {
 // ── KI ───────────────────────────────────────────────────────────────────
 const pz = (v, s = 1) => (istZahl(v) ? `${(v * 100).toFixed(s)} %` : '—')
 const zl = (v, s = 4) => (istZahl(v) ? Number(v).toFixed(s) : '—')
+/**
+ * Betrag in der Margin-Münze für den Prompt. USDT: feste Stellen. Coin-M: vier GÜLTIGE Stellen —
+ * 0,000897 BTC stand sonst als «−0.0009», ein Rand von −0,000407 als «−0.00» (Audit PLN-03).
+ * `auf: true` rundet auf (Mindesteinsatz: abgerundet läge der abgetippte Betrag darunter).
+ */
+export function betragImPrompt(v, coinM, { stellen = 4, auf = false } = {}) {
+    if (!istZahl(v)) return '—'
+    if (!coinM) return auf ? (Math.ceil(v * 10 ** stellen - 1e-9) / 10 ** stellen).toFixed(stellen) : Number(v).toFixed(stellen)
+    if (v === 0) return '0'
+    const n = Math.min(12, Math.max(stellen, 3 - Math.floor(Math.log10(Math.abs(v)))))
+    const f = 10 ** n
+    return (auf ? Math.ceil(v * f - 1e-9) / f : Math.round(v * f) / f).toFixed(n)
+}
 
 /** Prompt für die Auswahl unter den Plan-Kandidaten. `wissen` = wissenAlsText(typ), `zrText` = Zeitrahmen-Block. */
 /** Langfrist-Trend als Promptzeile (rein). */
@@ -580,29 +607,34 @@ export function trendText(trend) {
     return `LANGFRIST-TREND (vom Code gemessen): ${trend.richtung === 'auf' ? 'AUFWÄRTS' : trend.richtung === 'ab' ? 'ABWÄRTS' : 'SEITWÄRTS'}, Punkte ${trend.punkte} von ±${trend.max}; dazu passt ${trend.passend}. Zeichen: ${z}`
 }
 
-export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false, trend = null, chart = [], mindest = {} } = {}) {
+export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false, trend = null, chart = [], mindest = {}, von = null, bis = null } = {}) {
     const einheit = e.coinM ? e.coin : 'USDT'
+    // Tatsächliche Länge des Rückblicks: bei jungen Coins oder kurzer Pionex-Tiefe kürzer als gewünscht (Audit PLN-09)
+    const echt = istZahl(von) && istZahl(bis) && bis > von ? (bis - von) / 86_400_000 : null
+    const rueckblickKurz = echt !== null && echt < e.tage * 0.9
+    const rueckblickTage = rueckblickKurz ? runde(echt, 1) : e.tage
     const kopf = [
         wissen, '',
         e.spot
             ? `NEUER BOT (Plan, noch nicht gestartet): ${e.coin}/USDT Spot-Grid — kein Hebel, keine Liquidation, kein Funding; kauft beim Start die Coin für die Linien über dem Kurs (wirkt wie Long), gestartet ohne Stop-Loss. Einsatz ${zl(e.einsatz)} USDT`
-            : `NEUER BOT (Plan, noch nicht gestartet): ${e.coin} ${e.coinM ? 'Coin-M' : 'USDT-M'} Futures-Grid, Richtung ${e.richtung === ALLE ? 'OFFEN — Long, Short und Neutral werden verglichen' : e.richtung}, Hebel ${e.hebel}x, Einsatz ${zl(e.einsatz)} ${einheit}`,
+            : `NEUER BOT (Plan, noch nicht gestartet): ${e.coin} ${e.coinM ? 'Coin-M' : 'USDT-M'} Futures-Grid, Richtung ${e.richtung === ALLE ? 'OFFEN — Long, Short und Neutral werden verglichen' : e.richtung}, Hebel ${e.hebel}x, Einsatz ${betragImPrompt(e.einsatz, !!e.coinM)} ${einheit}`,
         `Kurs ${zl(lage?.kurs)} USD`,
         trendText(trend),
     ]
     const markt = lage ? [`MARKT: 7 Tage ${pz(lage.aenderung7)}, 30 Tage ${pz(lage.aenderung30)}, 30-Tage-Hoch ${zl(lage.hoch30, 2)}, -Tief ${zl(lage.tief30, 2)}, Tagesspanne Median ${pz(lage.spanneMedian)} / max ${pz(lage.spanneMax)}, grösster 7-Tage-Fall ${pz(lage.maxFall7)}, Tages-ATR ${zl(lage.atr, 2)}`] : []
+    const bz = (x, st = 4) => betragImPrompt(x, !!e.coinM, { stellen: st })
     const zeilen = kandidaten.filter((c) => !c.fehler).map((c) => {
         const r = c.rueckblick, s = c.start, v = c.variante
         const m = mindest[c.id]
-        const pionexMin = !m ? 'nicht geprüft' : m.reichtAus === true ? `reicht (${zl(e.einsatz, e.coinM ? 4 : 2)} ${einheit})` : istZahl(m.min) ? `ab ${zl(m.min, e.coinM ? 4 : 2)} ${einheit}` : m.reichtAus === false ? 'Einsatz zu klein, Minimum unbekannt' : 'unbekannt'
+        const pionexMin = !m ? 'nicht geprüft' : m.reichtAus === true ? `reicht (${bz(e.einsatz, 2)} ${einheit})` : istZahl(m.min) ? `ab ${betragImPrompt(m.min, e.coinM, { stellen: e.coinM ? 4 : 2, auf: true })} ${einheit}` : m.reichtAus === false ? 'Einsatz zu klein, Minimum unbekannt' : 'unbekannt'
         const ende = r?.liquidation ? 'LIQUIDIERT' : r?.ausstieg ? r.ausstieg.art : 'läuft'
-        return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), s?.verlustRand ? `${zl(s.verlustRand.betrag, 2)} bei ${zl(s.verlustRand.preis, 2)}${s.verlustRand.liquidiert ? ' LIQUIDIERT' : s.verlustRand.ausstieg ? ' (Stop)' : ''}` : '—', pionexMin, (c.warnungen || []).join(',') || '—'].join(' | ')
+        return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), bz(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), bz(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), s?.verlustRand ? `${bz(s.verlustRand.betrag, 2)} bei ${zl(s.verlustRand.preis, 2)}${s.verlustRand.liquidiert ? ' LIQUIDIERT' : s.verlustRand.ausstieg ? ' (Stop)' : ''}` : '—', pionexMin, (c.warnungen || []).join(',') || '—'].join(' | ')
     })
     return [
         ...kopf, ...markt, ...(zrText ? ['', zrText] : []),
         ...(chart.length ? ['', 'CHART-NIVEAUS (vom Code gemessen: Volumenprofile der Seitwärtsphasen auf 1w und die eigenen Zeichnungen des Nutzers; Varianten „Band ab/bis Chart …" sind daran gebaut):', ...chart.map((n) => `${n.id} | ${n.name} | ${zl(n.preis, 2)} | ${n.preis < (lage?.kurs ?? 0) ? 'unter' : 'über'} dem Kurs`)] : []),
         '',
-        `KANDIDATEN (vom Code gerechnet). Rückblick = dasselbe Band RELATIV zum Kurs (gleiche Prozente), gestartet vor ${e.tage} Tagen, simuliert auf ${tf || '?'}-Kerzen mit Gebühren${kandidaten.some((c) => c.rueckblick?.funding) ? ' und Funding' : ''}. Start heute = beim heutigen Kurs gestartet.`,
+        `KANDIDATEN (vom Code gerechnet). Rückblick = dasselbe Band RELATIV zum Kurs (gleiche Prozente), gestartet vor ${rueckblickTage} Tagen${rueckblickKurz ? ` (gewünscht waren ${e.tage}; so weit reichen die Kerzen nicht zurück — Prozente und Zyklen sind mit einem ${e.tage}-Tage-Rückblick NICHT vergleichbar)` : ''}, simuliert auf ${tf || '?'}-Kerzen mit Gebühren${kandidaten.some((c) => c.rueckblick?.funding) ? ' und Funding' : ''}. Start heute = beim heutigen Kurs gestartet.`,
         `id | Richtung | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Weg zur Gefahren-Kante (Ergebnis bei Preis) | Pionex-Mindesteinsatz (von Pionex geprüft) | Warnungen`,
         ...zeilen,
         '',

@@ -199,7 +199,8 @@ export function mindestAus(roh) {
     for (const [id, m] of Object.entries(roh).slice(0, 200)) {
         if (!/^[PLSNE]\d{1,3}$/.test(id) || !m || typeof m !== 'object') continue
         const min = Number(m.min)
-        aus[id] = { min: Number.isFinite(min) && min > 0 ? min : null, reichtAus: m.reichtAus === true ? true : m.reichtAus === false ? false : null }
+        // Die Zahl kommt aus dem Browser (dort aus der Pionex-Prüfung): nur plausible Beträge, auf 6 gültige Stellen
+        aus[id] = { min: Number.isFinite(min) && min >= 1e-6 && min <= 1e7 ? Number(min.toPrecision(6)) : null, reichtAus: m.reichtAus === true ? true : m.reichtAus === false ? false : null }
     }
     return aus
 }
@@ -210,7 +211,7 @@ async function kiFuer(e, coins, englisch, mindest = {}) {
     if (!gueltig.length) throw Object.assign(new Error('Keine rechenbaren Kandidaten'), { code: 'keineKandidaten' })
     const typ = e.spot ? 'spot_grid' : e.coinM ? 'coinm_grid' : 'futures_grid'
     const zrText = d._zr ? zeitrahmenText(d._zr, (t) => new Date(t).toISOString().slice(0, 10)).replace('ZEITRAHMEN — vom Code gemessen', 'HOHE ZEITRAHMEN — vom Code gemessen') : ''
-    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend, chart: d.chart || [], mindest })
+    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend, chart: d.chart || [], mindest, von: d.von, bis: d.bis })
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
     cfg.maxTokens = 2500
     const antwort = await callLLMJson(cfg, {

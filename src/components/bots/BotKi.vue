@@ -18,6 +18,7 @@ import { preis, betrag, prozent, datum, ton } from './format.js'
 const props = defineProps({
     bot: { type: Object, required: true },
     steuerungAktiv: { type: Boolean, default: false },
+    stand: { type: String, default: '' },   // ändert sich, wenn der Bot anders eingestellt ist (BotDetail `einstellungStand`)
 })
 const emit = defineEmits(['inSimulation', 'umsetzen'])
 const { t, locale } = useI18n()
@@ -27,6 +28,9 @@ const laedt = ref(false)
 const fehler = ref('')
 const mc = computed(() => props.bot.marginCoin)
 const heute = computed(() => erg.value?.eichung?.simuliert ?? null)
+// Die Vorschläge wurden für einen anderen Stand des Bots gerechnet (nach einer Aktion verwirft der Server
+// seinen Cache, die Karte zeigte sie weiter — mit «Umsetzen»): kennzeichnen und nicht mehr umsetzen lassen
+const veraltet = ref(false)
 
 async function ladeCache() {
     try { erg.value = (await axios.get(`/api/bots/${encodeURIComponent(props.bot.id)}/ki`)).data?.ergebnis || null } catch { erg.value = null }
@@ -38,6 +42,7 @@ async function erzeuge() {
         const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/ki`, { sprache: locale.value }, { timeout: 180_000 })
         if (data?.aus) { fehler.value = t('bots.marktAus'); return }
         erg.value = data.ergebnis
+        veraltet.value = false
     } catch (e) {
         // Ohne Antwort (Zeitlimit) kann der Server trotzdem fertig geworden sein: Cache lesen
         if (!e?.response) { await ladeCache(); if (erg.value) return }
@@ -48,7 +53,8 @@ async function erzeuge() {
     }
 }
 onMounted(ladeCache)
-watch(() => props.bot.id, () => { erg.value = null; ladeCache() })
+watch(() => props.bot.id, () => { erg.value = null; veraltet.value = false; ladeCache() })
+watch(() => props.stand, (neu, alt) => { if (erg.value && alt && neu !== alt) veraltet.value = true })
 
 const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot.kurs - a.liqNeu) / props.bot.kurs : null)
 </script>
@@ -75,6 +81,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
 
         <template v-if="erg">
+            <Hinweis v-if="veraltet" art="warn">{{ t('bots.ki.veraltet') }}</Hinweis>
             <div class="kopf">
                 <Pille ton="akzent" symbol="ki">{{ t('bots.ki.kennzeichnung') }}</Pille>
                 <span v-if="erg.kurs" class="leise">{{ t('bots.ki.kursStand', { kurs: preis(erg.kurs) }) }}</span>
@@ -123,8 +130,8 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                     <div v-if="v.variante.extraMarge"><dt>{{ t('bots.sim.extraMargePlus') }}</dt><dd>{{ betrag(v.variante.extraMarge, mc) }}</dd></div>
                     <div><dt>{{ t('bots.sim.liqNeu') }}</dt><dd>{{ preis(v.abJetzt?.liqNeu) }} <span class="leise">({{ prozent(abstand(v.abJetzt)) }})</span></dd></div>
                     <div><dt>{{ t('bots.sim.geschlossen') }}</dt><dd>{{ prozent(v.abJetzt?.geschlossenAnteil, { stellen: 0 }) }}</dd></div>
-                    <div><dt>{{ t('bots.sim.realisiertCa') }}</dt><dd :class="ton(v.abJetzt?.realisiertCa)">{{ betrag(v.abJetzt?.realisiertCa, mc, { vorzeichen: true }) }}</dd></div>
-                    <div><dt>{{ t('bots.ki.rueckblick') }}</dt><dd :class="ton(v.rueckblick?.gesamt)">{{ betrag(v.rueckblick?.gesamt, mc, { vorzeichen: true }) }} <span class="leise">{{ t('bots.ki.stattHeute', { wert: betrag(heute, mc, { vorzeichen: true }) }) }}</span></dd></div>
+                    <div><dt>{{ t('bots.sim.realisiertCa') }}</dt><dd :class="ton(v.abJetzt?.realisiertCa, mc)">{{ betrag(v.abJetzt?.realisiertCa, mc, { vorzeichen: true }) }}</dd></div>
+                    <div><dt>{{ t('bots.ki.rueckblick') }}</dt><dd :class="ton(v.rueckblick?.gesamt, mc)">{{ betrag(v.rueckblick?.gesamt, mc, { vorzeichen: true }) }} <span class="leise">{{ t('bots.ki.stattHeute', { wert: betrag(heute, mc, { vorzeichen: true }) }) }}</span></dd></div>
                 </dl>
                 <p>{{ v.begruendung }}</p>
                 <p class="risiko"><strong>{{ t('bots.ki.risiko') }}:</strong> {{ v.risiko }}</p>
@@ -132,7 +139,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <p v-if="v.unbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: v.unbelegt.join(', ') }) }}</p>
                 <div class="knoepfe">
                     <Knopf art="leise" symbol="rechner" klein @click="emit('inSimulation', v.variante)">{{ t('bots.ki.inSimulation') }}</Knopf>
-                    <Knopf v-if="steuerungAktiv" symbol="hochladen" klein @click="emit('umsetzen', v.variante)">{{ t('bots.ki.umsetzen') }}</Knopf>
+                    <Knopf v-if="steuerungAktiv && !veraltet" symbol="hochladen" klein @click="emit('umsetzen', v.variante)">{{ t('bots.ki.umsetzen') }}</Knopf>
                 </div>
             </article>
             <p v-if="erg.hinweis" class="leise">{{ erg.hinweis }}</p>
@@ -145,14 +152,14 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                         <tbody>
                             <tr v-for="c in erg.kandidaten" :key="c.id" :class="{ gewaehlt: erg.vorschlaege.some((v) => v.id === c.id) }">
                                 <th>{{ c.id }}</th><td>{{ c.titel }}</td>
-                                <td :class="ton(c.rueckblick?.gesamt)">{{ betrag(c.rueckblick?.gesamt, mc, { vorzeichen: true }) }}</td>
+                                <td :class="ton(c.rueckblick?.gesamt, mc)">{{ betrag(c.rueckblick?.gesamt, mc, { vorzeichen: true }) }}</td>
                                 <td>{{ c.abJetzt?.zusatz > 0 ? betrag(c.abJetzt.zusatz, mc) : '—' }}</td>
                                 <td>{{ betrag(c.abJetzt?.realisiertCa, mc, { vorzeichen: true }) }}</td>
                                 <td>{{ preis(c.abJetzt?.liqNeu) }}</td>
                                 <td class="zeilenKnoepfe">
                                     <template v-if="c.variante">
                                         <Knopf art="leise" symbol="rechner" klein nurSymbol :titel="t('bots.ki.inSimulation')" @click="emit('inSimulation', c.variante)" />
-                                        <Knopf v-if="steuerungAktiv" art="leise" symbol="hochladen" klein nurSymbol :titel="t('bots.ki.umsetzen')" @click="emit('umsetzen', c.variante)" />
+                                        <Knopf v-if="steuerungAktiv && !veraltet" art="leise" symbol="hochladen" klein nurSymbol :titel="t('bots.ki.umsetzen')" @click="emit('umsetzen', c.variante)" />
                                     </template>
                                 </td>
                             </tr>

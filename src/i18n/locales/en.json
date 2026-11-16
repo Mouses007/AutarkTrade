@@ -8551,7 +8551,10 @@
       "endGrund": "Ended by",
       "keiner": "none",
       "mengeJeGrid": "Quantity per grid",
-      "volumen": "Volume"
+      "volumen": "Volume",
+      "liqUnten": "below",
+      "liqOben": "above",
+      "status": "Status"
     },
     "lage": {
       "innen": "in range",
@@ -8596,7 +8599,7 @@
     },
     "chartBandOben": "Range top",
     "chartBandUnten": "Range bottom",
-    "chartHinweis": "{tf} candles from the configured market-data source, not from Pionex. Range and liquidation as above.",
+    "chartHinweis": "{tf} candles from the configured market-data source, not from Pionex. Lines: range, grids, price, avg. entry, start price, stops and liquidation; anything far away is noted at the edge. Zoom with Ctrl + mouse wheel or two fingers.",
     "marktAus": "No price history without a market-data source.",
     "rohAufklappen": "Show raw data",
     "imJournal": "Open bot page",
@@ -8645,7 +8648,8 @@
         "stopLoss": "Variant {n}: stop loss must be on the losing side of the price.",
         "takeProfit": "Variant {n}: take profit must be on the winning side of the price.",
         "neutralStop": "Variant {n}: the simulation cannot model stop loss and take profit for neutral bots.",
-        "extraMarge": "Variant {n}: extra margin must not be negative."
+        "extraMarge": "Variant {n}: extra margin must not be negative.",
+        "keineZahl": "At least one field does not contain a valid number. Nothing was computed – please correct or clear the marked fields."
       },
       "wieHeute": "as today",
       "einstellung": "Settings",
@@ -8670,7 +8674,11 @@
       "extraMargePlus": "Add extra margin",
       "margeKurz": "margin",
       "umsetzen": "Apply variant {n} …",
-      "fundingGenaehert": "(Coin-M: funding rates of the linear contract, approximated)"
+      "fundingGenaehert": "(Coin-M: funding rates of the linear contract, approximated)",
+      "geoKurz": "geo",
+      "keineZahl": "The marked fields do not contain a number.",
+      "mengeHinweisSpot": "With another range or grid count the investment stays the same; more investment scales the quantity per grid. Spot grids have no leverage, no funding and no liquidation.",
+      "abJetztHinweisSpot": "On a change the position is brought to the new settings at market price; the part sold realises its share of the unrealised result. A spot grid cannot be changed through the app, only stopped and started anew."
     },
     "ki": {
       "warnTitel": "Before you use AI suggestions",
@@ -8703,7 +8711,8 @@
       "zrErklaerung": "The AI also receives the situation on 1w, 1d and 4h: structure, last break, position in the range, momentum and the nearest levels. Lower bounds and stop losses are also computed just beyond these levels.",
       "warten": "Please wait {s} seconds — every run costs.",
       "unbelegt": "These numbers are not in the computed data — check them: {zahlen}",
-      "titelPlan": "AI selection"
+      "titelPlan": "AI selection",
+      "veraltet": "These suggestions were computed for an earlier setting of the bot. The bot has changed since – please generate them again before applying anything."
     },
     "st": {
       "titel": "Bot control (Pionex)",
@@ -8890,7 +8899,8 @@
       "redPnl": "Realised profit/loss (Pionex estimate)",
       "redGrid": "Of which grid profit (Pionex estimate)",
       "redEinsatz": "Investment released (Pionex estimate)",
-      "redGebuehr": "Fee (Pionex estimate)"
+      "redGebuehr": "Fee (Pionex estimate)",
+      "stufen": "Possible steps"
     },
     "plan": {
       "knopf": "Plan a new bot",
@@ -9031,8 +9041,19 @@
       "kerzenPionex": "The candles come straight from Pionex here because the market-data source does not list this coin (e.g. tokenised stocks). Hence no funding, and \"of the market-data source\" above does not apply to this look-back.",
       "minKarte": "Minimum at Pionex",
       "minReicht": "enough ({betrag})",
-      "minPruefe": "being checked …"
-    }
+      "minPruefe": "being checked …",
+      "minFehler": "Not checked: {grund}",
+      "minZuViele": "too many requests to Pionex – recompute later"
+    },
+    "gridArt": {
+      "arithmetic": "equal in price (arithmetic)",
+      "geometric": "equal in percent (geometric)"
+    },
+    "risikoStatus": {
+      "TRADING": "normal (trading)"
+    },
+    "chartHinweisSpot": "{tf} candles from the configured market-data source, not from Pionex. Lines: range, grids, price, avg. entry, start price and stops; anything far away is noted at the edge. Zoom with Ctrl + mouse wheel or two fingers.",
+    "chartLeer": "There are no candles for this bot's runtime yet. The chart appears as soon as the market-data source delivers some."
   },
   "aktienTrennung": {
     "offenAndererMarkt": "In the {markt} market: {n} open position(s) – hidden here.",

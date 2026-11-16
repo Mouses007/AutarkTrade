@@ -186,7 +186,7 @@ export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null) {
         `BOT ${bot.coin} ${bot.typName}, Richtung ${bot.richtung}, Hebel ${bot.hebel}x, läuft seit ${zl(k.tage, 1)} Tagen`,
         `Band ${zl(bot.grid?.unten)}–${zl(bot.grid?.oben)} USD, ${bot.grid?.anzahl} Grids ${bot.grid?.art}, Netto je Zyklus ${pz(bot.grid?.nettoJeZyklus, 3)}`,
         `Einsatz ${zl(k.gewinn?.basis)} ${mc}, Extra-Marge ${zl(bot.einsatz?.extraMarge)} ${mc}, Gewinn gesamt ${zl(k.gewinn?.gesamt)} ${mc} (realisiert ${zl(k.gewinn?.realisiert)}, schwebend ${zl(k.gewinn?.schwebend)}), Grid-Gewinn ${zl(bot.ergebnis?.gridGewinn)}, Funding ${zl(bot.ergebnis?.funding)}`,
-        `Kurs ${zl(bot.kurs)} USD, Lage ${k.band?.lage || '—'}, Liquidation (Pionex) ${zl(liqHeute, 2)} USD, Abstand ${pz(k.liquidation?.abstand)}, Stop-Loss ${bot.stops?.stopLoss?.wert ?? 'keiner'}, Take-Profit ${bot.stops?.takeProfit?.wert ?? 'keiner'}`,
+        `Kurs ${zl(bot.kurs)} USD, Lage ${k.band?.lage || '—'}, Liquidation (Pionex) ${zl(liqHeute, 2)} USD, Abstand ${pz(k.liquidation?.abstand)}, Stop-Loss ${stopImPrompt(bot.stops?.stopLoss)}, Take-Profit ${stopImPrompt(bot.stops?.takeProfit)}`,
     ]
     const markt = lage ? [`MARKT: 7 Tage ${pz(lage.aenderung7)}, 30 Tage ${pz(lage.aenderung30)}, 30-Tage-Hoch ${zl(lage.hoch30, 2)}, -Tief ${zl(lage.tief30, 2)}, Tagesspanne Median ${pz(lage.spanneMedian)} / max ${pz(lage.spanneMax)}, grösster 7-Tage-Fall ${pz(lage.maxFall7)}, Tages-ATR ${zl(lage.atr, 2)}`] : []
     const hoch = zr ? ['', zeitrahmenText(zr, (t) => new Date(t).toISOString().slice(0, 10)).replace('ZEITRAHMEN — vom Code gemessen', 'HOHE ZEITRAHMEN — vom Code gemessen')] : []
@@ -246,6 +246,9 @@ export function unbelegteZahlen(text, eingabe) {
     return aus
 }
 const kuerze = (s, n) => String(s || '').trim().slice(0, n)
+
+/** Stop für den Prompt: ein Preis in USD, sonst Art und Wert (ein Quoten-Stop −0.2 ist kein Preis). */
+const stopImPrompt = (stop) => (!stop || stop.wert == null ? 'keiner' : /price/.test(String(stop.art || '')) ? `${stop.wert} USD` : `${stop.wert} (${stop.art || 'ohne Art'})`)
 
 /** Antwort der KI prüfen: nur bekannte IDs, Längen begrenzt, verbotene Wörter verwerfen. */
 export function pruefeKiAntwort(json, gerechnet, eingabe = '') {
