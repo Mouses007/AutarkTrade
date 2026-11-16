@@ -12,10 +12,13 @@
  *                                     Dollar, Breite im eigenen Feld (Yahoo, 30 min im Speicher)
  *   GET  /api/aktien/titel/:ticker    Titel-Seite: Profil, Kurs, Kennzahlen, Analysten, Ertragsverlauf
  *                                     (Yahoo, hinter dem Quellen-Schalter; 15 min im Speicher)
+ *                                     — merkt dabei die Sparte (Sektor/Branche) im Stamm, wenn sie sicher ist
  *   GET  /api/aktien/titel/:ticker/einreichungen   Einreichungen bei der SEC (EDGAR): Börsenprospekt, Angebote,
  *                                     Insider-Meldungen; nur mit eigener Kontaktangabe, 6 h im Speicher
  *   GET  /api/aktien/titel/:ticker/bewegung   gemerkte Recherche «was hat den Kurs bewegt» (liest nur)
  *   POST /api/aktien/titel/:ticker/bewegung   Recherche jetzt holen (Perplexity, kostet — nur auf Knopfdruck)
+ *
+ * Die Merkliste (`/api/aktien/favoriten`) steht in `favoriten.js`.
  */
 import { getKnex } from '../database.js'
 import { gleicheAb, letzterLauf, leseStamm, stammZahlen, HANDELSPLAETZE } from './stamm.js'
@@ -32,6 +35,7 @@ import { rechercheThema } from '../news-recherche.js'
 import { pruefeEinordnung } from '../coin-radar/einordnung.js'
 import { logWarn } from '../logger.js'
 import { holeEinreichungen, EdgarAbgelehnt, EdgarGebremst } from './edgar.js'
+import { merkeSparte, leseSparten } from './sparte.js'
 
 const TICKER_RE = /^[A-Z0-9][A-Z0-9.\-]{0,14}$/
 const TITEL_MS = 15 * 60_000
@@ -59,9 +63,13 @@ async function baueTitelSeite(ticker) {
         const daten = zus.status === 'fulfilled' ? ausZusammenfassung(zus.value) : null
         const quellenName = (chart.status === 'fulfilled' ? chart.value.meta.name : null) || daten?.profil?.name || null
         const nameQuelle = namensWarnung(titel.name, quellenName, ticker)
+        // Die Sparte fällt hier nebenbei an; gemerkt wird sie nur bei sicherer Zuordnung (`sparte-kern.js`).
+        if (daten?.profil) await merkeSparte(getKnex(), titel, kursSymbol, daten.profil).catch((e) => logWarn('aktien', `Sparte ${ticker}: ${e.message}`))
         return {
             ...kopf,
             daten,
+            // `null` = unbekannt. Die Seite zeigt Sektor/Branche nur damit an, nie am Namenswiderspruch vorbei.
+            sparte: (await leseSparten(getKnex(), [ticker]).catch(() => new Map())).get(ticker) || null,
             nameQuelle,
             // RAS-01: mit einem Future gilt dessen Ticker — dann ist nicht die Kursquelle fraglich,
             // sondern der Name im Stamm (von Bitpanda, dort eine andere Firma unter demselben Kürzel).

@@ -122,6 +122,8 @@ export const PAGES = [
     { id: 'coinVerlauf', mode: 'research', path: '/coin-radar/verlauf', symbol: 'verlauf', titleKey: 'coinradar.tab_verlauf', group: 'coinGruppe', markt: 'krypto' },
     // Abverkaufs-Wache: gepumpte Perps, die zu kippen beginnen (`server/coin-radar/abverkauf.js`).
     { id: 'coinAbverkauf', mode: 'research', path: '/coin-radar/abverkauf', symbol: 'pfeilSchraegAb', titleKey: 'coinradar.tab_abverkauf', group: 'coinGruppe', markt: 'krypto' },
+    // Die Favoritenliste beider Radare auf einer Seite (liest `hype_favoriten`, `server/coin-radar/favoriten.js`).
+    { id: 'coinFavoriten', mode: 'research', path: '/coin-radar/favoriten', symbol: 'stern', titleKey: 'nav.coinFavoriten', group: 'coinGruppe', markt: 'krypto', gegenstueck: { aktien: '/aktien-favoriten' } },
     /*
      * Aktien (Aufbau, `docs/PLAN-AKTIEN.md`): was an den angebundenen
      * Handelsplätzen als Aktie kaufbar ist, Spot oder Future. Nur mit
@@ -130,6 +132,8 @@ export const PAGES = [
     // Newcomer-Radar zuerst: er ist die Frage, der Stamm das Nachschlagewerk dazu.
     { id: 'newcomerRadar', mode: 'research', path: '/newcomer-radar', symbol: 'entdecken', titleKey: 'nav.newcomerRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
     { id: 'aktienRadar', mode: 'research', path: '/aktien-radar', symbol: 'listeNummer', titleKey: 'nav.aktienRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/coin-radar' } },
+    // Die eigene Merkliste: bleibt stehen, auch wenn der Radar einen Titel nicht bewertet (`server/aktien/favoriten.js`).
+    { id: 'aktienFavoriten', mode: 'research', path: '/aktien-favoriten', symbol: 'stern', titleKey: 'nav.aktienFavoriten', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/coin-radar/favoriten' } },
     // Das Umfeld (Index, Schwankung, Sektoren) — nach den Radaren, damit der Newcomer-Radar die Startseite bleibt.
     { id: 'aktienMarktlage', mode: 'research', path: '/aktien-marktlage', symbol: 'tacho', titleKey: 'nav.aktienMarktlage', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien', gegenstueck: { krypto: '/marktradar' } },
     { id: 'aktienStamm', mode: 'research', path: '/aktien', symbol: 'gebaeude', titleKey: 'nav.aktienStamm', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },

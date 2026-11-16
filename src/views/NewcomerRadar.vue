@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { haltefrist } from '../../shared/aktien-newcomer.js'
 import axios from 'axios'
 import Knopf from '../components/basis/Knopf.vue'
+import FavoritStern from '../components/aktien/FavoritStern.vue'
 import Pille from '../components/basis/Pille.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Leerzustand from '../components/basis/Leerzustand.vue'
@@ -155,6 +156,7 @@ const notenText = (n) => t('newcomer.teilnoten', { neuheit: n?.neuheit ?? '—',
                     <tr v-for="z in titel" :key="z.id">
                         <td class="rechts note" :title="notenText(z.noten)">{{ z.kennzahlen.gedeckelt ? '≤ ' : '' }}{{ z.note == null ? '—' : zahl(z.note, 0) }}</td>
                         <td class="ticker">
+                            <FavoritStern :ticker="z.ticker" @fehler="fehler = $event" />
                             <router-link :to="{ path: '/aktien', query: { titel: z.ticker } }" :title="t('titel.oeffnen')">{{ z.ticker }}</router-link>
                             <span v-if="z.zuordnung === 'sucheFremd'" class="frage" :title="t('newcomer.zuordnung_sucheFremd')">?</span>
                         </td>
@@ -198,6 +200,11 @@ const notenText = (n) => t('newcomer.teilnoten', { neuheit: n?.neuheit ?? '—',
 <style scoped>
 .vermerk.warn {
     color: var(--warn);
+}
+
+.ticker .stern {
+    margin-right: 0.3rem;
+    vertical-align: -0.15em;
 }
 
 .ticker a {

@@ -120,7 +120,7 @@ export function getKnex() {
  * gemischtem `is_called` hinkt der Vergleich um eins.
  */
 async function fixPostgresSequences(knex) {
-    const tables = ['notes', 'trades', 'screenshots', 'satisfactions', 'tags', 'excursions', 'incoming_positions', 'diaries', 'playbooks', 'ai_reports', 'ai_report_messages', 'ai_trade_messages', 'live_recordings', 'market_snapshots', 'calendar_events', 'live_sessions', 'ai_usage', 'hype_candidates', 'hype_reports', 'hype_settings', 'hype_favoriten', 'hype_alarme', 'coinradar_laeufe', 'coinradar_zeilen', 'coinradar_settings', 'radar_ergebnisse', 'oi_minute', 'hype_projekt', 'hype_frueh', 'hype_smart_kaeufe', 'hype_listungen_neu', 'hype_gedaechtnis', 'chart_layouts', 'chart_watchlists', 'chart_zeichnungen', 'chart_alarme', 'chart_vorlagen']
+    const tables = ['notes', 'trades', 'screenshots', 'satisfactions', 'tags', 'excursions', 'incoming_positions', 'diaries', 'playbooks', 'ai_reports', 'ai_report_messages', 'ai_trade_messages', 'live_recordings', 'market_snapshots', 'calendar_events', 'live_sessions', 'ai_usage', 'hype_candidates', 'hype_reports', 'hype_settings', 'hype_favoriten', 'hype_alarme', 'coinradar_laeufe', 'coinradar_zeilen', 'coinradar_settings', 'radar_ergebnisse', 'oi_minute', 'hype_projekt', 'hype_frueh', 'hype_smart_kaeufe', 'hype_listungen_neu', 'hype_gedaechtnis', 'chart_layouts', 'chart_watchlists', 'chart_zeichnungen', 'chart_alarme', 'chart_vorlagen', 'aktien_favoriten']
     let fixed = 0
 
     for (const table of tables) {

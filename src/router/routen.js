@@ -163,6 +163,7 @@ export const routen = [
     seite('/newcomer-radar', 'newcomerRadar', () => import('../views/NewcomerRadar.vue'), { title: 'Newcomer-Radar', titleKey: 'nav.newcomerRadar', mode: 'research' }),
     seite('/aktien-marktlage', 'aktienMarktlage', () => import('../views/AktienMarktlage.vue'), { title: 'Marktlage', titleKey: 'nav.aktienMarktlage', mode: 'research' }),
     seite('/aktien-radar', 'aktienRadar', () => import('../views/AktienRadar.vue'), { title: 'Aktien-Radar', titleKey: 'nav.aktienRadar', mode: 'research' }),
+    seite('/aktien-favoriten', 'aktienFavoriten', () => import('../views/AktienFavoriten.vue'), { title: 'Favoriten', titleKey: 'nav.aktienFavoriten', mode: 'research' }),
     seite('/aktien', 'aktienStamm', () => import('../views/AktienStamm.vue'), { title: 'Aktien', titleKey: 'nav.aktienStamm', mode: 'research' }),
 
     // ── Strategien ──────────────────────────────────────────

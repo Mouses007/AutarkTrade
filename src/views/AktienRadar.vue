@@ -13,6 +13,9 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Knopf from '../components/basis/Knopf.vue'
 import Kaufzettel from '../components/aktien/Kaufzettel.vue'
+import FavoritStern from '../components/aktien/FavoritStern.vue'
+import SpartenFilter from '../components/aktien/SpartenFilter.vue'
+import { passtSparte, sektorSchluessel } from '../../shared/aktien-sparte.js'
 import AktienRadarEinstellungen from '../components/aktien/AktienRadarEinstellungen.vue'
 import AktienRadarGuete from '../components/aktien/AktienRadarGuete.vue'
 import Pille from '../components/basis/Pille.vue'
@@ -21,7 +24,7 @@ import Leerzustand from '../components/basis/Leerzustand.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
 import { marktdaten, ladeMarktdaten } from '../utils/marktdaten.js'
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 
 const PLATZ = { binance: 'Binance', bitget: 'Bitget', bitunix: 'Bitunix', pionex: 'Pionex', bitpanda: 'Bitpanda' }
 const TON = { perp: 'akzent', 'token-spot': 'gut', 'broker-spot': 'neutral' }
@@ -41,6 +44,13 @@ const mitHuerden = ref(false)
 const laedt = ref(true)
 const laeuft = ref(false)
 const zettelTicker = ref('')
+// Filter nach Sparte (Sektor/Branche der Kursquelle); der Rang bleibt der des ganzen Felds.
+const sparte = ref({ sektor: '', branche: '' })
+const sichtbar = computed(() => zeilen.value.filter((z) => passtSparte(z, sparte.value)))
+const sektorName = (s) => {
+    const k = sektorSchluessel(s)
+    return k && te('sparte.sektor_' + k) ? t('sparte.sektor_' + k) : s
+}
 // Einstellungen (Zeitplan, Hürden, Gewichte) und Erfolgskontrolle: erst auf Wunsch geladen.
 const zeigeEinstellungen = ref(false)
 const zeigeGuete = ref(false)
@@ -53,6 +63,7 @@ async function lade() {
         const { data } = await axios.get('/api/coin-radar/zeilen', { params: { ...MARKT, huerden: mitHuerden.value ? 1 : 0 } })
         lauf.value = data?.lauf || null
         zeilen.value = data?.zeilen || []
+        spartenLaeuft.value = data?.spartenLaeuft === true
     } catch (e) {
         fehler.value = `${t('aktienradar.ladeFehler')}: ${e?.response?.data?.error || e.message}`
     } finally {
@@ -106,9 +117,17 @@ async function starteLauf() {
     }
 }
 
+// Solange der Server Sparten nachfüllt, alle 20 s neu lesen — sonst bliebe «unbekannt» bis zum Neuladen stehen.
+const spartenLaeuft = ref(false)
+let spartenWecker = null
+watch(spartenLaeuft, (an) => {
+    clearInterval(spartenWecker)
+    if (an) spartenWecker = setInterval(() => { if (!laeuft.value) lade() }, 20_000)
+})
+
 watch(mitHuerden, lade)
 onMounted(lade)
-onBeforeUnmount(() => strom?.abort())
+onBeforeUnmount(() => { strom?.abort(); clearInterval(spartenWecker) })
 
 const referenz = computed(() => lauf.value?.quellenStand?.referenz?.ticker || null)
 const schrittText = computed(() => {
@@ -155,7 +174,10 @@ const volleReihe = computed(() => Object.keys(lauf.value?.quellenStand?.volleRei
 <template>
     <div class="aktienradar-seite">
         <div class="leiste">
-            <label class="haken"><input v-model="mitHuerden" type="checkbox" /> {{ t('aktienradar.zeigeHuerden') }}</label>
+            <div class="filter">
+                <label class="haken"><input v-model="mitHuerden" type="checkbox" /> {{ t('aktienradar.zeigeHuerden') }}</label>
+                <SpartenFilter v-if="zeilen.length" v-model="sparte" :zeilen="zeilen" />
+            </div>
             <div class="knoepfe">
                 <Knopf klein art="leise" symbol="waage" :aria-expanded="zeigeGuete" @click="zeigeGuete = !zeigeGuete">{{ t('aktienAlltag.guete.knopf') }}</Knopf>
                 <Knopf klein art="leise" symbol="einstellungen" :aria-expanded="zeigeEinstellungen" @click="zeigeEinstellungen = !zeigeEinstellungen">{{ t('aktienAlltag.einst.knopf') }}</Knopf>
@@ -178,6 +200,7 @@ const volleReihe = computed(() => Object.keys(lauf.value?.quellenStand?.volleRei
             <template v-if="volleReihe"> {{ t('aktienradar.volleReihe', { ze: volleReihe }) }}</template>
         </p>
         <Hinweis v-if="!laeuft && staerke && !staerke.ok" art="warn">{{ t('aktienradar.staerkeFehlt_' + (staerke.grund || 'abrufFehlgeschlagen')) }}</Hinweis>
+        <p v-if="spartenLaeuft && !laeuft" class="leise" role="status">{{ t('sparte.laeuft') }}</p>
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
 
         <Kreisel v-if="laedt" />
@@ -185,6 +208,8 @@ const volleReihe = computed(() => Object.keys(lauf.value?.quellenStand?.volleRei
             <Knopf art="haupt" symbol="aktualisieren" @click="starteLauf">{{ t('aktienradar.lauf') }}</Knopf>
         </Leerzustand>
         <Leerzustand v-else-if="!zeilen.length && !laeuft" :titel="t('aktienradar.keineTitel')" :text="t('aktienradar.keineTitelText')" symbol="suche" />
+
+        <Leerzustand v-else-if="!sichtbar.length && !laeuft" :titel="t('sparte.keineTreffer')" :text="t('sparte.keineTrefferText')" symbol="suche" />
 
         <div v-else-if="zeilen.length" class="rolle">
             <table class="liste">
@@ -194,6 +219,7 @@ const volleReihe = computed(() => Object.keys(lauf.value?.quellenStand?.volleRei
                         <th class="rechts" :title="t('aktienradar.noteInfo')">{{ t('aktienradar.note') }}</th>
                         <th>{{ t('aktienradar.ticker') }}</th>
                         <th>{{ t('aktienradar.name') }}</th>
+                        <th :title="t('sparte.info')">{{ t('sparte.spalte') }}</th>
                         <th class="rechts">{{ t('aktienradar.umsatz') }}</th>
                         <th class="rechts">{{ t('aktienradar.spread') }}</th>
                         <template v-if="!mitHuerden">
@@ -212,16 +238,24 @@ const volleReihe = computed(() => Object.keys(lauf.value?.quellenStand?.volleRei
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="z in zeilen" :key="z.symbol">
+                    <tr v-for="z in sichtbar" :key="z.symbol">
                         <td class="rechts">{{ z.rang || '—' }}</td>
                         <td class="rechts note" :title="teilText(z.teilnoten)">{{ z.note == null ? '—' : zahl(z.note, 0) }}</td>
                         <td class="ticker" :title="z.symbol">
+                            <FavoritStern v-if="z.boersen?.ticker" :ticker="z.boersen.ticker" @fehler="fehler = $event" />
                             <router-link :to="chartZiel(z)" :title="t('aktienradar.zumChart')">{{ z.boersen?.ticker || z.symbol }}</router-link>
                             <span v-if="z.boersen?.unterart && z.boersen.unterart !== 'aktie'" class="art">{{ t('aktien.art_' + z.boersen.unterart) }}</span>
                         </td>
                         <td class="name">
                             <router-link v-if="z.boersen?.ticker" :to="{ path: '/aktien', query: { titel: z.boersen.ticker } }" :title="t('titel.oeffnen')">{{ z.boersen?.name || z.boersen.ticker }}</router-link>
                             <template v-else>—</template>
+                        </td>
+                        <td class="sparte">
+                            <template v-if="z.sparte">
+                                {{ sektorName(z.sparte.sektor) }}
+                                <div v-if="z.sparte.branche" class="vermerk">{{ z.sparte.branche }}</div>
+                            </template>
+                            <span v-else class="leise" :title="t('sparte.unbekanntInfo')">{{ t('sparte.unbekannt') }}</span>
                         </td>
                         <td class="rechts">{{ gross(z.umsatz24h) }}</td>
                         <td class="rechts">{{ z.spreadBp == null ? '—' : zahl(z.spreadBp, 1) + ' bp' }}</td>
@@ -281,6 +315,23 @@ const volleReihe = computed(() => Object.keys(lauf.value?.quellenStand?.volleRei
     align-items: center;
     justify-content: space-between;
     gap: 0.7rem 1rem;
+}
+
+.filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.2rem;
+}
+
+.vermerk {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.ticker .stern {
+    margin-right: 0.3rem;
+    vertical-align: -0.15em;
 }
 
 .knoepfe {

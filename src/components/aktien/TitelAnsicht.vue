@@ -26,6 +26,7 @@ import Hinweis from '../basis/Hinweis.vue'
 import Kreisel from '../basis/Kreisel.vue'
 import Diagramm from '../strategien/Diagramm.vue'
 import QuelleAus from '../quellen/QuelleAus.vue'
+import FavoritStern from './FavoritStern.vue'
 import Kaufzettel from './Kaufzettel.vue'
 import EdgarKarte from './EdgarKarte.vue'
 import { marktdaten, ladeMarktdaten } from '../../utils/marktdaten.js'
@@ -264,6 +265,7 @@ const grundText = computed(() => {
                 </Pille>
             </div>
             <div class="knoepfe">
+                <FavoritStern v-if="seite?.ok" :ticker="ticker" mit-text @fehler="fehler = $event" />
                 <Knopf v-if="chartZiel" klein art="haupt" symbol="chart" :to="chartZiel">{{ t('titel.zumChart') }}</Knopf>
                 <Knopf v-if="listungen.length" klein symbol="dokument" :titel="t('kaufzettel.knopfTitel', { ticker })" @click="zettelOffen = true">{{ t('kaufzettel.knopf') }}</Knopf>
                 <Knopf klein nur-symbol symbol="aktualisieren" :titel="t('titel.aktualisieren')" :laedt="laedt" @click="lade(true)" />

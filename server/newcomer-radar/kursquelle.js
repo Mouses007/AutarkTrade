@@ -87,12 +87,15 @@ async function yahooSitzung(neu = false) {
     return sitzung
 }
 
-/** Rohe `quoteSummary`-Antwort; gelesen wird sie in `server/aktien/titel-kern.js`. */
-export async function holeZusammenfassung(symbol) {
+/**
+ * Rohe `quoteSummary`-Antwort; gelesen wird sie in `server/aktien/titel-kern.js`.
+ * @param {string} [module]  Module der Antwort; ohne Angabe alle der Titel-Seite (die Sparte braucht nur zwei)
+ */
+export async function holeZusammenfassung(symbol, module = MODULE) {
     await fordereQuelle('yahoo')
     for (const neu of [false, true]) {
         const s = await yahooSitzung(neu)
-        const url = `${ZUSAMMENFASSUNG}${encodeURIComponent(symbol)}?modules=${MODULE}&crumb=${encodeURIComponent(s.crumb)}`
+        const url = `${ZUSAMMENFASSUNG}${encodeURIComponent(symbol)}?modules=${module}&crumb=${encodeURIComponent(s.crumb)}`
         const antwort = await mitFrist(url, { headers: { ...KOPF, accept: 'application/json', cookie: s.cookie } })
         if (antwort.status === 401 && !neu) continue
         if (antwort.status === 429) throw new Gebremst('HTTP 429')

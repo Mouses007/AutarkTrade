@@ -33,6 +33,13 @@
  *    nur diese Spalte, damit SQLite und PostgreSQL dasselbe finden (Audit DB-D-003).
  *    Der Stamm-Abgleich füllt sie, der Start füllt bestehende Zeilen nach.
  *
+ * 8. Favoriten und Sparte (16.11.2026):
+ *      `aktien_favoriten`            die Merkliste des Nutzers, ein Ticker je Zeile. Bewusst der
+ *                                    TICKER und nicht die `instrumentId`: der Stamm steht nicht in
+ *                                    der Sicherung und bekommt nach einem Rückspielen neue Nummern.
+ *      `instrumente.sparteSymbol`    zu welchem Kurssymbol `sektor`/`branche` gehören
+ *      `instrumente.sparteStand`     wann zuletzt gefragt (`server/aktien/sparte.js`)
+ *
  * 5. `edgarKontakt` — womit sich die App bei der SEC ausweist (`server/aktien/edgar.js`).
  *    Trägt der Nutzer selbst ein; leer = EDGAR aus.
  */
@@ -118,6 +125,18 @@ export async function migriereAktien(knex, addColumnIfNotExists) {
             t.index(['kategorie', 'note'])
         })
     }
+
+    // Punkt 8: Merkliste und Sparte.
+    if (!(await knex.schema.hasTable('aktien_favoriten'))) {
+        await knex.schema.createTable('aktien_favoriten', (t) => {
+            t.increments('id').primary()
+            t.string('ticker').notNullable().unique()
+            t.string('name')                         // Name beim Anheften — bleibt lesbar, wenn der Titel aus dem Stamm fällt
+            t.bigInteger('erstelltAm')
+        })
+    }
+    await addColumnIfNotExists('instrumente', 'sparteSymbol', (t) => t.string('sparteSymbol'))
+    await addColumnIfNotExists('instrumente', 'sparteStand', (t) => t.bigInteger('sparteStand'))
 
     for (const tabelle of TABELLEN_MIT_ANLAGEKLASSE) {
         await addColumnIfNotExists(tabelle, 'anlageklasse', (t) => t.string('anlageklasse').defaultTo('krypto'))

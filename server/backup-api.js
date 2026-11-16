@@ -81,6 +81,9 @@ const BACKUP_TABLES = [
     'chart_zeichnungen',
     'chart_alarme',
     'chart_vorlagen',
+    // Merkliste Aktien: Handarbeit. Am Ticker geführt, nicht an der Nummer im Stamm —
+    // der Stamm steht nicht in der Sicherung und wird nach dem Rückspielen neu aufgebaut.
+    'aktien_favoriten',
     // ── Strategie-Sektion ───────────────────────────────────────────────
     // Selbst gebaute Regelstrategien existieren NIRGENDWO sonst — sie sind
     // Handarbeit des Nutzers, kein Mitschnitt. Ohne sie wäre der
@@ -229,6 +232,7 @@ const DELETE_ORDER = [
     'chart_watchlists',
     'chart_layouts',
     'chart_vorlagen',
+    'aktien_favoriten',
     'live_sessions',
     'calendar_events',
     'market_snapshots',

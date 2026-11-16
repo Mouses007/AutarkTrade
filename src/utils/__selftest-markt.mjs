@@ -26,8 +26,8 @@ gleich([seiteImMarkt({ markt: 'aktien' }, 'krypto'), seiteImMarkt({ markt: 'akti
 // Menü: im Markt Krypto sieht Research aus wie vor der Aktien-Integration
 const research = pagesForMode('research')
 gleich(research.filter((s) => seiteImMarkt(s, 'krypto')).map((s) => s.id),
-    ['hypeRadar', 'hypeFrueh', 'hypeBoersen', 'hypeBerichte', 'coinRadar', 'coinVerlauf', 'coinAbverkauf'], 'Research im Markt Krypto unverändert')
-gleich(research.filter((s) => seiteImMarkt(s, 'aktien')).map((s) => s.id), ['newcomerRadar', 'aktienRadar', 'aktienMarktlage', 'aktienStamm'], 'Research im Markt Aktien')
+    ['hypeRadar', 'hypeFrueh', 'hypeBoersen', 'hypeBerichte', 'coinRadar', 'coinVerlauf', 'coinAbverkauf', 'coinFavoriten'], 'Research im Markt Krypto (seit 16.11.2026 mit Favoriten)')
+gleich(research.filter((s) => seiteImMarkt(s, 'aktien')).map((s) => s.id), ['newcomerRadar', 'aktienRadar', 'aktienFavoriten', 'aktienMarktlage', 'aktienStamm'], 'Research im Markt Aktien')
 // Jede Aktien-Seite hängt am Schalter, sonst stünde sie nach dem Abschalten noch im Menü
 gleich(PAGES.filter((s) => s.markt === 'aktien' && s.flag !== 'modusAktienAn').map((s) => s.id), [], 'Aktien-Seiten tragen das Flag')
 // Ausserhalb von Research ist nur die Live-Analyse marktgebunden — und zwar ganz: jede ihrer Seiten ist Krypto
@@ -65,6 +65,8 @@ gleich(zielImMarkt(null, 'aktien', AN), null, 'unbekannte Seite: keine Umleitung
 gleich(zielImMarkt(pageById('marktradar'), 'krypto', {}), null, 'Marktradar im Krypto-Markt bleibt')
 gleich(zielImMarkt(pageById('marktradar'), 'aktien', AN), '/aktien-marktlage', 'Marktradar → Marktlage')
 gleich(zielImMarkt(pageById('aktienMarktlage'), 'krypto', AN), '/marktradar', 'Marktlage → Marktradar')
+gleich(zielImMarkt(pageById('aktienFavoriten'), 'krypto', AN), '/coin-radar/favoriten', 'Favoriten Aktien → Favoriten Coins')
+gleich(zielImMarkt(pageById('coinFavoriten'), 'aktien', AN), '/aktien-favoriten', 'Favoriten Coins → Favoriten Aktien')
 gleich(zielImMarkt(pageById('coinRadar'), 'aktien', AN), '/aktien-radar', 'Coin-Radar → Aktien-Radar')
 gleich(zielImMarkt(pageById('aktienRadar'), 'krypto', AN), '/coin-radar', 'Aktien-Radar → Coin-Radar')
 gleich(zielImMarkt(pageById('hypeRadar'), 'aktien', AN), '/newcomer-radar', 'Hype-Radar → Startseite von Research im Aktien-Markt')

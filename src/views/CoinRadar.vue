@@ -3,7 +3,7 @@
         <!-- ── Kopf ──────────────────────────────────────────────────── -->
         <!-- Die Abverkaufs-Wache hat eigene Einstellungen und einen eigenen
              Knopf; der Kopf der Rangliste stünde dort als zweiter „Jetzt"-Knopf. -->
-        <div v-if="reiter !== 'abverkauf'" class="crKopf">
+        <div v-if="reiter !== 'abverkauf' && reiter !== 'favoriten'" class="crKopf">
             <!-- Rangliste und Verlauf stehen als eigene Einträge im
                  Seitenmenü. Was bleibt, sind die Einstellungen — und die
                  verhalten sich wie in den Nachrichten: ein Zahnrad und eine
@@ -807,6 +807,13 @@
             <AbverkaufAnsicht :aktiv="reiter === 'abverkauf'" />
         </div>
 
+        <!-- ══ Favoriten ═════════════════════════════════════════════ -->
+        <!-- Die Favoritenliste beider Radare auf einer Seite; liest nur. Nimmt
+             man hier einen Stern weg, lädt die Rangliste ihre Sterne neu. -->
+        <div v-if="reiter === 'favoriten'" class="at-mo-3">
+            <CoinFavoriten :aktiv="reiter === 'favoriten'" @geaendert="ladeFavoriten" />
+        </div>
+
         <!-- ══ Verlauf ═══════════════════════════════════════════════ -->
         <div v-show="reiter === 'verlauf'" class="at-mo-3">
             <p class="crHinweis">{{ t('coinradar.verlaufHinweis') }}</p>
@@ -1031,6 +1038,7 @@ import TickerZeichen from '../components/hype/TickerZeichen.vue'
 import RadarQuellen from '../components/hype/RadarQuellen.vue'
 import QuelleAus from '../components/quellen/QuelleAus.vue'
 import AbverkaufAnsicht from '../components/coinradar/AbverkaufAnsicht.vue'
+import CoinFavoriten from '../components/coinradar/CoinFavoriten.vue'
 import { useKostenAnzeige } from '../utils/journal/format.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { logWarn } from '../utils/logger.js'
@@ -1085,7 +1093,7 @@ const ZE_AUSWAHL = ['5m', '15m', '1h', '4h']
  */
 const route = useRoute()
 const router = useRouter()
-const reiter = computed(() => (['verlauf', 'abverkauf'].includes(route.params.reiter) ? route.params.reiter : 'rangliste'))
+const reiter = computed(() => (['verlauf', 'abverkauf', 'favoriten'].includes(route.params.reiter) ? route.params.reiter : 'rangliste'))
 const laeuft = ref(false)
 const fortschritt = ref(null)
 const meldung = ref('')

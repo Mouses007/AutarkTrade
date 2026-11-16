@@ -62,6 +62,8 @@ import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engin
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
 import { setupPortfolioRoutes } from './server/portfolio/api.js'
 import { setupAktienRoutes } from './server/aktien/api.js'
+import { setupAktienFavoritenRoutes } from './server/aktien/favoriten.js'
+import { setupCoinFavoritenRoutes } from './server/coin-radar/favoriten.js'
 import { setupAktienJournalRoutes } from './server/aktien/journal-klasse.js'
 import { starteStammTakt } from './server/aktien/stamm.js'
 import { setupNewcomerRoutes } from './server/newcomer-radar/api.js'
@@ -311,6 +313,8 @@ async function starteServer() {
     setupRanglisteRoutes(app);
     setupPortfolioRoutes(app);
     setupAktienRoutes(app);
+    setupAktienFavoritenRoutes(app);
+    setupCoinFavoritenRoutes(app);
     setupAktienJournalRoutes(app);
     setupNewcomerRoutes(app);
     // Eigene Regelstrategien aus der DB in die Registry holen — sie sind ab

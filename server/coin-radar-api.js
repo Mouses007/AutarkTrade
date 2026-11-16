@@ -27,6 +27,7 @@ import { bereinigeAktienEinstellungen, fehlerText, HUERDEN_GRENZEN, GEWICHT_GREN
 import { faelligerPlatz, naechsterPlatz, leseZeitplan, ZEITPLAN_GRENZEN } from './coin-radar/aktien-zeitplan.js'
 import { ART_AKTIEN, HORIZONTE_AKTIEN, werteAusAktien } from './coin-radar/aktien-erfolg.js'
 import { sitzungVon } from '../shared/aktien-sitzung.js'
+import { leseSparten, fuelleSpartenImHintergrund, stosseSpartenAn, spartenLaeuft } from './aktien/sparte.js'
 import { werteAus } from './radar-guete.js'
 import { raeumeRadarAuf } from './radar-aufraeumen.js'
 import { abverkaufLauf, abverkaufUebersicht, abverkaufStand } from './coin-radar/abverkauf.js'
@@ -167,15 +168,24 @@ export function setupCoinRadarRoutes(app) {
             if (req.query.huerden === '1') q = q.where('status', 'huerde').orderBy('umsatz24h', 'desc')
             else q = q.where('status', 'bewertet').orderBy('rang', 'asc')
 
-            const zeilen = await q.limit(Math.min(500, Number(req.query.limit) || 300))
+            const zeilen = (await q.limit(Math.min(500, Number(req.query.limit) || 300))).map((z) => ({
+                ...z,
+                jeZeiteinheit: sicherParse(z.jeZeiteinheit, {}),
+                teilnoten: sicherParse(z.teilnoten, {}),
+                boersen: sicherParse(z.boersen, {}),
+            }))
+            // Aktien-Radar: Sparte (Sektor/Branche) aus dem Titel-Stamm für den Filter; `null` = unbekannt.
+            if (lauf?.anlageklasse === 'aktien') {
+                const sparten = await leseSparten(knex, zeilen.map((z) => z.boersen?.ticker).filter(Boolean))
+                for (const z of zeilen) z.sparte = sparten.get(z.boersen?.ticker) || null
+                // Titel ohne Sparte: im Hintergrund nachfragen (gebremst, siehe `stosseSpartenAn`).
+                stosseSpartenAn(knex, zeilen.filter((z) => !z.sparte && z.boersen?.ticker).map((z) => z.boersen.ticker))
+            }
             res.json({
                 lauf: lauf ? { ...lauf, quellenStand: sicherParse(lauf.quellenStand, {}) } : null,
-                zeilen: zeilen.map((z) => ({
-                    ...z,
-                    jeZeiteinheit: sicherParse(z.jeZeiteinheit, {}),
-                    teilnoten: sicherParse(z.teilnoten, {}),
-                    boersen: sicherParse(z.boersen, {}),
-                })),
+                zeilen,
+                // nur Aktien: die Sparten werden gerade nachgefüllt — die Seite lädt dann in Abständen neu
+                ...(lauf?.anlageklasse === 'aktien' ? { spartenLaeuft: spartenLaeuft() } : {}),
             })
         } catch (e) {
             logWarn('coin-radar', `Zeilen lesen: ${e.message}`)
@@ -582,6 +592,9 @@ async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => f
             // Index über Tage und Wochen, getrennt von der Güte des Coin-Radars.
             await legeAnAktienRadar(laufId).catch((e) =>
                 logWarn('coin-radar', `Aktien-Erfolgskontrolle nicht angemeldet: ${e.message}`))
+            // Sparten des Felds und der Favoriten nachfüllen, was fehlt oder veraltet ist — im
+            // Hintergrund, der Lauf wartet nicht darauf (`server/aktien/sparte.js`).
+            fuelleSpartenNachLauf(laufId).catch((e) => logWarn('coin-radar', `Sparten nachfüllen: ${e.message}`))
             fertigMelden({ laufId, ...ergebnis })
             return { laufId, ...ergebnis }
         }
@@ -710,6 +723,17 @@ export function startCoinRadarTakt() {
 /* ── Aktien-Radar: Zeitplan nach US-Börsenzeit ───────────────────────── */
 
 /** Anspruch je Platz — `eroeffnung` und `schluss` sperren einander nicht. */
+/** Ticker des Laufs und der Merkliste an den Sparten-Nachfüller geben. */
+async function fuelleSpartenNachLauf(laufId) {
+    const knex = getKnex()
+    const tickers = new Set((await knex('aktien_favoriten').select('ticker')).map((z) => z.ticker))
+    for (const z of await knex('coinradar_zeilen').where('laufId', laufId).select('boersen')) {
+        const ticker = sicherParse(z.boersen, {})?.ticker
+        if (ticker) tickers.add(ticker)
+    }
+    fuelleSpartenImHintergrund(knex, [...tickers])
+}
+
 const ZEITPLAN_KEY = (platz) => `aktienradar_lauf_${platz}`
 /** Ein Platz läuft höchstens einmal am Handelstag; zwölf Stunden reichen über sein Fenster hinaus. */
 const ZEITPLAN_SPERRE_MS = 12 * 3600e3
