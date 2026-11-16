@@ -565,6 +565,7 @@ async function createTradeFromClosedPosition(histPos, incoming, skipMetadata = f
         tradeObj.botType = histPos.botType
         tradeObj.category = 'bot'
         if (!histPos.spotGrid) tradeObj.nettoNachGebuehren = true   // Marke für server/migrationen/bot-netto.js
+        if (!histPos.spotGrid && Number.isFinite(parseFloat(histPos.nettoBot))) tradeObj.nettoAusPionex = true
         if (histPos.setLeverage) tradeObj.leverage = parseFloat(histPos.setLeverage)
         if (histPos.initQuoteInvestment) tradeObj.investment = parseFloat(histPos.initQuoteInvestment)
     } else {

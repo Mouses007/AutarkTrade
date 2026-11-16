@@ -8452,7 +8452,9 @@
       "force_liquidation": "liquidated",
       "loss_stop": "stop loss",
       "profit_stop": "take profit",
-      "user_cancel": "stopped by hand"
+      "user_cancel": "stopped by hand",
+      "stock_split": "stock split",
+      "bonus_auto_close_upon_maturity": "bonus expired"
     },
     "feld": {
       "band": "Grid range",

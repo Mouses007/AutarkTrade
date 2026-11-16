@@ -68,7 +68,8 @@ const kn = kennzahlen(neutral, {})
 // Gegenprobe an Pionex' eigenen Feldern: totalRealizedProfit + totalFee + totalFundingFee.
 p('Coin-M beendet: Gewinn aus der Marge plus entnommener Gewinn', nahe(kn.gewinn.gesamt, neutral.einsatz.marge - (neutral.einsatz.aktuell + (neutral.einsatz.extraMarge || 0)) + (neutral.ergebnis.entnommen || 0)))
 p('… und das ist Pionex\' Zahl (Gewinn + Gebühren + Funding)', neutral.ergebnis.entnommen > 0 && Math.abs(kn.gewinn.gesamt - (neutral.ergebnis.gesamt + neutral.ergebnis.gebuehren + neutral.ergebnis.funding)) < 1e-6, `${kn.gewinn.gesamt} / ${neutral.ergebnis.gesamt + neutral.ergebnis.gebuehren + neutral.ergebnis.funding}`)
-p('beendetes Spot-Grid: Ergebnis unbekannt, nicht −100 %', gewinn({ typ: 'spot_grid', laufend: false, einsatz: { basis: 10, marge: 0 }, ergebnis: { gridGewinn: 0.3 } }, null).gesamt === null)
+p('beendetes Spot-Grid ohne Schlusspreis: Ergebnis unbekannt, nicht −100 %', gewinn({ typ: 'spot_grid', laufend: false, einsatz: { basis: 10, marge: 0 }, ergebnis: { gridGewinn: 0.3 } }, null).gesamt === null)
+p('beendetes XRP-Spot-Grid: −0.00899 wie bei Pionex (Coins × Schlusspreis + USDT − Einzahlung)', Math.abs(gewinn({ typ: 'spot_grid', laufend: false, einsatz: { basis: 10, quoteBestand: 4.142404 }, position: { menge: 6.05697, schlussPreis: 0.9656 }, ergebnis: {} }, null).gesamt - (-0.00899)) < 0.00002)
 
 console.log('Bausteine')
 const l = lageImBand(150, 100, 200)

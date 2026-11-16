@@ -8,6 +8,7 @@ import { setupSpendenRoutes } from './server/spenden.js'
 import { setupTradePopupRoutes } from './server/trade-popups.js'
 import { setupBitgetRoutes } from './server/bitget-api.js'
 import { setupPionexRoutes } from './server/pionex-api.js'
+import { starteBotNettoAbgleich } from './server/bot-netto-abgleich.js'
 import { setupBotRoutes } from './server/bots/routen.js'
 import { setupBotSteuerungRoutes } from './server/bots/steuerung-routen.js'
 import { setupBotPlanerRoutes } from './server/bots/planer-routen.js'
@@ -239,6 +240,8 @@ async function starteServer() {
     setupBitunixRoutes(app);
     setupBitgetRoutes(app);
     setupPionexRoutes(app);
+    // Bot-Trades im Journal einmalig exakt aus Pionex nachrechnen (nur lesend bei Pionex, nie im Testbetrieb)
+    starteBotNettoAbgleich();
     setupBotPlanerRoutes(app);
     setupBotSteuerungRoutes(app);
     setupBotRoutes(app);

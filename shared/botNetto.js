@@ -99,3 +99,47 @@ export function tagNettoKorrigiert(zeile) {
     const executions = Array.isArray(zeile.executions) ? zeile.executions.map(tradeNettoKorrigiert) : zeile.executions
     return { geaendert: true, trades: neueTrades, executions, ...tagesSummen(neueTrades) }
 }
+
+/** Bot-Kennung aus der Trade-ID des Imports: `t<Tag>_<Index>_<buOrderId>`. */
+export function botIdAusTradeId(id) {
+    const teile = String(id || '').split('_')
+    return teile.length >= 3 ? teile.slice(2).join('_') : null
+}
+
+/** Fehlt diesem Bot-Trade noch der Abgleich mit Pionex' Rohdaten? */
+export function brauchtPionexAbgleich(t) {
+    return !!t && t.category === 'bot' && !istSpotBot(t.botType) && !t.nettoAusPionex
+}
+
+/**
+ * Einen Bot-Trade auf das Netto aus Pionex' Rohdaten setzen (`nettoAusMarge`), exakt statt genähert.
+ * Nötig, weil die Start-Migration für Alt-Trades nur Gewinn − Gebühr + Funding rechnen konnte — bei
+ * liquidierten Bots zu streng (NAS 16.11.2026: sieben Bots zusammen 132 USDT, ein MYX-Bot −177.90 statt
+ * −143.57: der Verlust ist auf das Eingezahlte gedeckelt).
+ * @param {object} t      gespeicherter Trade
+ * @param {number|null} netto  Netto in der Margin-Münze, oder null = Pionex kennt den Bot nicht (mehr)
+ */
+export function tradeAusPionex(t, netto) {
+    if (!brauchtPionexAbgleich(t)) return t
+    if (netto === null || netto === undefined || !Number.isFinite(netto)) return { ...t, nettoAusPionex: 'unbekannt' }
+    if (t.coinM || (t.marginCoin && t.marginCoin !== 'USDT')) {
+        // USDT-Wert kam schon aus der Marge; nur der Coin-Wert wird exakt
+        const brutto = netto + Math.abs(zahl(t.feeCoin) ?? 0) - (zahl(t.fundingCoin) ?? 0)
+        return { ...t, netCoin: netto, grossCoin: brutto, nettoNachGebuehren: true, nettoAusPionex: true }
+    }
+    const brutto = netto + Math.abs(zahl(t.tradingFee ?? t.commission) ?? 0) - (zahl(t.fundingFee) ?? 0)
+    return { ...t, ...geldFelder(t, brutto, netto), ...(t.pnlUsdt !== undefined ? { pnlUsdt: netto } : {}), nettoNachGebuehren: true, nettoAusPionex: true }
+}
+
+/**
+ * Eine Tageszeile mit Pionex abgleichen. `nettoNachBot`: Map buOrderId → Netto (Margin-Münze).
+ * `geaendert: false` = nichts zu tun.
+ */
+export function tagAusPionex(zeile, nettoNachBot) {
+    const trades = Array.isArray(zeile?.trades) ? zeile.trades : []
+    if (!trades.some(brauchtPionexAbgleich)) return { geaendert: false }
+    const neu = (t) => (brauchtPionexAbgleich(t) ? tradeAusPionex(t, nettoNachBot.get(botIdAusTradeId(t.trade ?? t.id)) ?? null) : t)
+    const neueTrades = trades.map((t) => (brauchtPionexAbgleich(t) ? tradeAusPionex(t, nettoNachBot.get(botIdAusTradeId(t.id)) ?? null) : t))
+    const executions = Array.isArray(zeile.executions) ? zeile.executions.map(neu) : zeile.executions
+    return { geaendert: true, trades: neueTrades, executions, ...tagesSummen(neueTrades) }
+}

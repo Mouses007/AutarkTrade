@@ -513,6 +513,8 @@ function createPionexTradeObj(pos, i) {
         obj.quoteCloseP = parseFloat(pos.quoteCloseP ?? 0)   // Schlusskurs für SOL→USD
         // Marke für die Start-Migration (server/migrationen/bot-netto.js): dieser Trade ist schon nach Gebühren
         if (istBotOrder) obj.nettoNachGebuehren = true
+        // …und schon exakt aus Pionex' Rohdaten (server/bot-netto-abgleich.js fasst ihn nicht mehr an)
+        if (istBotOrder && Number.isFinite(parseFloat(pos.nettoBot))) obj.nettoAusPionex = true
     } else {
         obj.category = 'futures'
     }

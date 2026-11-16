@@ -41,9 +41,15 @@ export function gewinn(bot, kurs) {
         // 0.2144 gegen Pionex «Gesamt Profit» 0.15 (Marge 16.6706 − 11.52 − 5 = 0.1506); in den gespeicherten
         // Antworten überall dieselbe Lücke in Höhe von totalFee + totalFundingFee (−13.09 statt −13.75,
         // Liquidation −3.18 statt −4.09). Nur ohne Marge bleibt das Feld der Rückfall.
-        // Spot hat keine Marge: ein beendetes Spot-Grid läse sich mit `marginBalance 0` als −100 % (Audit STG-10).
-        // Sein Endstand steht in anderen Feldern, die noch an keiner echten Antwort gemessen sind → unbekannt.
-        if (bot.typ === 'spot_grid') return { realisiert: null, schwebend: 0, gesamt: null, basis: istZahl(basis) ? basis : null }
+        // Spot hat keine Marge (ein beendetes Spot-Grid läse sich mit `marginBalance 0` als −100 %, Audit STG-10).
+        // Beendet gilt dieselbe Rechnung wie laufend, zum Schlusspreis: Coins × Schlusspreis + USDT − Einzahlung.
+        // Gemessen 16.11.2026 am echten XRP-Spot-Grid: 6.05697 × 0.9656 + 4.142404 − 10 = −0.00899 = Pionex.
+        if (bot.typ === 'spot_grid') {
+            const menge = bot.position?.menge, usdt = e.quoteBestand, schluss = bot.position?.schlussPreis
+            if (!istZahl(menge) || !istZahl(usdt) || !istZahl(basis) || !(istZahl(schluss) && schluss > 0)) return { realisiert: null, schwebend: 0, gesamt: null, basis: istZahl(basis) ? basis : null }
+            const g = menge * schluss + usdt + (bot.ergebnis?.entnommen || 0) - basis
+            return { realisiert: g, schwebend: 0, gesamt: g, basis }
+        }
         if (istZahl(e.marge) && istZahl(basis)) {
             // Entnommener Gewinn ist nicht mehr in der Marge, aber verdient (Audit STG-04)
             const g = e.marge - (basis + (e.extraMarge || 0)) + ausserhalb

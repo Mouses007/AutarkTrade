@@ -351,6 +351,11 @@ async function fetchAllFinishedBots(apiKey, secretKey, sinceMs = 0) {
     return all
 }
 
+/** Alle beendeten Bots als Rohliste (für den Journal-Abgleich `bot-netto-abgleich.js`). */
+export async function holeAlleBeendetenBots(apiKey, secretKey) {
+    return fetchAllFinishedBots(apiKey, secretKey, 0)
+}
+
 /**
  * Test der Verbindung — einfacher authentifizierter Read-Call.
  */

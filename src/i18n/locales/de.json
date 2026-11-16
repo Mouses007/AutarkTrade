@@ -8452,7 +8452,9 @@
       "force_liquidation": "liquidiert",
       "loss_stop": "Stop-Loss",
       "profit_stop": "Take-Profit",
-      "user_cancel": "von Hand beendet"
+      "user_cancel": "von Hand beendet",
+      "stock_split": "Aktiensplit",
+      "bonus_auto_close_upon_maturity": "Bonus abgelaufen"
     },
     "feld": {
       "band": "Grid-Band",

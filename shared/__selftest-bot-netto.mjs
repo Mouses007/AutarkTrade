@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { nettoAusMarge, nettoAusGewinn, brauchtNettoKorrektur, tradeNettoKorrigiert, tagNettoKorrigiert, istSpotBot } from './botNetto.js'
+import { nettoAusMarge, nettoAusGewinn, brauchtNettoKorrektur, tradeNettoKorrigiert, tagNettoKorrigiert, istSpotBot, botIdAusTradeId, tradeAusPionex, tagAusPionex, brauchtPionexAbgleich } from './botNetto.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -60,6 +60,24 @@ console.log('Tageszeile')
 const tag = tagNettoKorrigiert({ trades: [alt, futures], executions: [{ ...alt, trade: alt.id }] })
 p('Zeile mit Bot: geändert, P&L neu summiert, Futures-Trade gleich', tag.geaendert && nahe(tag.pAndL.netProceeds, -13.7526 + 5) && tag.trades[1] === futures && nahe(tag.executions[0].netProceeds, -13.7526))
 p('Zeile ohne offenen Bot-Trade: nichts zu tun', tagNettoKorrigiert({ trades: [futures, spot, neu] }).geaendert === false && tagNettoKorrigiert(null).geaendert === false)
+
+console.log('Exakter Abgleich mit Pionex')
+{
+    const id = '6f9d3fb2-08d9-4113-b52a-4f1205936fb2'
+    p('Bot-Kennung aus der Trade-ID', botIdAusTradeId(`t1794700800_3_${id}`) === id && botIdAusTradeId('t1_2') === null && botIdAusTradeId('t1_0_px_42') === 'px_42')
+    // liquidierter MYX-Bot: die Näherung der Migration (−177.90) war zu streng, eingezahlt und verloren sind 143.57
+    const genaehert = { id: `t1_0_${id}`, category: 'bot', botType: 'futures_grid', symbol: 'MYXUSDT', buyQuantity: 1, netProceeds: -177.9, netSharePL: -177.9, grossProceeds: -93.64, commission: 84.74, tradingFee: 84.74, fundingFee: 0.48, pnlUsdt: -177.9, nettoNachGebuehren: true }
+    const ex = tradeAusPionex(genaehert, -143.57)
+    p('liquidiert: −177.90 → −143.57, Brutto = Netto + Gebühr − Funding, Marke', nahe(ex.netProceeds, -143.57) && nahe(ex.grossProceeds, -143.57 + 84.74 - 0.48) && nahe(ex.pnlUsdt, -143.57) && ex.nettoAusPionex === true && ex.netLossCount === 1 && ex.commission === 84.74)
+    p('zweiter Lauf ändert nichts', tradeAusPionex(ex, -1) === ex && !brauchtPionexAbgleich(ex))
+    p('Pionex kennt den Bot nicht mehr: Werte bleiben, Marke «unbekannt»', tradeAusPionex(genaehert, null).netProceeds === -177.9 && tradeAusPionex(genaehert, null).nettoAusPionex === 'unbekannt')
+    const cm = tradeAusPionex({ id: 't1_1_cm', category: 'bot', botType: 'futures_grid', coinM: true, netProceeds: -2.28, netCoin: -0.03, feeCoin: 0.0563, fundingCoin: 0.0057 }, -0.0254)
+    p('Coin-M: nur der Coin-Wert wird exakt, USDT bleibt', cm.netProceeds === -2.28 && nahe(cm.netCoin, -0.0254) && nahe(cm.grossCoin, -0.0254 + 0.0563 - 0.0057) && cm.nettoAusPionex === true)
+    const fut = { id: 't1_2_px', category: 'futures', netProceeds: 5, grossProceeds: 6, commission: 1, symbol: 'BTCUSDT', grossWinsCount: 1, grossLossCount: 0, netWinsCount: 1, netLossCount: 0 }
+    const tag = tagAusPionex({ trades: [genaehert, fut], executions: [{ ...genaehert, trade: genaehert.id }] }, new Map([[id, -143.57]]))
+    p('Tageszeile: Bot exakt, Futures gleich, Summe neu, Execution mit', tag.geaendert && nahe(tag.trades[0].netProceeds, -143.57) && tag.trades[1] === fut && nahe(tag.pAndL.netProceeds, -138.57) && nahe(tag.executions[0].netProceeds, -143.57))
+    p('Zeile ohne offenen Bot-Trade: nichts zu tun', tagAusPionex({ trades: [fut, ex] }, new Map()).geaendert === false)
+}
 
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)
 process.exit(fehl ? 1 : 0)

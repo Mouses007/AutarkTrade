@@ -56,14 +56,23 @@ export const MAX_EIGENE = 3
  */
 export const LANG = { abstand_min_unten: 0.92, abstand_min_oben: 1.08, oben: 1.4, oben_max: 1.6, notbremse: 0.08 }
 
+/** Die Notbremse bleibt knapp ausserhalb des Bands: so weit (Anteil) jenseits der Bandkante. */
+const NOTBREMSE_BANDABSTAND = 0.005
+
 /**
- * Preis der Notbremse: `LANG.notbremse` vor der geschätzten Liquidation, aber höchstens auf halbem Weg
- * zwischen Liquidation und Bandkante — sie soll ausserhalb des Bands bleiben. Rein.
+ * Preis der Notbremse: `LANG.notbremse` vor der geschätzten Liquidation — liegt das schon im Band, dann
+ * knapp ausserhalb der Bandkante (so weit weg von der Liquidation wie möglich, ohne im Band zu stoppen).
+ * Passt auch das nicht zwischen Liquidation und Band, der halbe Weg. Rein.
  */
 export function notbremsePreis(richtung, liq, variante) {
-    if (richtung === 'LONG') return Math.min(liq * (1 + LANG.notbremse), (liq + variante.unten) / 2)
-    return Math.max(liq * (1 - LANG.notbremse), (liq + variante.oben) / 2)
+    if (richtung === 'LONG') {
+        const sl = Math.min(liq * (1 + LANG.notbremse), variante.unten * (1 - NOTBREMSE_BANDABSTAND))
+        return sl > liq ? sl : (liq + variante.unten) / 2
+    }
+    const sl = Math.max(liq * (1 - LANG.notbremse), variante.oben * (1 + NOTBREMSE_BANDABSTAND))
+    return sl < liq ? sl : (liq + variante.oben) / 2
 }
+
 /** Ab so vielen Grids ist es ein Grid; darunter warnt der Planer oben (Einsatz zu klein). */
 export const SINNVOLLE_GRIDS = 20
 export const WENIG_GRIDS = 10
