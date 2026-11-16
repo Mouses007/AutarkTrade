@@ -48,8 +48,22 @@ export const MAX_PLAN_GRIDS = 500
 export const MAX_HEBEL = 125
 export const MAX_KANDIDATEN = 24
 export const MAX_EIGENE = 3
-/** Langfrist-Bänder: Unterstützung/Widerstand mindestens 8 % entfernt, oben +40 % (bis +60 % an einem Widerstand), Notbremse 2 % vor der Liquidation. */
-export const LANG = { abstand_min_unten: 0.92, abstand_min_oben: 1.08, oben: 1.4, oben_max: 1.6, notbremse: 0.02 }
+/**
+ * Langfrist-Bänder: Unterstützung/Widerstand mindestens 8 % entfernt, oben +40 % (bis +60 % an einem Widerstand),
+ * Notbremse 8 % vor der GESCHÄTZTEN Liquidation. Bis 16.11.2026 waren es 2 % — das lag innerhalb des
+ * Schätzfehlers (Reserve 0,90–0,95 gemessen, Wartungsmarge nicht aus Pionex' Tabelle: die echte Liquidation
+ * lag in Nachrechnungen bis 2,5 % näher am Kurs), der Stop hätte dann nie ausgelöst (Audit PLN-01).
+ */
+export const LANG = { abstand_min_unten: 0.92, abstand_min_oben: 1.08, oben: 1.4, oben_max: 1.6, notbremse: 0.08 }
+
+/**
+ * Preis der Notbremse: `LANG.notbremse` vor der geschätzten Liquidation, aber höchstens auf halbem Weg
+ * zwischen Liquidation und Bandkante — sie soll ausserhalb des Bands bleiben. Rein.
+ */
+export function notbremsePreis(richtung, liq, variante) {
+    if (richtung === 'LONG') return Math.min(liq * (1 + LANG.notbremse), (liq + variante.unten) / 2)
+    return Math.max(liq * (1 - LANG.notbremse), (liq + variante.oben) / 2)
+}
 /** Ab so vielen Grids ist es ein Grid; darunter warnt der Planer oben (Einsatz zu klein). */
 export const SINNVOLLE_GRIDS = 20
 export const WENIG_GRIDS = 10
@@ -527,7 +541,7 @@ export function rechnePlan(e, kerzen, liste, opt = {}) {
         if (c.stopNahLiq) {
             const liq = r.start?.liq
             if (!istZahl(liq) || !(richtung === 'LONG' ? liq < c.variante.unten : liq > c.variante.oben)) continue
-            const sl = runde(richtung === 'LONG' ? liq * (1 + LANG.notbremse) : liq * (1 - LANG.notbremse), 5)
+            const sl = runde(notbremsePreis(richtung, liq, c.variante), 5)
             r = rechnePlanVariante({ ...e, richtung }, { ...c.variante, stopLoss: sl }, kerzen, opt)
             c = { ...c, titel: `${c.titel} (Stop-Loss ${runde(sl, 4)})` }
         }

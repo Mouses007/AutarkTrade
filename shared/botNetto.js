@@ -1,0 +1,92 @@
+/**
+ * Netto eines beendeten Pionex-Futures-Grid-Bots — die EINE Rechnung für Journal-Import und Bot-Seite.
+ *
+ * `totalRealizedProfit` ist der Gewinn VOR Gebühren und Funding. Bis 16.11.2026 buchte der Journal-Import
+ * das Feld als «Netto-Wallet-Delta» (die Aussage galt für normale Futures-Positionen, nicht für Bots):
+ * beendete USDT-M-Bots standen um |Gebühren| − Funding zu gut im Journal (an fünf gespeicherten Bots
+ * zusammen 6.70 USDT, rund 9 % der Verluste). Belegt am echten XRP-Bot vom 15.11.2026:
+ * totalRealizedProfit 0.2144, Pionex «Gesamt Profit» 0.15, Marge 16.6706 − Investition 11.52 −
+ * Extra-Marge 5 = 0.1506.
+ *
+ * Was wirklich zurückkam, ist die Marge: Netto = Marge − Investition − Extra-Marge (+ entnommener Gewinn).
+ * Fehlt die Marge (alter Import), bleibt die Näherung Gewinn − Gebühren + Funding; sie ist bei
+ * liquidierten Bots zu streng (der Verlust ist dort auf den Einsatz gedeckelt).
+ *
+ * Rein, ohne Netz und Datenbank. Selbsttest: `shared/__selftest-bot-netto.mjs`.
+ */
+import { istGewinn } from './gewinn.js'
+import { tagesSummen } from './coinM.js'
+
+const zahl = (v) => { if (v === null || v === undefined || v === '') return null; const n = parseFloat(v); return Number.isFinite(n) ? n : null }
+
+/** Spot-Grids haben ein eigenes Layout (Gewinn schon netto) und sind nie gemeint. */
+export const istSpotBot = (botType) => /spot|token_grid/i.test(String(botType || ''))
+
+/**
+ * Netto aus den Rohfeldern einer Pionex-Bot-Antwort, in der Margin-Münze. `null`, wenn die Marge fehlt.
+ * @param {{marginBalance, quoteInvestment, extraMargin, profitWithdrawn}} d
+ */
+export function nettoAusMarge(d) {
+    const marge = zahl(d?.marginBalance), invest = zahl(d?.quoteInvestment)
+    if (marge === null || invest === null) return null
+    return marge - invest - (zahl(d.extraMargin) ?? 0) + (zahl(d.profitWithdrawn) ?? 0)
+}
+
+/** Näherung ohne Marge: Gewinn vor Gebühren − Gebühren + Funding (Funding trägt sein Vorzeichen). */
+export function nettoAusGewinn(gewinnVorGebuehren, gebuehr, funding) {
+    return (zahl(gewinnVorGebuehren) ?? 0) - Math.abs(zahl(gebuehr) ?? 0) + (zahl(funding) ?? 0)
+}
+
+/** Braucht dieser gespeicherte Trade die Korrektur? Nur Futures-Grid-Bots ohne Marke. */
+export function brauchtNettoKorrektur(t) {
+    return !!t && t.category === 'bot' && !istSpotBot(t.botType) && !t.nettoNachGebuehren
+}
+
+function geldFelder(t, brutto, netto) {
+    const gw = istGewinn(brutto), nw = istGewinn(netto)
+    const menge = Number(t.buyQuantity) || 0
+    return {
+        grossProceeds: brutto, netProceeds: netto, grossSharePL: brutto, netSharePL: netto,
+        grossWins: gw ? brutto : 0, grossLoss: gw ? 0 : brutto,
+        netWins: nw ? netto : 0, netLoss: nw ? 0 : netto,
+        grossWinsCount: gw ? 1 : 0, grossLossCount: gw ? 0 : 1,
+        netWinsCount: nw ? 1 : 0, netLossCount: nw ? 0 : 1,
+        grossWinsQuantity: gw ? menge : 0, grossLossQuantity: gw ? 0 : menge,
+        netWinsQuantity: nw ? menge : 0, netLossQuantity: nw ? 0 : menge,
+        grossSharePLWins: gw ? brutto : 0, grossSharePLLoss: gw ? 0 : brutto,
+        netSharePLWins: nw ? netto : 0, netSharePLLoss: nw ? 0 : netto,
+        highGrossSharePLWin: gw ? brutto : 0, highGrossSharePLLoss: gw ? 0 : brutto,
+        highNetSharePLWin: nw ? netto : 0, highNetSharePLLoss: nw ? 0 : netto,
+    }
+}
+
+/**
+ * Einen bereits importierten Bot-Trade nachrechnen (neues Objekt; andere unverändert zurück).
+ * - USDT-M: gespeichert ist Netto = Gewinn vor Gebühren. Neu: Netto − Gebühr + Funding; das alte Netto
+ *   ist das richtige Brutto. Die Marge ist am Trade nicht gespeichert, darum die Näherung.
+ * - Coin-M: der USDT-Wert kam schon aus der Marge und bleibt; nur der Coin-Wert `netCoin` war vor Gebühren.
+ */
+export function tradeNettoKorrigiert(t) {
+    if (!brauchtNettoKorrektur(t)) return t
+    if (t.coinM || (t.marginCoin && t.marginCoin !== 'USDT')) {
+        const netCoin = zahl(t.netCoin)
+        if (netCoin === null) return { ...t, nettoNachGebuehren: true }
+        const neu = nettoAusGewinn(netCoin, t.feeCoin, t.fundingCoin)
+        return { ...t, grossCoin: netCoin, netCoin: neu, nettoNachGebuehren: true }
+    }
+    const alt = zahl(t.netProceeds ?? t.netSharePL) ?? 0
+    const netto = nettoAusGewinn(alt, t.tradingFee ?? t.commission, t.fundingFee)
+    return { ...t, ...geldFelder(t, alt, netto), ...(t.pnlUsdt !== undefined ? { pnlUsdt: netto } : {}), nettoNachGebuehren: true }
+}
+
+/**
+ * Eine gespeicherte Tageszeile nachrechnen: Trades und Executions, Blotter und P&L neu.
+ * `geaendert: false` = nichts zu tun.
+ */
+export function tagNettoKorrigiert(zeile) {
+    const trades = Array.isArray(zeile?.trades) ? zeile.trades : []
+    if (!trades.some(brauchtNettoKorrektur)) return { geaendert: false }
+    const neueTrades = trades.map(tradeNettoKorrigiert)
+    const executions = Array.isArray(zeile.executions) ? zeile.executions.map(tradeNettoKorrigiert) : zeile.executions
+    return { geaendert: true, trades: neueTrades, executions, ...tagesSummen(neueTrades) }
+}

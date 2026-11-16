@@ -1,6 +1,7 @@
 import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
 import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText, nichtEingerichtet } from './boersen-status.js'
+import { nettoAusMarge, nettoAusGewinn } from '../shared/botNetto.js'
 import { setzeBoersenAnker } from './trade-popups.js'
 import { BASE_URL, pionexRequest } from './pionex-transport.js'
 import { journalSymbol } from './pionex-symbole.js'
@@ -159,8 +160,13 @@ function normalizeBotOrder(o) {
         pnlUsdt = (marginBal && closeQuoteP) ? (marginBal * closeQuoteP - investSolBase * entryQuoteP) : 0
     } else {
         investUsdt = parseFloat(d.usdtInvestment ?? d.initUsdtInvestment ?? 0)
-        pnlUsdt = parseFloat(d.totalRealizedProfit ?? d.realizedProfit ?? 0)   // linear: bereits USDT
+        // linear: schon USDT. Futures-Grid: aus der Marge (nach Gebühren und Funding), nicht
+        // `totalRealizedProfit` — das Feld ist VOR Gebühren (shared/botNetto.js). Spot: realizedProfit.
+        pnlUsdt = isSpot ? parseFloat(d.realizedProfit ?? 0)
+            : (nettoAusMarge(d) ?? nettoAusGewinn(d.totalRealizedProfit ?? d.realizedProfit, d.totalFee, d.totalFundingFee))
     }
+    // Netto in der Margin-Münze (USDT bzw. die Coin) für den Journal-Import; null = Marge fehlt
+    const nettoBot = isSpot ? null : nettoAusMarge(d)
 
     return {
         positionId: buOrderId,
@@ -175,7 +181,8 @@ function normalizeBotOrder(o) {
         reasonBy: d.reasonBy ?? null,
         createTime: o.createTime ?? d.createTime ?? '',
         closeTime: o.closeTime ?? d.closeTime ?? '',
-        totalRealizedProfit: d.totalRealizedProfit,
+        totalRealizedProfit: d.totalRealizedProfit,   // Gewinn VOR Gebühren und Funding
+        nettoBot,                                     // Marge − Investition − Extra-Marge (+ Entnahmen)
         gridProfit: d.gridProfit,
         realizedProfit: d.realizedProfit,          // Spot: Positions-PnL beim Schliessen
         totalFee: d.totalFee,

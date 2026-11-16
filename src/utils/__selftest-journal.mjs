@@ -180,6 +180,10 @@ function pionexBot(n, feste = {}) {
     const auf = zeitpunkt()
     const zu = auf + Math.floor(3600_000 + r() * 72 * 3600_000)
     const gewinn = runde((r() - 0.4) * 40, 6)
+    // dieselbe Reihenfolge der Zufallszahlen wie vor dem 16.11.2026 (Gebühr, Funding, Volumen, Hebel)
+    const gebuehr = runde(r() * 3, 6)
+    const funding = runde((r() - 0.5) * 2, 6)
+    const netto = runde(gewinn - gebuehr + funding, 6)
     // positionId = buOrderId setzt der Server (pionex-api.js), nicht die Börse
     return Object.assign({
         positionId: `bot-${1000 + n}`,
@@ -188,9 +192,12 @@ function pionexBot(n, feste = {}) {
         symbol,
         // Richtung liefert der Server mal mit, mal nicht (dann aus den Preisen)
         side: n % 3 === 0 ? undefined : (n % 3 === 1 ? 'LONG' : 'SHORT'),
-        totalRealizedProfit: String(gewinn),
-        totalFee: String(runde(r() * 3, 6)),
-        totalFundingFee: String(runde((r() - 0.5) * 2, 6)),
+        totalRealizedProfit: String(gewinn),   // Gewinn VOR Gebühren und Funding (so liefert es Pionex)
+        totalFee: String(gebuehr),
+        totalFundingFee: String(funding),
+        // Was aus der Marge zurückkam — das Netto des Imports (shared/botNetto.js). Jeder zweite Bot ohne
+        // (alter Server / Marge fehlt → Näherung), Bot 7 liquidiert: der ganze Einsatz, nicht Gewinn − Gebühr.
+        nettoBot: n === 7 ? -500 : (n % 2 === 0 ? netto : undefined),
         totalVolume: String(runde(2000 + r() * 8000, 2)),
         setLeverage: String(wahl([3, 5, 10])),
         positionOpenPrice: String(ein),
@@ -200,7 +207,7 @@ function pionexBot(n, feste = {}) {
         initQuoteInvestment: '500',
         gridProfit: String(runde(gewinn * 0.7, 6)),
         marginCoin: 'USDT',
-        pnlUsdt: String(gewinn),
+        pnlUsdt: String(n === 7 ? -500 : netto),
         investUsdt: '500',
         quoteCloseP: String(aus),
     }, feste)

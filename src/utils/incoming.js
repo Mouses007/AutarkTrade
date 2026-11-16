@@ -8,6 +8,7 @@ import { gewaehlteBoerse } from '../stores/filters.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { eingerichteteBoersen, pruefeNichtEingerichtet } from './boersenZugang.js'
 import { istGewinn } from '../../shared/gewinn.js'
+import { nettoAusGewinn } from '../../shared/botNetto.js'
 import i18n from '../i18n'
 import { holeNeueBewertungen } from './tradePopups.js'
 
@@ -449,12 +450,18 @@ async function createTradeFromClosedPosition(histPos, incoming, skipMetadata = f
     //           netPL bevorzugt netProfit, sonst pnl - fee
     let grossPL, fee, tradingFee, fundingFee, netPL
     if (isPionex) {
-        // Pionex Bot/Futures: totalRealizedProfit = NETTO-Wallet-Delta (live
-        // verifiziert), analog Bitunix realizedPNL. grossPL rekonstruiert.
-        const netRaw = histPos.totalRealizedProfit ?? histPos.realizedPnl ?? histPos.amountSettled ?? histPos.gridProfit ?? histPos.pnl ?? 0
-        netPL = parseFloat(netRaw || 0)
         tradingFee = Math.abs(parseFloat(histPos.totalFee ?? histPos.fee ?? histPos.tradingFee ?? 0))
         fundingFee = parseFloat(histPos.totalFundingFee ?? histPos.fundingFee ?? histPos.funding ?? 0)
+        if (histPos.botType && !histPos.spotGrid) {
+            // Futures-Grid-Bot: `totalRealizedProfit` ist VOR Gebühren und Funding — Netto ist, was aus der
+            // Marge zurückkam (`nettoBot` vom Server), sonst die Näherung (shared/botNetto.js).
+            const ausMarge = parseFloat(histPos.nettoBot)
+            netPL = Number.isFinite(ausMarge) ? ausMarge : nettoAusGewinn(histPos.totalRealizedProfit ?? histPos.gridProfit ?? 0, tradingFee, fundingFee)
+        } else {
+            // Reguläre Pionex-Futures-Position: Wallet-Delta, vom Server schon netto geliefert
+            const netRaw = histPos.totalRealizedProfit ?? histPos.realizedPnl ?? histPos.amountSettled ?? histPos.gridProfit ?? histPos.pnl ?? 0
+            netPL = parseFloat(netRaw || 0)
+        }
         grossPL = netPL + tradingFee - fundingFee
         fee = tradingFee
     } else if (isBitget) {
@@ -557,6 +564,7 @@ async function createTradeFromClosedPosition(histPos, incoming, skipMetadata = f
     if (isPionex && histPos.botType) {
         tradeObj.botType = histPos.botType
         tradeObj.category = 'bot'
+        if (!histPos.spotGrid) tradeObj.nettoNachGebuehren = true   // Marke für server/migrationen/bot-netto.js
         if (histPos.setLeverage) tradeObj.leverage = parseFloat(histPos.setLeverage)
         if (histPos.initQuoteInvestment) tradeObj.investment = parseFloat(histPos.initQuoteInvestment)
     } else {

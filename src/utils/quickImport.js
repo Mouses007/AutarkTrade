@@ -1,4 +1,5 @@
 import { tradeInUsdt } from '../../shared/coinM.js'
+import { nettoAusGewinn } from '../../shared/botNetto.js'
 import axios from 'axios'
 import dayjs from './journal/zeit.js'
 import { dbCreate, dbFind, dbDelete, dbUpdate as dbUpdateRecord, dbFindTradeIdByPositionId } from './db.js'
@@ -407,14 +408,15 @@ export function createBitgetTradeObj(pos, i) {
 /**
  * Create a trade object from a Pionex item — unterstützt zwei Quellen:
  *  1) Bot-Order (Grid-Bot): Server liefert normalisierte Felder aus
- *     /api/v1/bot/orders → totalRealizedProfit (NETTO-Wallet-Delta, verifiziert),
+ *     /api/v1/bot/orders → nettoBot (Marge − Investition − Extra-Marge),
+ *     totalRealizedProfit (Gewinn VOR Gebühren und Funding, nur noch Rückfall),
  *     totalFee, totalFundingFee, totalVolume, setLeverage, positionOpenPrice,
  *     closedPrice, botType (futures_grid/spot_grid), buOrderId.
  *  2) Reguläre Futures-Position (historyPositions) — falls der Nutzer künftig
  *     manuell Futures tradet.
  *
- * netPL = totalRealizedProfit ist bereits der finale Wallet-Delta (wie Bitunix
- * realizedPNL). grossPL = netPL + tradingFee − fundingFee (reine Strategie-PnL).
+ * Bot: netPL = nettoBot (was aus der Marge zurückkam). Reguläre Futures: netPL =
+ * totalRealizedProfit (dort schon netto). grossPL = netPL + tradingFee − fundingFee.
  */
 function createPionexTradeObj(pos, i) {
     const isBot = pos.botType !== undefined || pos.totalRealizedProfit !== undefined || pos.buOrderId !== undefined
@@ -422,6 +424,9 @@ function createPionexTradeObj(pos, i) {
     // Spot-Grid hat ein eigenes Layout: Profit = gridProfit + realizedProfit,
     // Gebühren in totalFeeInQuote (USDT), KEIN Funding, kein Hebel.
     const isSpot = !!pos.spotGrid || /spot|token_grid/i.test(pos.botType || '')
+    // Die Weiche hängt am Bot-Kennzeichen, NICHT am Feld `totalRealizedProfit`: reguläre Futures tragen
+    // dasselbe Feld bereits netto und würden sonst doppelt belastet.
+    const istBotOrder = !isSpot && (pos.botType !== undefined || pos.buOrderId !== undefined)
 
     let netPL, tradingFee, fundingFee, grossPL, fee
     if (isSpot) {
@@ -432,11 +437,18 @@ function createPionexTradeObj(pos, i) {
         grossPL = netPL + tradingFee
         fee = tradingFee
     } else {
-        // NETTO-Wallet-Delta: futures_grid → totalRealizedProfit; Futures → amountSettled/realizedPnl.
-        const netRaw = pos.totalRealizedProfit ?? pos.realizedPnl ?? pos.amountSettled ?? pos.gridProfit ?? pos.pnl ?? 0
-        netPL = parseFloat(netRaw || 0)
         tradingFee = Math.abs(parseFloat(pos.totalFee ?? pos.fee ?? pos.tradingFee ?? 0))
         fundingFee = parseFloat(pos.totalFundingFee ?? pos.fundingFee ?? pos.funding ?? 0)  // signiert
+        if (istBotOrder) {
+            // Futures-Grid-Bot: `totalRealizedProfit` ist der Gewinn VOR Gebühren und Funding. Netto ist,
+            // was aus der Marge zurückkam (`nettoBot` vom Server); ohne Marge die Näherung (shared/botNetto.js).
+            const ausMarge = parseFloat(pos.nettoBot)
+            netPL = Number.isFinite(ausMarge) ? ausMarge : nettoAusGewinn(pos.totalRealizedProfit ?? pos.gridProfit ?? 0, tradingFee, fundingFee)
+        } else {
+            // Reguläre Futures-Position: der Server liefert das Wallet-Delta schon netto.
+            const netRaw = pos.totalRealizedProfit ?? pos.realizedPnl ?? pos.amountSettled ?? pos.gridProfit ?? pos.pnl ?? 0
+            netPL = parseFloat(netRaw || 0)
+        }
         grossPL = netPL + tradingFee - fundingFee
         fee = tradingFee
     }
@@ -499,6 +511,8 @@ function createPionexTradeObj(pos, i) {
         obj.pnlUsdt = parseFloat(pos.pnlUsdt ?? 0)
         obj.investUsdt = parseFloat(pos.investUsdt ?? 0)
         obj.quoteCloseP = parseFloat(pos.quoteCloseP ?? 0)   // Schlusskurs für SOL→USD
+        // Marke für die Start-Migration (server/migrationen/bot-netto.js): dieser Trade ist schon nach Gebühren
+        if (istBotOrder) obj.nettoNachGebuehren = true
     } else {
         obj.category = 'futures'
     }

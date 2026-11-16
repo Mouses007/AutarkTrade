@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
     planBot, trendFuer, mengeJeGrid, pruefePlanEingabe, pruefePlanVariante, planKandidaten, anzahlFuerSchritt,
     rechnePlanVariante, rechnePlan, bauePlanPrompt, planSystemText, PLAN_ID, MAX_PLAN_GRIDS, MAX_KANDIDATEN,
-    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS, LANG, freiesGuthaben } from './planer.js'
+    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS, LANG, freiesGuthaben, notbremsePreis } from './planer.js'
 import { normalisiereBot } from './pionex-bots.js'
 import { pruefeKiAntwort } from './bot-ki.js'
 import { baueAktion } from './steuerung.js'
@@ -191,7 +191,8 @@ p('Spot Langfrist ohne Notbremse', planKandidaten({ kurs: 160, atr: 6, zr: zrW, 
 const eL = { coin: 'TST', coinM: false, richtung: 'LONG', einsatz: 100, hebel: 5, tage: 30 }
 const lr = rechnePlan(eL, kerzen, [{ id: 'P1', titel: 'Langfrist x', variante: { unten: 150, oben: 260, anzahl: 40, art: 'geometric' }, stopNahLiq: true }, { id: 'P2', titel: 'Langfrist y', variante: { unten: 150, oben: 260, anzahl: 40, art: 'geometric' } }], { kurs: 200 })
 const nb = lr.find((c) => c.id === 'P1'), ohne = lr.find((c) => c.id === 'P2')
-p('Notbremse: Stop-Loss 2 % über der Liquidation der Variante, unter dem Band', !!nb && Math.abs(nb.variante.stopLoss - ohne.start.liq * (1 + LANG.notbremse)) / nb.variante.stopLoss < 1e-4 && nb.variante.stopLoss < 150 && nb.titel.includes('Stop-Loss'), JSON.stringify([nb?.variante, ohne?.start?.liq]))
+p('Notbremse: Stop-Loss 8 % über der geschätzten Liquidation (höchstens halber Weg zur Bandkante), unter dem Band', !!nb && LANG.notbremse === 0.08 && Math.abs(nb.variante.stopLoss - notbremsePreis('LONG', ohne.start.liq, { unten: 150 })) / nb.variante.stopLoss < 1e-4 && nb.variante.stopLoss < 150 && nb.variante.stopLoss > ohne.start.liq && nb.titel.includes('Stop-Loss'), JSON.stringify([nb?.variante, ohne?.start?.liq]))
+p('Notbremse rein: Long 8 % darüber, Short 8 % darunter, nahe am Band nur der halbe Weg', Math.abs(notbremsePreis('LONG', 60, { unten: 75 }) - 64.8) < 1e-9 && Math.abs(notbremsePreis('SHORT', 150, { oben: 130 }) - 140) < 1e-9 && Math.abs(notbremsePreis('LONG', 70, { unten: 72 }) - 71) < 1e-9)
 p('Weg zur Kante: Long ohne Stop bis zur Unterkante (Verlust), mit Stop bis zum Stop (mehr Verlust, nicht liquidiert)', ohne.start.verlustRand.preis === 150 && ohne.start.verlustRand.betrag < 0 && nb.start.verlustRand.betrag < ohne.start.verlustRand.betrag && !nb.start.verlustRand.liquidiert && nb.start.verlustRand.ausstieg === 'stopLoss', JSON.stringify([ohne.start.verlustRand, nb.start.verlustRand]))
 p('Notbremse ohne Liquidation (Spot) entfällt', rechnePlan({ ...eL, spot: true, hebel: 1 }, kerzen, [{ id: 'P1', titel: 'x', variante: { unten: 150, oben: 260, anzahl: 40, art: 'geometric' }, stopNahLiq: true }], { kurs: 200 }).length === 0)
 const ws = rechnePlanVariante({ ...eL, richtung: 'SHORT' }, { unten: 150, oben: 260, anzahl: 40 }, kerzen, { kurs: 200 })

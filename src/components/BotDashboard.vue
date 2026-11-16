@@ -9,8 +9,8 @@
  *
  * Relevante Bot-Felder pro Trade (aus createPionexTradeObj / pionex-api.js):
  *   botType (futures_grid | spot_grid | smart_copy), symbol, leverage,
- *   investment (initQuoteInvestment), netSharePL (= totalRealizedProfit, echter
- *   Wallet-Delta), grossSharePL (Grid-Profit vor Gebühren), tradingFee,
+ *   investment (initQuoteInvestment), netSharePL (Marge − Investition − Extra-Marge,
+ *   also nach Gebühren und Funding — shared/botNetto.js), grossSharePL (vor Gebühren), tradingFee,
  *   fundingFee (signiert: + erhalten / − bezahlt), entryTime/exitTime, strategy.
  */
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'

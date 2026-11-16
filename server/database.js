@@ -14,6 +14,7 @@ import { migriereStrategien } from './migrationen/strategien.js'
 import { migriereS15 } from './migrationen/s15.js'
 import { migrierePortfolio } from './migrationen/portfolio.js'
 import { migriereCoinMUsdt } from './migrationen/coinm-usdt.js'
+import { migriereBotNetto } from './migrationen/bot-netto.js'
 import { migriereDouble } from './migrationen/double.js'
 import { migriereTls } from './migrationen/tls.js'
 import { migriereBots } from './migrationen/bots.js'
@@ -3718,6 +3719,8 @@ async function runMigrations(knex, client) {
 
     // Coin-M-Bots in USDT (Audit FIN-01): gespeicherte Pionex-Tage einmal umrechnen. Idempotent.
     await migriereCoinMUsdt(knex)
+    // danach: Coin-M-Trades tragen dann schon `netCoin`/`feeCoin`
+    await migriereBotNetto(knex)
 
     // ── Spot-Portfolio (additiv, ohne SCHEMA_VERSION) ───────
     await migrierePortfolio(knex, addColumnIfNotExists)

@@ -924,12 +924,13 @@ function sectionHeaderAt(idx) {
 }
 
 // Realisierter PnL einer geschlossenen Position für den Karten-Header.
-// Bots liefern kein realizedPNL (normalizeBotOrder) → Fallback auf
+// Bots liefern kein realizedPNL (normalizeBotOrder) → nettoBot, sonst
 // totalRealizedProfit / gridProfit.
 function closedPnL(pos) {
     const hd = pos?.historyData
     if (!hd) return null
-    const v = hd.realizedPNL ?? hd.totalRealizedProfit ?? hd.gridProfit
+    // Futures-Grid-Bot: `nettoBot` (aus der Marge) vor `totalRealizedProfit` — das Feld ist VOR Gebühren und Funding
+    const v = hd.realizedPNL ?? (hd.nettoBot != null ? hd.nettoBot : null) ?? hd.totalRealizedProfit ?? hd.gridProfit
     return (v === null || v === undefined || v === '') ? null : v
 }
 
