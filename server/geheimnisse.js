@@ -67,6 +67,8 @@ export const ZIEL_SETTINGS = [...new Set([
     'mailHost', 'mailPort', 'mailUser', 'mailSicherheit', 'mailVon', 'mailAn',
     // Handy-Geräte der Sofort-Zustellung (Adresse + Auth-Geheimnis): nur über /api/esp32/push
     'esp32PushGeraete',
+    // Eigener Whisper-Dienst der Spracheingabe: nur über PUT /api/sprache/einstellungen
+    'spracheUrl',
 ])]
 
 /** Zugangs- und Rechtsstand: nie aus einem Backup. */

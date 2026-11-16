@@ -15,7 +15,7 @@ import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { kiMarkdown } from '../../utils/kiMarkdown.js'
 import { useKiGespraech } from '../../composables/useKiGespraech.js'
-import { useSpracheingabe, erkennungsSprache } from '../../composables/useSpracheingabe.js'
+import { useSpracheingabe, erkennungsSprache, mikroTitelText, mikroFehlerText } from '../../composables/useSpracheingabe.js'
 import Symbol from '../basis/Symbol.vue'
 import { Knopf, Kreisel } from '../basis'
 
@@ -23,7 +23,7 @@ const props = defineProps({
     panel: { type: Object, required: true },
     sichtbarBis: { type: Function, default: null },
 })
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 
 const liste = ref(null)
 
@@ -57,9 +57,8 @@ const sprache = useSpracheingabe({
     sprache: () => erkennungsSprache(locale.value),
     beiText: (text) => { eingabe.value = [vorAufnahme, text].filter(Boolean).join(' ') },
 })
-const mikroTitel = () => (sprache.grund.value === 'keinHttps' ? t('kiCoach.mikroKeinHttps')
-    : sprache.grund.value === 'keinBrowser' ? t('kiCoach.mikroKeinBrowser')
-        : sprache.hoert.value ? t('kiCoach.mikroStopp') : t('kiCoach.mikroStart'))
+const mikroTitel = () => mikroTitelText(sprache, t)
+const mikroFehler = () => mikroFehlerText(sprache.fehler.value, t, te)
 function schalteMikro() {
     if (sprache.grund.value) return
     if (!sprache.hoert.value) vorAufnahme = eingabe.value.trim()
@@ -102,12 +101,13 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
                 <span v-for="(s, i) in werkzeuge()" :key="i" class="werkzeug">{{ s }}</span>
             </div>
             <div v-if="fehler" class="fehler">{{ fehler }}</div>
+            <div v-if="mikroFehler()" class="fehler">{{ mikroFehler() }}</div>
         </div>
         <div class="eingabe">
             <textarea v-model="eingabe" class="at-feld klein" rows="2" :placeholder="t('chart.ki.chatPlatzhalter')"
                 :disabled="laeuft" @keydown="taste"></textarea>
-            <button type="button" class="mikro" :class="{ hoert: sprache.hoert.value, aus: !!sprache.grund.value }"
-                :aria-pressed="sprache.hoert.value" :title="mikroTitel()" :aria-label="mikroTitel()" :disabled="laeuft" @click="schalteMikro">
+            <button type="button" class="mikro" :class="{ hoert: sprache.hoert.value, arbeitet: sprache.arbeitet.value, aus: !!sprache.grund.value }"
+                :aria-pressed="sprache.hoert.value" :title="mikroTitel()" :aria-label="mikroTitel()" :disabled="laeuft || sprache.arbeitet.value" @click="schalteMikro">
                 <Symbol name="mikrofon" />
             </button>
             <Knopf art="haupt" klein nur-symbol symbol="nachricht" :disabled="laeuft || !eingabe.trim()" :titel="t('chart.ki.chatSenden')"
@@ -240,6 +240,11 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
     color: var(--text);
     background: var(--bad-flaeche);
     border-color: var(--bad);
+}
+/* Server-Weg: Aufnahme ist unterwegs zur Umschrift */
+.mikro.arbeitet {
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 /* Text-Knopf: Handlung ohne Fläche, für Zeilen in der dichten Seitenleiste. */

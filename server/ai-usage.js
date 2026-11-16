@@ -56,6 +56,7 @@ export const FUNKTIONEN = {
     STRATEGIE_BAUKASTEN: 'strategie-baukasten',
     RANGLISTE: 'rangliste',                // Universum-Vorschlag
     BILD: 'bild',                          // FLUX / Gemini-Bild
+    SPRACHE: 'sprache',                    // Spracheingabe über den Server (OpenAI-Umschrift)
 }
 
 /**

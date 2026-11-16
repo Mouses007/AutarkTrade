@@ -1983,6 +1983,10 @@ async function runMigrations(knex, client) {
      * einzuschalten. Wer sie nicht braucht, schaltet sie ab.
      */
     await addColumnIfNotExists('settings', 'erweiterteInfos', (t) => t.integer('erweiterteInfos').defaultTo(1))
+    // Spracheingabe über den Server (16.11.2026): browser | openai | eigen, siehe server/sprache-kern.js
+    await addColumnIfNotExists('settings', 'spracheArt', (t) => t.text('spracheArt'))
+    await addColumnIfNotExists('settings', 'spracheUrl', (t) => t.text('spracheUrl'))
+    await addColumnIfNotExists('settings', 'spracheModell', (t) => t.text('spracheModell'))
 
     // Kerzenfarben des Charts (src/utils/chart/kerzenFarben.js); leer = Vorgabe
     await addColumnIfNotExists('settings', 'chartKerzeSteigend', (t) => t.string('chartKerzeSteigend'))

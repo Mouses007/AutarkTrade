@@ -11,7 +11,8 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { kiMarkdown } from '@/utils/kiMarkdown.js'
 import { Symbol, Knopf, Kreisel, Hinweis } from '@/components/basis'
-import { useSpracheingabe, erkennungsSprache } from '@/composables/useSpracheingabe.js'
+import { useSpracheingabe, erkennungsSprache, mikroTitelText, mikroFehlerText } from '@/composables/useSpracheingabe.js'
+import { appEinstellungen } from '@/stores/settings.js'
 
 const props = defineProps({
     gespraech: { type: Object, required: true },
@@ -21,7 +22,7 @@ const props = defineProps({
     // Fragen, die im leeren Gespräch als Knöpfe angeboten werden
     vorschlaege: { type: Array, default: () => [] },
 })
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 
 const { nachrichten, schritte, eingabe, laeuft, fehler, sitzungId, sende } = props.gespraech
 const offeneWerkzeuge = ref(new Set())
@@ -54,14 +55,12 @@ const sprache = useSpracheingabe({
     sprache: () => erkennungsSprache(locale.value),
     beiText: (text) => { eingabe.value = [vorAufnahme, text].filter(Boolean).join(' ') },
 })
-const mikroTitel = computed(() => {
-    if (sprache.grund.value === 'keinHttps') return t('kiCoach.mikroKeinHttps')
-    if (sprache.grund.value === 'keinBrowser') return t('kiCoach.mikroKeinBrowser')
-    return sprache.hoert.value ? t('kiCoach.mikroStopp') : t('kiCoach.mikroStart')
-})
-const mikroFehler = computed(() => {
-    if (!sprache.fehler.value) return ''
-    return sprache.fehler.value === 'verweigert' ? t('kiCoach.mikroVerweigert') : t('kiCoach.mikroFehler', { grund: sprache.fehler.value })
+const mikroTitel = computed(() => mikroTitelText(sprache, t))
+const mikroFehler = computed(() => mikroFehlerText(sprache.fehler.value, t, te))
+// Wohin der Ton geht, hängt am gewählten Weg (Einstellungen › KI › Zugang › Spracheingabe).
+const mikroHinweisText = computed(() => {
+    const a = appEinstellungen.value?.spracheArt
+    return a === 'openai' ? t('kiCoach.mikroHinweisOpenai') : a === 'eigen' ? t('kiCoach.mikroHinweisEigen') : t('kiCoach.mikroHinweis')
 })
 // Einmal sagen, wohin der Ton geht — danach nicht mehr.
 const mikroHinweis = ref(false)
@@ -141,15 +140,15 @@ function taste(e) {
 
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
         <Hinweis v-if="mikroFehler" art="warn">{{ mikroFehler }}</Hinweis>
-        <small v-if="mikroHinweis" class="mikroHinweis">{{ t('kiCoach.mikroHinweis') }}</small>
+        <small v-if="mikroHinweis" class="mikroHinweis">{{ mikroHinweisText }}</small>
 
         <div class="eingabeZeile">
             <textarea v-model="eingabe" class="at-feld klein" rows="2" :placeholder="platzhalter || t('kiCoach.platzhalter')"
                 :disabled="laeuft || !bereit" @keydown="taste"></textarea>
             <div class="knoepfe">
-                <button type="button" class="mikro" :class="{ hoert: sprache.hoert.value, aus: !!sprache.grund.value }"
+                <button type="button" class="mikro" :class="{ hoert: sprache.hoert.value, arbeitet: sprache.arbeitet.value, aus: !!sprache.grund.value }"
                     :aria-pressed="sprache.hoert.value" :aria-disabled="!!sprache.grund.value || undefined"
-                    :title="mikroTitel" :aria-label="mikroTitel" :disabled="laeuft || !bereit" @click="schalteMikro">
+                    :title="mikroTitel" :aria-label="mikroTitel" :disabled="laeuft || !bereit || sprache.arbeitet.value" @click="schalteMikro">
                     <Symbol name="mikrofon" />
                 </button>
                 <Knopf art="haupt" klein nur-symbol symbol="nachricht" :titel="t('kiCoach.senden')"
@@ -331,6 +330,13 @@ function taste(e) {
     background: var(--bad-flaeche);
     border-color: var(--bad);
     animation: mikroPuls 1.2s ease-in-out infinite;
+}
+
+/* Server-Weg: Aufnahme ist unterwegs zur Umschrift */
+.mikro.arbeitet {
+    color: var(--accent);
+    border-color: var(--accent);
+    animation: mikroPuls 0.8s ease-in-out infinite;
 }
 
 @keyframes mikroPuls {

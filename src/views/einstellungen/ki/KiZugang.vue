@@ -14,6 +14,7 @@ import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import InfoTipp from '@/components/InfoTipp.vue'
 import KiHinweis from '@/components/quellen/KiHinweis.vue'
+import SpracheEingabe from './SpracheEingabe.vue'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
@@ -274,6 +275,9 @@ const {
                 </div>
             </div><!-- /v-show aiEnabled -->
         </Abschnitt>
+
+        <!-- Mikrofon der KI-Chats: Browser-Erkennung oder Umschrift über den Server -->
+        <SpracheEingabe />
 
         <!-- Modell je Aufgabe: nur Aufgaben ohne eigene Seite. Stand bis
              29.10.2026 unter Agent, obwohl kaum eine davon den Agenten betrifft. -->

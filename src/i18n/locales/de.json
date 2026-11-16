@@ -1390,7 +1390,33 @@
     "profilBildUnlesbar": "Das Bild lässt sich nicht lesen.",
     "esp32HauptLabel": "Hauptschlüssel (Handy-App, Widget, Desklet)",
     "modeAktien": "Aktien (im Aufbau)",
-    "modeAktienInfo": "Schaltet den Umschalter Krypto ↔ Aktien in der Kopfleiste frei und gleicht zweimal täglich ab, welche Aktien an Binance, Bitget, Bitunix, Pionex und Bitpanda handelbar sind.\nIm Markt «Aktien» gibt es bisher: Newcomer-Radar, Aktien-Radar, die Titel-Liste mit einer Seite je Titel (Kurs, Kennzahlen, Analysten) und den Chart mit eigenen Layouts und Watchlists. Der Marktradar zeigt weiterhin Krypto-Daten.\nGelesen werden nur öffentliche Listen und Kurse; Kennzahlen kommen von Yahoo Finance und brauchen den Schalter «Quellen mit eingeschränkten Nutzungsbedingungen».\nAus: Umschalter und Aktien-Seiten verschwinden, es wird nichts abgerufen, und Backtest, Papierbetrieb und Chart behandeln jedes Symbol wieder wie einen Coin (keine Börsensitzungen, keine Split-Umrechnung)."
+    "modeAktienInfo": "Schaltet den Umschalter Krypto ↔ Aktien in der Kopfleiste frei und gleicht zweimal täglich ab, welche Aktien an Binance, Bitget, Bitunix, Pionex und Bitpanda handelbar sind.\nIm Markt «Aktien» gibt es bisher: Newcomer-Radar, Aktien-Radar, die Titel-Liste mit einer Seite je Titel (Kurs, Kennzahlen, Analysten) und den Chart mit eigenen Layouts und Watchlists. Der Marktradar zeigt weiterhin Krypto-Daten.\nGelesen werden nur öffentliche Listen und Kurse; Kennzahlen kommen von Yahoo Finance und brauchen den Schalter «Quellen mit eingeschränkten Nutzungsbedingungen».\nAus: Umschalter und Aktien-Seiten verschwinden, es wird nichts abgerufen, und Backtest, Papierbetrieb und Chart behandeln jedes Symbol wieder wie einen Coin (keine Börsensitzungen, keine Split-Umrechnung).",
+    "sprache": {
+      "titel": "Spracheingabe",
+      "einleitung": "Womit das Mikrofon in den KI-Chats (Coach, Chart-Chat, Bot-Planer) Gesprochenes in Text verwandelt.",
+      "browserOhneDienst": "Dieser Browser (z. B. Brave oder Firefox) hat keine funktionierende eingebaute Spracherkennung. Wähle „OpenAI“ oder „Eigener Whisper-Dienst“.",
+      "art": "Erkennung",
+      "artBrowser": "Browser (eingebaut)",
+      "artOpenai": "OpenAI (über den Server)",
+      "artEigen": "Eigener Whisper-Dienst (über den Server)",
+      "erklaerung": {
+        "browser": "Die eingebaute Erkennung des Browsers: Text erscheint schon beim Sprechen, kostet nichts. Chrome und Edge schicken den Ton dafür an Google bzw. Microsoft. Brave, Chromium, Vivaldi, Opera und Firefox können das nicht.",
+        "openai": "Der Browser nimmt auf, dein Server schickt die Aufnahme mit deinem OpenAI-Schlüssel an OpenAI. Geht in jedem Browser. Kosten: etwa 0,3 Rappen pro Minute (gpt-4o-mini-transcribe), im KI-Verbrauch als „sprache“ gebucht. Der Text erscheint nach dem Ausschalten des Mikrofons.",
+        "eigen": "Der Browser nimmt auf, dein Server schickt die Aufnahme an einen Whisper-Dienst in deinem Netz (OpenAI-kompatibel, z. B. Speaches/faster-whisper-server, oder whisper.cpp mit --inference-path /v1/audio/transcriptions). Gratis, der Ton verlässt dein Netz nicht."
+      },
+      "keinSchluessel": "Es ist noch kein OpenAI-Schlüssel hinterlegt. Trag ihn oben bei den Anbietern unter OpenAI ein.",
+      "url": "Adresse des Dienstes",
+      "urlHilfe": "Bis /v1, z. B. http://192.168.1.10:8000/v1. Der Server hängt /audio/transcriptions an.",
+      "modell": "Modell",
+      "modellHilfe": "Leer = {vorgabe}.",
+      "speichern": "Speichern",
+      "gespeichert": "Gespeichert.",
+      "fehler": {
+        "url": "Die Adresse ist ungültig oder nicht erlaubt.",
+        "urlFehlt": "Für den eigenen Dienst braucht es eine Adresse.",
+        "modell": "Der Modellname enthält unerlaubte Zeichen."
+      }
+    }
   },
   "setup": {
     "welcome": "Willkommen!",
@@ -2130,10 +2156,32 @@
     "mikroStart": "Frage sprechen",
     "mikroStopp": "Aufnahme beenden",
     "mikroKeinHttps": "Spracheingabe braucht https oder localhost. Über http sperrt der Browser das Mikrofon.",
-    "mikroKeinBrowser": "Dieser Browser hat keine Spracherkennung (z. B. Firefox). Chrome, Edge und Safari haben eine.",
+    "mikroKeinBrowser": "Dieser Browser hat keine eingebaute Spracherkennung (z. B. Firefox). Unter Einstellungen › KI › Zugang › Spracheingabe lässt sich die Umschrift über den Server einschalten.",
     "mikroVerweigert": "Der Mikrofon-Zugriff wurde abgelehnt. Erlaube ihn in den Website-Einstellungen des Browsers.",
     "mikroFehler": "Spracherkennung fehlgeschlagen ({grund}).",
-    "mikroHinweis": "Der Browser schickt den Ton zur Erkennung an seinen Hersteller (bei Chrome an Google)."
+    "mikroHinweis": "Der Browser schickt den Ton zur Erkennung an seinen Hersteller (bei Chrome an Google).",
+    "mikroKeinAufnahme": "Dieser Browser kann keinen Ton aufnehmen (MediaRecorder fehlt).",
+    "mikroArbeitet": "Wird umgeschrieben …",
+    "mikroNetz": "Dein Browser erreicht seinen Sprachdienst nicht. Brave, Chromium, Vivaldi und Opera haben dafür keinen Zugang. Stell unter Einstellungen › KI › Zugang › Spracheingabe auf „OpenAI“ oder „Eigener Whisper-Dienst“ um, dann nimmt der Browser selbst auf und dein Server schreibt um.",
+    "mikroKeinMikrofon": "Kein Mikrofon gefunden oder es ist von einem anderen Programm belegt.",
+    "mikroHinweisOpenai": "Der Ton geht über deinen Server an OpenAI und wird dort umgeschrieben (ca. 0,3 Rappen pro Minute). Der Text erscheint nach dem Ausschalten des Mikrofons.",
+    "mikroHinweisEigen": "Der Ton geht an deinen eigenen Whisper-Dienst. Der Text erscheint nach dem Ausschalten des Mikrofons.",
+    "mikroServer": {
+      "fehlt_schluessel": "Für die Umschrift über OpenAI ist kein OpenAI-Schlüssel hinterlegt (Einstellungen › KI › Zugang).",
+      "fehlt_url": "Für den eigenen Whisper-Dienst ist keine Adresse eingetragen (Einstellungen › KI › Zugang › Spracheingabe).",
+      "fehlt_browser": "Die Spracheingabe ist auf „Browser“ gestellt. Bitte die Seite neu laden.",
+      "schluesselAbgelehnt": "Der Dienst hat den Schlüssel abgelehnt.",
+      "limit": "Der Dienst meldet zu viele Anfragen oder kein Guthaben mehr. Später noch einmal versuchen.",
+      "adresse": "Unter der eingetragenen Adresse gibt es keine Umschrift (HTTP 404). Die Adresse muss bis /v1 gehen.",
+      "dienst": "Der Umschrift-Dienst hat einen Fehler gemeldet.",
+      "nichtErreichbar": "Der Umschrift-Dienst ist nicht erreichbar.",
+      "zeit": "Der Umschrift-Dienst hat nicht rechtzeitig geantwortet.",
+      "zuGross": "Die Aufnahme ist zu lang. Bitte kürzer sprechen.",
+      "format": "Dieses Aufnahmeformat kennt der Server nicht.",
+      "belegt": "Es laufen schon zwei Umschriften. Kurz warten.",
+      "leer": "Die Aufnahme war leer.",
+      "unbekannt": "Umschrift fehlgeschlagen ({grund})."
+    }
   },
   "playbook": {
     "tradeEvaluations": "Trade-Bewertungen und Notizen",

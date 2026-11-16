@@ -1390,7 +1390,33 @@
     "profilBildUnlesbar": "The picture cannot be read.",
     "esp32HauptLabel": "Main key (phone app, widget, desklet)",
     "modeAktien": "Stocks (work in progress)",
-    "modeAktienInfo": "Enables the crypto ↔ stocks switch in the header and syncs twice a day which stocks are tradable at Binance, Bitget, Bitunix, Pionex and Bitpanda.\nThe «Stocks» market has so far: newcomer radar, stock radar, the instrument list with a page per instrument (price, key figures, analysts) and the chart with its own layouts and watchlists. The market radar still shows crypto data.\nOnly public lists and prices are read; key figures come from Yahoo Finance and need the switch «Sources with restricted terms of use».\nOff: the switch and the stock pages disappear, nothing is fetched, and backtest, paper trading and chart treat every symbol as a coin again (no exchange sessions, no split adjustment)."
+    "modeAktienInfo": "Enables the crypto ↔ stocks switch in the header and syncs twice a day which stocks are tradable at Binance, Bitget, Bitunix, Pionex and Bitpanda.\nThe «Stocks» market has so far: newcomer radar, stock radar, the instrument list with a page per instrument (price, key figures, analysts) and the chart with its own layouts and watchlists. The market radar still shows crypto data.\nOnly public lists and prices are read; key figures come from Yahoo Finance and need the switch «Sources with restricted terms of use».\nOff: the switch and the stock pages disappear, nothing is fetched, and backtest, paper trading and chart treat every symbol as a coin again (no exchange sessions, no split adjustment).",
+    "sprache": {
+      "titel": "Voice input",
+      "einleitung": "How the microphone in the AI chats (coach, chart chat, bot planner) turns speech into text.",
+      "browserOhneDienst": "This browser (e.g. Brave or Firefox) has no working built-in speech recognition. Choose “OpenAI” or “Own Whisper service”.",
+      "art": "Recognition",
+      "artBrowser": "Browser (built-in)",
+      "artOpenai": "OpenAI (via the server)",
+      "artEigen": "Own Whisper service (via the server)",
+      "erklaerung": {
+        "browser": "The browser's built-in recognition: text appears while you speak, free of charge. Chrome and Edge send the audio to Google or Microsoft for it. Brave, Chromium, Vivaldi, Opera and Firefox cannot do this.",
+        "openai": "The browser records, your server sends the recording to OpenAI with your OpenAI key. Works in every browser. Cost: about USD 0.003 per minute (gpt-4o-mini-transcribe), booked as “sprache” in the AI usage. The text appears after you switch the microphone off.",
+        "eigen": "The browser records, your server sends the recording to a Whisper service in your network (OpenAI-compatible, e.g. Speaches/faster-whisper-server, or whisper.cpp with --inference-path /v1/audio/transcriptions). Free, the audio never leaves your network."
+      },
+      "keinSchluessel": "No OpenAI key is stored yet. Enter it above under the providers at OpenAI.",
+      "url": "Service address",
+      "urlHilfe": "Up to /v1, e.g. http://192.168.1.10:8000/v1. The server appends /audio/transcriptions.",
+      "modell": "Model",
+      "modellHilfe": "Empty = {vorgabe}.",
+      "speichern": "Save",
+      "gespeichert": "Saved.",
+      "fehler": {
+        "url": "The address is invalid or not allowed.",
+        "urlFehlt": "Your own service needs an address.",
+        "modell": "The model name contains invalid characters."
+      }
+    }
   },
   "setup": {
     "welcome": "Welcome!",
@@ -2130,10 +2156,32 @@
     "mikroStart": "Speak your question",
     "mikroStopp": "Stop recording",
     "mikroKeinHttps": "Voice input needs https or localhost. Over http the browser blocks the microphone.",
-    "mikroKeinBrowser": "This browser has no speech recognition (e.g. Firefox). Chrome, Edge and Safari have one.",
+    "mikroKeinBrowser": "This browser has no built-in speech recognition (e.g. Firefox). Switch on transcription via the server under Settings › AI › Access › Voice input.",
     "mikroVerweigert": "Microphone access was denied. Allow it in the browser's site settings.",
     "mikroFehler": "Speech recognition failed ({grund}).",
-    "mikroHinweis": "The browser sends the audio to its vendor for recognition (Google in Chrome)."
+    "mikroHinweis": "The browser sends the audio to its vendor for recognition (Google in Chrome).",
+    "mikroKeinAufnahme": "This browser cannot record audio (MediaRecorder missing).",
+    "mikroArbeitet": "Transcribing …",
+    "mikroNetz": "Your browser cannot reach its speech service. Brave, Chromium, Vivaldi and Opera have no access to it. Switch Settings › AI › Access › Voice input to “OpenAI” or “Own Whisper service”: the browser then records itself and your server transcribes.",
+    "mikroKeinMikrofon": "No microphone found, or it is in use by another program.",
+    "mikroHinweisOpenai": "The audio goes through your server to OpenAI for transcription (about USD 0.003 per minute). The text appears after you switch the microphone off.",
+    "mikroHinweisEigen": "The audio goes to your own Whisper service. The text appears after you switch the microphone off.",
+    "mikroServer": {
+      "fehlt_schluessel": "No OpenAI key is stored for transcription via OpenAI (Settings › AI › Access).",
+      "fehlt_url": "No address is set for your own Whisper service (Settings › AI › Access › Voice input).",
+      "fehlt_browser": "Voice input is set to “Browser”. Please reload the page.",
+      "schluesselAbgelehnt": "The service rejected the key.",
+      "limit": "The service reports too many requests or no credit left. Try again later.",
+      "adresse": "There is no transcription at the address entered (HTTP 404). The address must end at /v1.",
+      "dienst": "The transcription service reported an error.",
+      "nichtErreichbar": "The transcription service cannot be reached.",
+      "zeit": "The transcription service did not answer in time.",
+      "zuGross": "The recording is too long. Please speak shorter.",
+      "format": "The server does not know this recording format.",
+      "belegt": "Two transcriptions are already running. Wait a moment.",
+      "leer": "The recording was empty.",
+      "unbekannt": "Transcription failed ({grund})."
+    }
   },
   "playbook": {
     "tradeEvaluations": "Trade Evaluations and Notes",
