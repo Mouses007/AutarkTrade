@@ -388,6 +388,25 @@ export async function pruefeEinzeln(eingabe, einst = {}, quellen = {}) {
     const huerden = { ...STANDARD_HUERDEN, ...(einst.huerden || {}) }
     bericht.huerde = pruefeHuerden(roh, huerden)
 
+    // ── Wo sonst noch gelistet ──────────────────────────────────────────
+    /*
+     * VOR der Notenprüfung (bis 16.11.2026 ganz am Ende): die Antwort auf „wo
+     * kann ich das handeln" fehlte sonst genau bei den zwei Fällen, die früher
+     * zurückkehren — dem frisch gelisteten Coin ohne genug Kerzen und BTC
+     * selbst (Referenz des BTC-Vergleichs). Die Coin-Ansicht zeigt die
+     * Handelsplätze im Kopf.
+     */
+    try {
+        const listen = await (quellen.listungen || ladeListungen)()
+        if (listen) {
+            const basis = symbol.replace(/USDT$|USDC$|USD$/, '').replace(/^1000+/, '')
+            bericht.boersen = pruefeListung(basis, listen)
+        }
+    } catch (e) {
+        logWarn('coin-radar', `Einzelprüfung Listungen ${symbol}: ${e.message}`)
+    }
+
+
     /*
      * Ohne Kerzen auf der Hauptzeiteinheit gibt es keine Note — und
      * ausdrücklich keine erfundene. Bei einem frisch gelisteten Coin ist das
@@ -443,17 +462,6 @@ export async function pruefeEinzeln(eingabe, einst = {}, quellen = {}) {
     } catch (e) {
         logWarn('coin-radar', `Einzelprüfung BTC-Vergleich ${symbol}: ${e.message}`)
         bericht.btcGrund = 'nicht_messbar'
-    }
-
-    // ── Wo sonst noch gelistet ──────────────────────────────────────────
-    try {
-        const listen = await (quellen.listungen || ladeListungen)()
-        if (listen) {
-            const basis = symbol.replace(/USDT$|USDC$|USD$/, '').replace(/^1000+/, '')
-            bericht.boersen = pruefeListung(basis, listen)
-        }
-    } catch (e) {
-        logWarn('coin-radar', `Einzelprüfung Listungen ${symbol}: ${e.message}`)
     }
 
     return bericht
