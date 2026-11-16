@@ -399,6 +399,10 @@
     "src/components/strategien/labor/TestReiter.vue|386210bfa88a": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/AktienFavoriten.vue|8c086a2ae621": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/AktienRadar.vue|30a356d7a611": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/views/NewcomerRadar.vue|30a356d7a611": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
+    "src/views/NewcomerRadar.vue|30a356d7a611": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/coinradar/CoinDerivate.vue|96a0bcc6a832": "Optionen von ECharts (dokumentierte Schlüssel)",
+    "src/components/coinradar/CoinMessung.vue|96ec1b087699": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/coinradar/CoinMessung.vue|d700312ff7af": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/coinradar/CoinMessung.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
   }
 }
