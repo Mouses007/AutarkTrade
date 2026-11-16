@@ -15,9 +15,12 @@ const p = (name, bed, zusatz = '') => {
 const nahe = (a, b, tol = 1e-4) => Math.abs(a - b) <= tol
 
 console.log('Echter XRP-Bot 15.11.2026 (beendet)')
-const xrp = { marginBalance: '16.67057363816801', quoteInvestment: '11.52', extraMargin: '5', totalRealizedProfit: '0.2144000000000011', totalFee: '-0.05494197', totalFundingFee: '-0.00195519183199096' }
-p('aus der Marge: +0.1506 wie Pionex «Gesamt Profit» 0.15, nicht 0.2144', nahe(nettoAusMarge(xrp), 0.15057, 1e-4))
-p('Näherung Gewinn − Gebühren + Funding trifft dasselbe auf 0.01', nahe(nettoAusGewinn(xrp.totalRealizedProfit, xrp.totalFee, xrp.totalFundingFee), nettoAusMarge(xrp), 0.01))
+const xrp = { marginBalance: '16.67057363816801', quoteInvestment: '11.52', extraMargin: '5', profitExited: '0.0069292', totalRealizedProfit: '0.2144000000000011', totalFee: '-0.05494197', totalFundingFee: '-0.00195519183199096' }
+p('aus der Marge mit ausgetretenem Gewinn: +0.1575 (im Bot blieben 0.1506 = Pionex «Gesamt Profit» 0.15), nicht 0.2144', nahe(nettoAusMarge(xrp), 0.1575, 1e-4))
+p('Pionex-Buchung Gewinn − Gebühren + Funding trifft dasselbe auf einen Zehntelcent', nahe(nettoAusGewinn(xrp.totalRealizedProfit, xrp.totalFee, xrp.totalFundingFee), nettoAusMarge(xrp), 0.001))
+// Echter MYX-Bot (16.11.2026): Start 500 + 70 Extra-Marge, zurück 2298.39; Pionex schlug 847.22 Gewinn der Investition zu
+const myx = { marginBalance: '2298.3870808', quoteInvestment: '1347.2181314', extraMargin: '70', profitExited: '847.21813141', totalRealizedProfit: '1752.7036018', totalFee: '-22.3570038', totalFundingFee: '-0.136835557' }
+p('MYX: +1728.39 (zurück 2298.39 − eingezahlt 570), nicht +881.17', nahe(nettoAusMarge(myx), 2298.3870808 - 570, 0.01) && Math.abs(nettoAusMarge(myx) - nettoAusGewinn(myx.totalRealizedProfit, myx.totalFee, myx.totalFundingFee)) < 2)
 p('ohne Marge oder Investition → null (dann die Näherung)', nettoAusMarge({ quoteInvestment: '10' }) === null && nettoAusMarge({ marginBalance: '', quoteInvestment: '10' }) === null && nettoAusMarge(null) === null)
 p('Marge 0 ist gültig (Liquidation): ganzer Einsatz weg', nettoAusMarge({ marginBalance: '0', quoteInvestment: '4.09' }) === -4.09)
 p('entnommener Gewinn zählt mit', nahe(nettoAusMarge({ marginBalance: '10', quoteInvestment: '10', profitWithdrawn: '0.5' }), 0.5))

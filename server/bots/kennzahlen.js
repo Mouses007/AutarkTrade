@@ -30,6 +30,11 @@ export const ZYKLUS_KNAPP = 0.001
 export function gewinn(bot, kurs) {
     const e = bot.einsatz || {}
     const basis = e.basis ?? (bot.coinM ? e.aktuell : (e.usdt ?? e.aktuell))
+    // Gewinn, der nicht mehr in der Marge steckt, aber verdient ist: entnommen (`profitWithdrawn`) und
+    // ausgetreten (`profitExited`: bei «Reduzieren» ausgezahlt oder bei einer Band-Änderung der Investition
+    // zugeschlagen). Ohne `profitExited` fehlten an 100 echten beendeten Bots rund 2400 USDT (16.11.2026,
+    // shared/botNetto.js) — die Investition `basis` enthält den zugeschlagenen Gewinn ja schon.
+    const ausserhalb = (bot.ergebnis?.entnommen || 0) + (bot.ergebnis?.ausgetreten || 0)
     if (!bot.laufend) {
         // Beendet: was zurückkam (Marge) minus was drin war (Investition + Extra-Marge) — für Coin-M UND linear.
         // `totalRealizedProfit` ist bei linearen Bots der Gewinn VOR Gebühren und Funding: XRP 15.11.2026
@@ -41,7 +46,7 @@ export function gewinn(bot, kurs) {
         if (bot.typ === 'spot_grid') return { realisiert: null, schwebend: 0, gesamt: null, basis: istZahl(basis) ? basis : null }
         if (istZahl(e.marge) && istZahl(basis)) {
             // Entnommener Gewinn ist nicht mehr in der Marge, aber verdient (Audit STG-04)
-            const g = e.marge - (basis + (e.extraMarge || 0)) + (bot.ergebnis?.entnommen || 0)
+            const g = e.marge - (basis + (e.extraMarge || 0)) + ausserhalb
             return { realisiert: g, schwebend: 0, gesamt: g, basis }
         }
         const g = bot.ergebnis?.gesamt
@@ -57,7 +62,7 @@ export function gewinn(bot, kurs) {
         return { realisiert, schwebend: realisiert == null ? null : gesamt - realisiert, gesamt, basis }
     }
     if (!istZahl(e.marge) || !istZahl(basis)) return { realisiert: null, schwebend: null, gesamt: null, basis: istZahl(basis) ? basis : null }
-    const realisiert = e.marge - (basis + (e.extraMarge || 0)) + (bot.ergebnis?.entnommen || 0)
+    const realisiert = e.marge - (basis + (e.extraMarge || 0)) + ausserhalb
     const menge = bot.position?.menge, einstieg = bot.position?.einstieg
     let schwebend = null
     if (istZahl(menge) && istZahl(einstieg) && einstieg > 0 && istZahl(kurs) && kurs > 0) {

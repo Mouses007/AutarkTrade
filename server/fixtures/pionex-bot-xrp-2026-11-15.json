@@ -1,5 +1,5 @@
 {
- "hinweis": "Echter XRP-Bot am 15.11.2026 nach Investition erhöhen (+10), Stop-Loss/Take-Profit und Reduzieren (20 %). Pionex zeigte: Investition 15.36, Gesamt-Profit −0.0596 bei Kurs 0.959, Voll-SL ≤ 0.6, Voll-TP ≥ 5.",
+ "hinweis": "Echter XRP-Bot am 15.11.2026 nach Investition erhöhen (+10), Stop-Loss/Take-Profit und Reduzieren (20 %). Pionex zeigte: Investition 15.36, Gesamt-Profit −0.0596 bei Kurs 0.959, Voll-SL ≤ 0.6, Voll-TP ≥ 5. profitExited 0.0007 = bei der ersten Reduzierung ausgezahlter Gewinn; er gehört zum Ergebnis, Pionex' «Gesamt Profit» zeigt nur, was im Bot blieb.",
  "buOrderData": {
   "adjustParamsInvestmentChanged": false,
   "baseAmount": "44",
@@ -44,6 +44,7 @@
   "trend": "long",
   "trx24h": 2,
   "uiInvestCoin": "USDT",
-  "usdtInvestment": "9.2"
+  "usdtInvestment": "9.2",
+  "profitExited": "0.00071597"
  }
 }

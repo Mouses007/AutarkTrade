@@ -180,6 +180,8 @@ export function normalisiereBot(o) {
             gebuehren: zahl(d.totalFee),
             funding: zahl(d.totalFundingFee),
             entnommen: zahl(d.profitWithdrawn),
+            // Gewinn, der den Bot schon verlassen hat oder der Investition zugeschlagen wurde (shared/botNetto.js)
+            ausgetreten: zahl(d.profitExited),
             reinvestiert: zahl(d.profitReinvest),
             gewinnAnteilPionex: zahl(d.sharedProfit),
             volumen: zahl(d.totalVolume),

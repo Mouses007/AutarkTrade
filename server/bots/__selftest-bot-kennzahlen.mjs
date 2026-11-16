@@ -53,8 +53,11 @@ const ks = kennzahlen(sui, {})
 p('Gewinn = Marge − Investition − Extra-Marge, nicht totalRealizedProfit', nahe(ks.gewinn.gesamt, sui.einsatz.marge - sui.einsatz.basis - (sui.einsatz.extraMarge || 0)) && !nahe(ks.gewinn.gesamt, sui.ergebnis.gesamt), `${ks.gewinn.gesamt} / ${sui.ergebnis.gesamt}`)
 p('Liquidation = ganzer Einsatz weg (−100 %)', nahe(ks.rendite.gesamt, -1), String(ks.rendite?.gesamt))
 {
-    const xrpEnde = { laufend: false, coinM: false, einsatz: { basis: 11.52, aktuell: 11.52, extraMarge: 5, marge: 16.67057363816801 }, ergebnis: { gesamt: 0.2144000000000011 } }
-    p('Echter XRP-Bot beendet: +0.15 wie Pionex «Gesamt Profit», nicht +0.21', Math.abs(gewinn(xrpEnde, null).gesamt - 0.15) < 0.001)
+    const xrpEnde = { laufend: false, coinM: false, einsatz: { basis: 11.52, aktuell: 11.52, extraMarge: 5, marge: 16.67057363816801 }, ergebnis: { gesamt: 0.2144000000000011, ausgetreten: 0.0069292 } }
+    p('Echter XRP-Bot beendet: +0.1575 (im Bot blieben 0.15, dazu 0.007 ausgetreten), nicht +0.21', Math.abs(gewinn(xrpEnde, null).gesamt - 0.1575) < 0.0005)
+    // Echter MYX-Bot: Start 570, zurück 2298.39; 847.22 Gewinn wurden der Investition zugeschlagen
+    const myx = { laufend: false, coinM: false, einsatz: { basis: 1347.2181314, extraMarge: 70, marge: 2298.3870808 }, ergebnis: { gesamt: 1752.7036018, ausgetreten: 847.21813141 } }
+    p('MYX: +1728.39 (zurück − eingezahlt), nicht +881.17', Math.abs(gewinn(myx, null).gesamt - (2298.3870808 - 570)) < 0.01)
     p('ohne Marge bleibt totalRealizedProfit der Rückfall', gewinn({ laufend: false, einsatz: { basis: 10 }, ergebnis: { gesamt: 1.5 } }, null).gesamt === 1.5)
 }
 p('Hinweis liquidiert, keine Lage-Hinweise', ks.hinweise.includes('liquidiert') && !ks.hinweise.includes('unterBand') && ks.band === null)

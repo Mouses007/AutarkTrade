@@ -5,10 +5,19 @@
  * das Feld als «Netto-Wallet-Delta» (die Aussage galt für normale Futures-Positionen, nicht für Bots):
  * beendete USDT-M-Bots standen um |Gebühren| − Funding zu gut im Journal (an fünf gespeicherten Bots
  * zusammen 6.70 USDT, rund 9 % der Verluste). Belegt am echten XRP-Bot vom 15.11.2026:
- * totalRealizedProfit 0.2144, Pionex «Gesamt Profit» 0.15, Marge 16.6706 − Investition 11.52 −
- * Extra-Marge 5 = 0.1506.
+ * totalRealizedProfit 0.2144, Gebühren 0.0549, Funding −0.0020 → 0.1575.
  *
- * Was wirklich zurückkam, ist die Marge: Netto = Marge − Investition − Extra-Marge (+ entnommener Gewinn).
+ * Was wirklich zurückkam, ist die Marge: Netto = Marge − Investition − Extra-Marge + ausgetretener Gewinn
+ * (`profitExited`) + entnommener Gewinn (`profitWithdrawn`).
+ *
+ * `profitExited` ist Pflicht: Gewinn, der den Bot schon verlassen hat oder in die Investition umgebucht
+ * wurde (bei «Reduzieren» ausgezahlt; bei einer Band-Änderung mit `adjustParamsInvestmentChanged` der
+ * Investition zugeschlagen). Ohne ihn fehlte am 16.11.2026 an 100 echten beendeten USDT-Bots zusammen
+ * rund 2400 USDT (ein MYX-Bot: +881 statt +1728 — Start 570, zurück 2298, `quoteInvestment` 1347 =
+ * 500 + 847 `profitExited`). Mit ihm stimmt die Rechnung bei 91 von 100 auf 0,5 % mit Pionex' eigener
+ * Buchung (Gewinn − Gebühren + Funding) überein, der Rest liegt wenige Cent bis Dollar daneben.
+ * Pionex' «Gesamt Profit» zeigt nur, was im Bot blieb (XRP: 0.15) — der wahre Gewinn ist 0.1575.
+ *
  * Fehlt die Marge (alter Import), bleibt die Näherung Gewinn − Gebühren + Funding; sie ist bei
  * liquidierten Bots zu streng (der Verlust ist dort auf den Einsatz gedeckelt).
  *
@@ -24,12 +33,12 @@ export const istSpotBot = (botType) => /spot|token_grid/i.test(String(botType ||
 
 /**
  * Netto aus den Rohfeldern einer Pionex-Bot-Antwort, in der Margin-Münze. `null`, wenn die Marge fehlt.
- * @param {{marginBalance, quoteInvestment, extraMargin, profitWithdrawn}} d
+ * @param {{marginBalance, quoteInvestment, extraMargin, profitExited, profitWithdrawn}} d
  */
 export function nettoAusMarge(d) {
     const marge = zahl(d?.marginBalance), invest = zahl(d?.quoteInvestment)
     if (marge === null || invest === null) return null
-    return marge - invest - (zahl(d.extraMargin) ?? 0) + (zahl(d.profitWithdrawn) ?? 0)
+    return marge - invest - (zahl(d.extraMargin) ?? 0) + (zahl(d.profitExited) ?? 0) + (zahl(d.profitWithdrawn) ?? 0)
 }
 
 /** Näherung ohne Marge: Gewinn vor Gebühren − Gebühren + Funding (Funding trägt sein Vorzeichen). */
