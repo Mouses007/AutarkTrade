@@ -153,202 +153,15 @@
                 </div>
             </div>
 
-            <div v-if="ep" ref="epKarte" class="crEinzelKarte">
-                <!-- Kopf: Symbol, Note, Preis — und woher gemessen wurde -->
-                <div class="crEinzelTitel">
-                    <span class="crEinzelSymbol">{{ kurz(ep.symbol) }}</span>
-                    <span v-if="ep.status === 'bewertet'" class="crNote" :class="noteKlasse(ep.note)">
-                        {{ ep.note }}
-                    </span>
-                    <span class="crEinzelPreis">{{ epPreis }}</span>
-                    <span class="at-ml-auto crEinzelQuelle" :class="{ fremd: !ep.vergleichbar }"
-                        :title="ep.vergleichbar ? t('coinradar.epQuelleBinanceHilfe') : t('coinradar.epQuelleBitunixHilfe')">
-                        {{ ep.vergleichbar ? t('coinradar.epQuelleBinance') : t('coinradar.epQuelleBitunix') }}
-                    </span>
-                </div>
+            <!-- Marktdatenquelle aus: ein Zustand mit Grund, kein «unbekanntes Symbol». -->
+            <QuelleAus v-if="epAus" :aus="epAus" class="at-mo-2" />
 
-                <!-- Was an dieser Messung anders ist als in der Rangliste.
-                     Steht oben und nicht im Kleingedruckten: Eine Note, die
-                     auf einer anderen Börse entstand, darf nicht wie eine
-                     Ranglistenzeile gelesen werden. -->
-                <p v-if="!ep.vergleichbar" class="crEinzelVermerk">
-                    {{ t('coinradar.epNichtVergleichbar') }}
-                </p>
-                <p v-if="ep.ergaenzt" class="crEinzelVermerk leise">
-                    {{ t('coinradar.epErgaenzt', { s: ep.symbol }) }}
-                </p>
-                <p v-if="!ep.aufBitunix" class="crEinzelVermerk warn">
-                    {{ t('coinradar.epNichtAufBitunix') }}
-                </p>
-
-                <!-- Die Hürden gelten, aber sie brechen hier nichts ab. -->
-                <p v-if="ep.huerde && !ep.huerde.ok" class="crEinzelVermerk warn">
-                    {{ t('coinradar.epHuerdeGerissen', { g: grundText(ep.huerde.grund) }) }}
-                </p>
-
-                <!-- Zu jung für eine Bewertung: Klartext statt einer Note aus
-                     zu wenigen Kerzen. -->
-                <div v-if="ep.status !== 'bewertet'" class="crEinzelLeer">
-                    <Symbol name="sanduhr" />
-                    <div>
-                        <div>{{ t('coinradar.epZuJung', { n: ep.kerzenAnzahl, ze: ep.haupt, min: ep.mindestKerzen }) }}</div>
-                        <div class="crHinweise">{{ t('coinradar.epZuJungHinweis') }}</div>
-                    </div>
-                </div>
-
-                <template v-else>
-                    <!-- Kennzahlenband -->
-                    <div class="crEinzelBand">
-                        <div class="crEinzelWert">
-                            <div class="crEinzelZahl">{{ n(epHaupt.atrPct, 2) }}<span class="crEinheit"> %</span></div>
-                            <div class="crLabel">ATR {{ ep.haupt }}</div>
-                        </div>
-                        <div class="crEinzelWert">
-                            <div class="crEinzelZahl">{{ n(epHaupt.rvol, 2) }}</div>
-                            <div class="crLabel">RVOL</div>
-                        </div>
-                        <div class="crEinzelWert">
-                            <div class="crEinzelZahl">{{ n(epHaupt.adx, 0) }}</div>
-                            <div class="crLabel">ADX</div>
-                        </div>
-                        <div class="crEinzelWert">
-                            <div class="crEinzelZahl">{{ geld(ep.umsatz24h) }}</div>
-                            <div class="crLabel">{{ t('coinradar.epUmsatz') }}</div>
-                        </div>
-                        <div class="crEinzelWert">
-                            <div class="crEinzelZahl">{{ n(ep.spreadBp, 2) }}<span class="crEinheit"> bp</span></div>
-                            <div class="crLabel">{{ t('coinradar.spalteSpread') }}</div>
-                        </div>
-                        <div class="crEinzelWert">
-                            <div class="crEinzelZahl" :class="fundingKlasse(ep.fundingJahresRate)">
-                                {{ n(ep.fundingJahresRate, 1) }}<span class="crEinheit"> %</span>
-                            </div>
-                            <div class="crLabel">
-                                {{ t('coinradar.spalteFunding') }}
-                                <span v-if="ep.fundingIntervallH" class="crEinzelTakt">{{ ep.fundingIntervallH }}h</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Ab hier dieselbe Aufteilung wie im aufgeklappten
-                         Ranglisteneintrag — dieselben Zahlen, dieselbe
-                         Anordnung, damit nichts zweimal gelernt werden muss. -->
-                    <div class="crDetailGrid">
-                        <div>
-                            <div class="crDetailTitel">{{ t('coinradar.teilnoten') }}</div>
-                            <div v-for="(wert, feld) in ep.teilnoten" :key="feld" class="crNoteZeile">
-                                <span class="crNoteName">{{ t('coinradar.note_' + feld) }}</span>
-                                <span class="crBalken"><i :style="{ width: Math.round(wert) + '%' }"></i></span>
-                                <span class="crNoteWert">{{ Math.round(wert) }}</span>
-                            </div>
-                            <p v-if="ep.hinweise?.length" class="crHinweise at-mu-0 at-mo-2">
-                                {{ ep.hinweise.join(' · ') }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <div class="crDetailTitel">{{ t('coinradar.jeZeiteinheit') }}</div>
-                            <table class="crZeTabelle">
-                                <tr>
-                                    <th></th><th>ATR %</th><th>RVOL</th><th>ADX</th><th>{{ t('coinradar.kerzen') }}</th>
-                                </tr>
-                                <tr v-for="(m, ze) in ep.jeZeiteinheit" :key="ze">
-                                    <td><b>{{ ze }}</b></td>
-                                    <td>{{ n(m.atrPct, 2) }}</td>
-                                    <td>{{ n(m.rvol, 2) }}</td>
-                                    <td>{{ n(m.adx, 0) }}</td>
-                                    <td>{{ m.kerzen }}</td>
-                                </tr>
-                            </table>
-                        </div>
-
-                        <div v-if="Object.keys(epBoersen).length">
-                            <div class="crDetailTitel">{{ t('coinradar.ausfuehrung5k') }}</div>
-                            <table class="crZeTabelle">
-                                <tr>
-                                    <th></th>
-                                    <th>{{ t('coinradar.spKauf') }}</th>
-                                    <th>{{ t('coinradar.spVerkauf') }}</th>
-                                    <th>{{ t('coinradar.spRund') }}</th>
-                                    <th>{{ t('coinradar.spTiefe25') }}</th>
-                                </tr>
-                                <tr v-for="(v, b) in epBoersen" :key="b"
-                                    :class="{ crBeste: b === ep.ausfuehrung?.beste?.boerse }">
-                                    <td :title="boerseName(b)"><b>{{ boerseKurz(b) }}</b></td>
-                                    <td>{{ n(v.slippageKaufBp, 1) }}</td>
-                                    <td>{{ n(v.slippageVerkaufBp, 1) }}</td>
-                                    <td>{{ n(v.rundlaufBp, 1) }}</td>
-                                    <td>{{ geld(v.tiefe25Bp) }}</td>
-                                </tr>
-                            </table>
-                            <p class="crHinweise at-mu-0 at-mo-2">
-                                <template v-for="(v, b) in epBoersen" :key="b + 'p'">
-                                    <span v-if="!v.passt5k" class="at-block">
-                                        {{ t('coinradar.passtNicht', { b: boerseName(b) }) }}
-                                    </span>
-                                </template>
-                            </p>
-                        </div>
-
-                        <div>
-                            <div class="crDetailTitel">
-                                {{ t('coinradar.btcTitel', { ze: ep.btc?.zeiteinheit || konst.btcZeiteinheit }) }}
-                                <Symbol
-                                    :titel="t('coinradar.btcNichtInNote')" name="info" class="crInfoWink" />
-                            </div>
-                            <table v-if="ep.btc" class="crZeTabelle">
-                                <tr>
-                                    <td>{{ t('coinradar.btcKopplung') }}</td>
-                                    <td class="at-rechtsbuendig">
-                                        <b>{{ Math.round(ep.btc.korrelation * 100) }} %</b>
-                                        <span class="crHinweisWort">
-                                            {{ t('coinradar.kopplung_' + deuteKopplung(epAlsZeile)) }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>{{ t('coinradar.spalteBeta') }}</td>
-                                    <td class="at-rechtsbuendig"><b>{{ n(ep.btc.beta, 2) }}</b></td>
-                                </tr>
-                                <tr>
-                                    <td>{{ t('coinradar.btcPunkte') }}</td>
-                                    <td class="at-rechtsbuendig">{{ ep.btc.punkte }}</td>
-                                </tr>
-                            </table>
-                            <p v-else class="crHinweise at-mu-0">
-                                {{ t('coinradar.epBtc_' + (ep.btcGrund || 'nicht_messbar'), { n: ep.btcKerzen ?? 0 }) }}
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Wo der Coin sonst noch liegt. Bei einem Paar, das
-                         Binance nicht führt, ist das keine Nebensache: Es ist
-                         die Antwort auf „wo kann ich das überhaupt handeln". -->
-                    <p v-if="epLinks.length" class="crEinzelListung">
-                        <span>{{ t('coinradar.epGelistet') }}</span>
-                        <a v-for="e in epLinks" :key="e.boerse" class="crBoerse"
-                            :href="boerseUrl(e.boerse, ep.symbol, epChartQuelle)" target="_blank"
-                            rel="noopener noreferrer"
-                            :title="e.boerse === 'tradingview'
-                                ? t('coinradar.epChartOeffnen', { q: epChartQuelle })
-                                : t('coinradar.gelistetAuf', { b: BOERSE_LINK_NAME[e.boerse] })">
-                            {{ BOERSE_LINK_KURZ[e.boerse] }}
-                        </a>
-                    </p>
-
-                    <!-- Tiefensuche: der Token HINTER dem Perpetual — Vertrag,
-                         Halter, On-Chain-Pools, Projekt; dieselben Prüfungen
-                         wie in der Frühphase, nur ohne deren Beschleunigungs-Note. -->
-                    <div class="crTiefe">
-                        <button type="button" class="ctl-pill klein" :disabled="tsLaeuft" @click="tiefensucheStarten">
-                            <Kreisel still class="at-mr-1" v-if="tsLaeuft" />
-                            <Symbol v-else name="lupePlus" class="at-mr-1" />{{ t('coinradar.tsKnopf') }}
-                        </button>
-                        <span class="crTiefeHinweis">{{ t('coinradar.tsHinweis') }}</span>
-                    </div>
-                    <p v-if="tsFehler" class="at-klein at-warn at-mu-0">{{ tsFehler }}</p>
-                    <TiefensucheErgebnis v-if="tsDaten" :daten="tsDaten" />
-                </template>
+            <!-- Die Coin-Ansicht: Kurs, Verlauf, Derivate, Messung, Projekt
+                 (`components/coinradar/CoinAnsicht.vue`). Die Messung holt
+                 diese Seite, alles Weitere lädt die Ansicht je Karte. -->
+            <div v-if="ep" ref="epKarte" class="crEinzelAnsicht">
+                <CoinAnsicht :bericht="ep" :konstanten="konst" :misst="epLaeuft" :favorit="istFav(ep)"
+                    @neu-messen="epNimm(ep.symbol)" @favorit="favUmschalten(ep)" @schliessen="epZuruecksetzen" />
             </div>
         </div>
 
@@ -827,79 +640,17 @@
             <div v-if="dauerhaft.length" class="crBlock at-mu-4">
                 <h6 class="crTitel">{{ t('coinradar.dauerhaftTitel') }}</h6>
                 <p class="crHinweis">{{ t('coinradar.dauerhaftHinweis', { n: dauerhaftMoeglich }) }}</p>
-                <div class="crDauerLayout" :class="{ mitInfo: coinInfoSymbol }">
-                    <div class="crDauerListe">
-                        <button v-for="d in dauerhaft" :key="d.symbol" type="button" class="crDauer"
-                            :class="{ aktiv: coinInfoSymbol === d.symbol }" @click="coinInfoOeffnen(d.symbol)">
-                            <span class="crDauerSymbol">{{ kurz(d.symbol) }}</span>
-                            <span class="crBalken breit"><i :style="{ width: d.anteil + '%' }"></i></span>
-                            <span class="crDauerWert">{{ d.male }} / {{ d.moeglich }}</span>
-                        </button>
-                    </div>
-
-                    <!-- Projekt-Infos zum angeklickten Symbol: was ist das,
-                         Links zur Website etc. Quelle ist CoinGecko — die
-                         hat KEIN strukturiertes "Team"-Feld mehr, deshalb
-                         der Hinweis unten statt einer erfundenen Ja/Nein-Zeile. -->
-                    <div v-if="coinInfoSymbol" class="crCoinInfo">
-                        <button type="button" class="crCoinInfoZu" :aria-label="t('common.close')" :title="t('common.close')" @click="coinInfoSymbol = ''">
-                            <Symbol name="schliessen" />
-                        </button>
-                        <div v-if="coinInfoLaedt" class="at-mittig at-py-3">
-                            <Kreisel still />
-                        </div>
-                        <p v-else-if="coinInfoFehler" class="at-gedaempft at-klein at-mu-0">{{ coinInfoFehler }}</p>
-                        <!-- Ohne CoinGecko-Schlüssel (S12): ein Zustand mit Weg zur Einstellung, kein Fehler. -->
-                        <QuelleAus v-else-if="coinInfoAus" :aus="coinInfoAus" klein />
-                        <p v-else-if="coinInfo === null" class="at-gedaempft at-klein at-mu-0">
-                            {{ t('coinradar.coinInfoKeineDaten', { symbol: kurz(coinInfoSymbol) }) }}
-                        </p>
-                        <template v-else-if="coinInfo">
-                            <div class="crCoinInfoKopf">
-                                <!-- Logo nur, wenn der Server es liefert (Schalter „Quellen ohne
-                                     Verkaufsfreigabe", ID tokenbilder, S15); sonst Initialen (S12). -->
-                                <img v-if="coinInfo.bild" :src="coinInfo.bild" alt="" referrerpolicy="no-referrer">
-                                <TickerZeichen v-else :symbol="coinInfo.symbol || kurz(coinInfoSymbol)" />
-                                <div>
-                                    <strong>{{ coinInfo.name }}</strong>
-                                    <span v-if="coinInfo.marketCapRang" class="crCoinInfoRang">
-                                        {{ t('coinradar.coinInfoRang', { n: coinInfo.marketCapRang }) }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div v-if="coinInfo.kategorien.length" class="crCoinInfoTags">
-                                <span v-for="k in coinInfo.kategorien.slice(0, 6)" :key="k" class="crCoinInfoTag">{{ k }}</span>
-                            </div>
-                            <p v-if="coinInfo.beschreibung" class="crCoinInfoText" :class="{ gekuerzt: !coinInfoVoll }">
-                                {{ coinInfo.beschreibung }}
-                            </p>
-                            <button v-if="coinInfo.beschreibung.length > 320" type="button"
-                                class="crCoinInfoMehr" @click="coinInfoVoll = !coinInfoVoll">
-                                {{ coinInfoVoll ? t('coinradar.coinInfoWeniger') : t('coinradar.coinInfoMehr') }}
-                            </button>
-                            <!-- homepage/whitepaper/github/explorer kommen roh von CoinGecko.
-                                 twitter/telegram/coingeckoUrl werden serverseitig mit festem
-                                 https:// zusammengesetzt und sind schemasicher. -->
-                            <div class="crCoinInfoLinks">
-                                <a v-if="sichereUrl(coinInfo.homepage)" :href="sichereUrl(coinInfo.homepage)" target="_blank" rel="noopener">
-                                    <Symbol name="globus" />{{ t('coinradar.coinInfoWebsite') }}</a>
-                                <a v-if="sichereUrl(coinInfo.whitepaper)" :href="sichereUrl(coinInfo.whitepaper)" target="_blank" rel="noopener">
-                                    <Symbol name="dokument" />Whitepaper</a>
-                                <a v-if="coinInfo.twitter" :href="coinInfo.twitter" target="_blank" rel="noopener">
-                                    <Symbol name="nachricht" />X</a>
-                                <a v-if="coinInfo.telegram" :href="coinInfo.telegram" target="_blank" rel="noopener">
-                                    <Symbol name="senden" />Telegram</a>
-                                <a v-if="sichereUrl(coinInfo.github)" :href="sichereUrl(coinInfo.github)" target="_blank" rel="noopener">
-                                    <Symbol name="code" />GitHub</a>
-                                <a v-if="sichereUrl(coinInfo.explorer)" :href="sichereUrl(coinInfo.explorer)" target="_blank" rel="noopener">
-                                    <Symbol name="suche" />Explorer</a>
-                                <a :href="coinInfo.coingeckoUrl" target="_blank" rel="noopener">
-                                    <Symbol name="extern" />CoinGecko</a>
-                            </div>
-                            <p class="crCoinInfoFuss">{{ coinInfoSichtbarkeitText }}</p>
-                            <RadarQuellen :quellen="['coingecko']" />
-                        </template>
-                    </div>
+                <!-- Ein Klick öffnet die Coin-Ansicht dieses Symbols (Reiter
+                     Rangliste) — dieselbe Ansicht wie beim Klick in der Rangliste
+                     und beim Absprung aus dem Chart. Bis 16.11.2026 ging hier
+                     eine eigene kleine Projekt-Karte auf. -->
+                <div class="crDauerListe">
+                    <button v-for="d in dauerhaft" :key="d.symbol" type="button" class="crDauer"
+                        :title="t('coinAnsicht.oeffnen', { symbol: kurz(d.symbol) })" @click="coinOeffnen(d.symbol)">
+                        <span class="crDauerSymbol">{{ kurz(d.symbol) }}</span>
+                        <span class="crBalken breit"><i :style="{ width: d.anteil + '%' }"></i></span>
+                        <span class="crDauerWert">{{ d.male }} / {{ d.moeglich }}</span>
+                    </button>
                 </div>
             </div>
 
@@ -1027,18 +778,15 @@ import Symbol from '@/components/basis/Symbol.vue'
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useKiSeitenStand } from '../composables/useKiSeitenStand.js'
-import { sichereUrl } from '../utils/sanitize.js'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import PageInfo from '../components/PageInfo.vue'
 import InfoTipp from '../components/InfoTipp.vue'
-import TiefensucheErgebnis from '../components/hype/TiefensucheErgebnis.vue'
-import TickerZeichen from '../components/hype/TickerZeichen.vue'
-import RadarQuellen from '../components/hype/RadarQuellen.vue'
 import QuelleAus from '../components/quellen/QuelleAus.vue'
 import AbverkaufAnsicht from '../components/coinradar/AbverkaufAnsicht.vue'
 import CoinFavoriten from '../components/coinradar/CoinFavoriten.vue'
+import CoinAnsicht from '../components/coinradar/CoinAnsicht.vue'
 import { useKostenAnzeige } from '../utils/journal/format.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { logWarn } from '../utils/logger.js'
@@ -1472,54 +1220,6 @@ const dauerhaft = ref([])
 /** Über wie viele fertige Läufe die Beständigkeit oben gerechnet ist. */
 const dauerhaftMoeglich = ref(0)
 
-// ── Coin-Info (Projektdaten zum angeklickten Symbol) ───────────────────────
-const coinInfoSymbol = ref('')
-const coinInfo = ref(undefined)   // undefined = noch nicht geladen, null = kein Treffer
-const coinInfoLaedt = ref(false)
-const coinInfoFehler = ref('')
-const coinInfoVoll = ref(false)
-const coinInfoAus = ref(null)     // `{aus: true, …}` ohne CoinGecko-Schlüssel (S12)
-let coinInfoLauf = 0   // gegen überholende Antworten beim schnellen Umklicken
-
-/*
- * "Team vorhanden" ist bei CoinGecko keine strukturierte Angabe mehr — aber
- * OB ein Projekt öffentliche Kanäle hinterlegt hat, ist selbst ein Hinweis:
- * ein öffentliches GitHub-Repo bedeutet sichtbaren, arbeitenden Code statt
- * einer blossen Behauptung. Gezählt wird aus Feldern, die ohnehin schon da
- * sind — kein zusätzlicher API-Aufruf, kein erfundenes Ja/Nein.
- */
-const COIN_INFO_KANAELE = ['homepage', 'whitepaper', 'twitter', 'telegram', 'github']
-const coinInfoSichtbarkeitText = computed(() => {
-    const c = coinInfo.value
-    if (!c) return ''
-    const n = COIN_INFO_KANAELE.filter((f) => c[f]).length
-    const kanaeleTxt = t('coinradar.coinInfoKanaeleHinweis', { n, gesamt: COIN_INFO_KANAELE.length })
-    const githubTxt = t(c.github ? 'coinradar.coinInfoGithubJa' : 'coinradar.coinInfoGithubNein')
-    return `${kanaeleTxt} ${githubTxt}`
-})
-
-async function coinInfoOeffnen(symbol) {
-    if (coinInfoSymbol.value === symbol) { coinInfoSymbol.value = ''; return }
-    coinInfoSymbol.value = symbol
-    coinInfo.value = undefined
-    coinInfoFehler.value = ''
-    coinInfoAus.value = null
-    coinInfoVoll.value = false
-    coinInfoLaedt.value = true
-    const eigenerLauf = ++coinInfoLauf
-    try {
-        const { data } = await axios.get('/api/coin-radar/coin-info', { params: { symbol } })
-        if (eigenerLauf !== coinInfoLauf) return   // zwischenzeitlich ein anderes Symbol angeklickt
-        if (data?.aus) { coinInfoAus.value = data; coinInfo.value = undefined; return }
-        coinInfo.value = data?.info ?? null
-    } catch (e) {
-        if (eigenerLauf !== coinInfoLauf) return
-        coinInfoFehler.value = e.response?.data?.error || e.message
-    } finally {
-        if (eigenerLauf === coinInfoLauf) coinInfoLaedt.value = false
-    }
-}
-
 // ── Einzelprüfung ───────────────────────────────────────────────────────
 /*
  * Ein Symbol auf Zuruf messen — die Frage, die die Rangliste konstruktiv nicht
@@ -1534,83 +1234,20 @@ const ep = ref(null)
 const epFehler = ref('')
 const epVorschlaege = ref([])
 
-/** Die Kennzahlen der Zeiteinheit, welche die Note trägt. */
-const epHaupt = computed(() => ep.value?.jeZeiteinheit?.[ep.value.haupt] || {})
-
-/*
- * Der Preis mit so vielen Stellen, wie der Coin braucht. Ein Meme-Coin steht
- * bei 0,0000042 — mit zwei Nachkommastellen wäre er kostenlos, und genau die
- * Coins, für die es diese Prüfung gibt, stehen tief.
- */
-const epPreis = computed(() => {
-    const w = Number(ep.value?.preis)
-    if (!Number.isFinite(w) || w <= 0) return '—'
-    const stellen = w >= 100 ? 2 : (w >= 1 ? 4 : (w >= 0.01 ? 5 : 8))
-    return w.toFixed(stellen)
-})
-
-/** Dieselbe Sortierung (günstigster Rundlauf zuerst) wie in der Rangliste. */
-const epBoersen = computed(() => jeBoerse({ jeBoerse: ep.value?.ausfuehrung?.jeBoerse || {} }))
-
-/*
- * Der BTC-Vergleich kommt hier als eigenes Objekt, in der Rangliste als flache
- * Spalten. Statt `deuteKopplung` zu verdoppeln, bekommt es die Form, die die
- * Funktion erwartet — eine zweite Fassung derselben Schwellen ist genau der
- * Fehler, den `KONSTANTEN` auf dem Server abgestellt hat.
- */
-const epAlsZeile = computed(() => ({ btcKorrelation: ep.value?.btc?.korrelation ?? null }))
-
-/*
- * Dieselben Links wie in der Rangliste — gelistete Börsen plus TradingView,
- * gefiltert nach der Einstellung `boersenLinks`. `boersenLinksVon` erwartet
- * genau die Form, die der Bericht mitbringt (`boersen.liste`), deshalb keine
- * zweite Umrechnung: Eine eigene Liste hier hätte TradingView weggelassen und
- * die Einstellung ignoriert — beides ist beim ersten Entwurf passiert.
- */
-const epLinks = computed(() => (ep.value ? boersenLinksVon(ep.value) : []))
-
-/*
- * Woher TradingView seine Kerzen nehmen soll.
- *
- * Nicht kosmetisch: `BINANCE:CASHCATUSDT.P` gibt es nicht — Binance führt das
- * Paar nicht, und TradingView antwortet mit „This symbol doesn't exist"
- * (live geprüft am 04.09.2026, ebenso dass `BITUNIX:CASHCATUSDT.P` lädt).
- * Der Chart folgt deshalb derselben Quelle wie die Messung.
- */
-const epChartQuelle = computed(() => (ep.value?.quelle === 'bitunix' ? 'BITUNIX' : 'BINANCE'))
+/** Marktdatenquelle aus (`{aus: true, …}` der Einzelprüfung) — dann gibt es nichts zu messen. */
+const epAus = ref(null)
 
 function epZuruecksetzen() {
     ep.value = null
     epFehler.value = ''
+    epAus.value = null
     epVorschlaege.value = []
 }
 
-/** Vorschlag angeklickt: übernehmen und sofort messen. */
-// ── Tiefensuche ──────────────────────────────────────────────────────
-const ts = ref(null)
-const tsLaeuft = ref(false)
-const tsFehler = ref('')
-// Nur für den Coin, der gerade in der Einzelprüfung steht.
-const tsDaten = computed(() => (ts.value && ep.value && ts.value.symbol === ep.value.symbol ? ts.value.daten : null))
-async function tiefensucheStarten() {
-    if (!ep.value || tsLaeuft.value) return
-    const symbol = ep.value.symbol
-    tsLaeuft.value = true
-    tsFehler.value = ''
-    try {
-        const r = await axios.get('/api/coin-radar/tiefensuche', { params: { symbol } })
-        ts.value = { symbol, daten: r.data }
-    } catch (e) {
-        tsFehler.value = e.response?.data?.error || e.message
-    } finally {
-        tsLaeuft.value = false
-    }
-}
-
 /*
- * Ein Klick auf einen Coin der Rangliste klappt ihn auf UND misst ihn oben in
- * der Einzelprüfung — dort steht die Tiefensuche. Die Seite springt hin, sobald
- * die Messung da ist; beim Zuklappen passiert nichts.
+ * Ein Klick auf einen Coin der Rangliste klappt ihn auf UND öffnet oben seine
+ * Coin-Ansicht (Kurs, Verlauf, Derivate, Projekt, Tiefensuche). Die Seite
+ * springt hin, sobald die Messung da ist; beim Zuklappen passiert nichts.
  */
 const epKarte = ref(null)
 async function zeileGeklickt(z) {
@@ -1623,6 +1260,7 @@ async function zeileGeklickt(z) {
     epKarte.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+/** Vorschlag angeklickt oder «Neu messen»: übernehmen und sofort messen. */
 function epNimm(symbol) {
     epEingabe.value = symbol
     epMessen()
@@ -1633,9 +1271,15 @@ async function epMessen() {
     if (!eingabe || epLaeuft.value) return
     epLaeuft.value = true
     epFehler.value = ''
+    epAus.value = null
     epVorschlaege.value = []
     try {
         const r = await axios.get('/api/coin-radar/einzel', { params: { symbol: eingabe } })
+        if (r.data?.aus) {
+            ep.value = null
+            epAus.value = r.data
+            return
+        }
         const b = r.data?.bericht
         if (!b?.gefunden) {
             ep.value = null
@@ -1728,12 +1372,6 @@ async function rechneDauerhaft() {
         const r = await axios.get('/api/coin-radar/dauerhaft')
         dauerhaft.value = r.data?.dauerhaft || []
         dauerhaftMoeglich.value = r.data?.moeglich || 0
-        // Vorbelegt mit dem ersten Coin, statt einer leeren Fläche —
-        // nur beim allerersten Laden, damit ein erneuter Aufruf (z.B. nach
-        // einem frischen Lauf) nicht die eigene Auswahl des Lesers verwirft.
-        if (dauerhaft.value.length && !coinInfoSymbol.value) {
-            coinInfoOeffnen(dauerhaft.value[0].symbol)
-        }
     } catch (e) {
         logWarn('coin-radar', 'Beständigkeit konnte nicht geladen werden', e)
         dauerhaft.value = []
@@ -1997,6 +1635,20 @@ async function messeAusAdresse() {
     epKarte.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 watch(() => route.query.symbol, (neu, alt) => { if (neu && neu !== alt) messeAusAdresse() })
+
+/**
+ * Die Coin-Ansicht eines Symbols öffnen — von überall auf der Seite (etwa aus
+ * «Wer hält sich oben» im Verlauf). Die Adresse trägt das Symbol, damit der
+ * Zurück-Knopf und ein Neuladen wieder dort landen.
+ */
+async function coinOeffnen(symbol) {
+    const vorher = symbolAusAdresse()
+    if (reiter.value !== 'rangliste' || vorher !== symbol) {
+        await router.push({ path: '/coin-radar', query: { symbol } }).catch(() => {})
+        if (vorher !== symbol) return   // der Wächter auf die Adresse misst
+    }
+    messeAusAdresse()
+}
 
 onMounted(async () => {
     messeAusAdresse()
@@ -2513,22 +2165,10 @@ a.crBoerse:hover, a.crBoerse:active {
 
 /* Liste links, Projekt-Infos rechts — nur wenn ein Symbol angeklickt ist.
    Auf schmalem Schirm untereinander statt nebeneinander. */
-.crDauerLayout {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    align-items: start;
-}
-
-@media (min-width: 700px) {
-    .crDauerLayout.mitInfo {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    }
-}
-
 .crDauerListe {
     display: grid;
     gap: .3rem;
+    max-width: 34rem;
 }
 
 .crDauer {
@@ -2552,11 +2192,6 @@ a.crBoerse:hover, a.crBoerse:active {
     background: rgba(255, 255, 255, .04);
 }
 
-.crDauer.aktiv {
-    background: rgba(79, 139, 255, .1);
-    border-color: var(--accent);
-}
-
 .crDauerSymbol {
     min-width: 5rem;
     font-weight: 600;
@@ -2566,121 +2201,6 @@ a.crBoerse:hover, a.crBoerse:active {
     font-size: .851rem;
     color: var(--leise);
     font-variant-numeric: tabular-nums;
-}
-
-/* ── Coin-Info-Feld ─────────────────────────────────────── */
-.crCoinInfo {
-    position: relative;
-    background: var(--bg);
-    border: 1px solid var(--line-stark);
-    border-radius: var(--radius);
-    padding: .9rem 1rem;
-    font-size: .87rem;
-}
-
-.crCoinInfoZu {
-    position: absolute;
-    top: .5rem;
-    right: .5rem;
-    background: transparent;
-    border: 0;
-    color: var(--leise);
-    cursor: pointer;
-    padding: .2rem;
-}
-
-.crCoinInfoZu:hover {
-    color: var(--text);
-}
-
-.crCoinInfoKopf {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    margin-bottom: .5rem;
-    padding-right: 1.5rem;
-}
-
-.crCoinInfoKopf img {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.crCoinInfoRang {
-    display: block;
-    font-size: .76rem;
-    color: var(--leise);
-}
-
-.crCoinInfoTags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .3rem;
-    margin-bottom: .6rem;
-}
-
-.crCoinInfoTag {
-    font-size: .68rem;
-    padding: .1rem .45rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, .06);
-    color: var(--leise);
-}
-
-.crCoinInfoText {
-    line-height: 1.5;
-    margin-bottom: .3rem;
-    white-space: pre-line;
-}
-
-.crCoinInfoText.gekuerzt {
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.crCoinInfoMehr {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    color: var(--accent);
-    font-size: .8rem;
-    cursor: pointer;
-    margin-bottom: .6rem;
-}
-
-.crCoinInfoLinks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .4rem;
-    margin-bottom: .6rem;
-}
-
-.crCoinInfoLinks a {
-    display: inline-flex;
-    align-items: center;
-    gap: .3rem;
-    font-size: .78rem;
-    padding: .2rem .55rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, .06);
-    color: color-mix(in srgb, var(--text) 70%, var(--muted));
-    text-decoration: none;
-}
-
-.crCoinInfoLinks a:hover {
-    background: var(--accent);
-    color: #fff;
-}
-
-.crCoinInfoFuss {
-    font-size: .72rem;
-    color: var(--leise);
-    margin: .4rem 0 0;
-    line-height: 1.4;
 }
 
 /* ── Einstellungen ──────────────────────────────────────── */
@@ -2826,111 +2346,6 @@ a.crBoerse:hover, a.crBoerse:active {
     border-color: var(--accent);
 }
 
-.crEinzelKarte {
-    margin-top: .5rem;
-    padding: .85rem 1rem 1rem;
-    border-radius: var(--radius);
-    background: var(--panel-soft);
-    border: 1px solid var(--leise);
-}
-
-.crEinzelTitel {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    flex-wrap: wrap;
-}
-
-.crEinzelSymbol {
-    font-size: 1.15rem;
-    font-weight: 600;
-}
-
-.crEinzelPreis {
-    opacity: .75;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Die Herkunft der Zahlen, nicht als Fussnote. Eine auf Bitunix gemessene
-   Note steht neben einer Rangliste aus Binance-Daten — wer das übersieht,
-   vergleicht zwei verschiedene Messungen. */
-.crEinzelQuelle {
-    font-size: .72rem;
-    padding: .1rem .5rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, .07);
-    opacity: .8;
-}
-
-.crEinzelQuelle.fremd {
-    background: rgba(255, 193, 7, .15);
-    color: #ffc107;
-    opacity: 1;
-}
-
-.crEinzelVermerk {
-    margin: .5rem 0 0;
-    font-size: .78rem;
-    opacity: .8;
-}
-
-.crEinzelVermerk.leise {
-    opacity: .55;
-}
-
-.crEinzelVermerk.warn {
-    color: #ffc107;
-    opacity: 1;
-}
-
-.crEinzelLeer {
-    display: flex;
-    align-items: flex-start;
-    gap: .6rem;
-    margin-top: .75rem;
-    font-size: .85rem;
-}
-
-.crEinzelLeer i {
-    font-size: 1.3rem;
-    opacity: .5;
-}
-
-.crEinzelBand {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr));
-    gap: .5rem;
-    margin: .85rem 0;
-}
-
-.crEinzelWert {
-    text-align: center;
-    padding: .4rem .25rem;
-    border-radius: var(--radius);
-    background: rgba(255, 255, 255, .04);
-}
-
-.crEinzelZahl {
-    font-size: 1.05rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-}
-
-.crEinzelTakt {
-    opacity: .6;
-}
-
-.crEinzelListung {
-    display: flex;
-    align-items: center;
-    gap: .35rem;
-    flex-wrap: wrap;
-    margin: .85rem 0 0;
-    font-size: .78rem;
-    opacity: .85;
-}
-
-
 @media (max-width: 767px) {
     /* Auf dem Telefon passen Feld und beide Knöpfe nicht in eine Zeile —
        ohne diese Regel bricht der Schliessen-Knopf allein um und steht
@@ -2975,7 +2390,4 @@ a.crBoerse:hover, a.crBoerse:active {
     }
 }
 
-/* ── Tiefensuche ── */
-.crTiefe { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: .75rem; }
-.crTiefeHinweis { font-size: .8rem; color: var(--muted); }
 </style>
