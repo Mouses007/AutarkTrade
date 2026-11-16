@@ -1402,7 +1402,7 @@
       "erklaerung": {
         "browser": "The browser's built-in recognition: text appears while you speak, free of charge. Chrome and Edge send the audio to Google or Microsoft for it. Brave, Chromium, Vivaldi, Opera and Firefox cannot do this.",
         "openai": "The browser records, your server sends the recording to OpenAI with your OpenAI key. Works in every browser. Cost: about USD 0.003 per minute (gpt-4o-mini-transcribe), booked as “sprache” in the AI usage. The text appears after you switch the microphone off.",
-        "eigen": "The browser records, your server sends the recording to a Whisper service in your network (OpenAI-compatible, e.g. Speaches/faster-whisper-server, or whisper.cpp with --inference-path /v1/audio/transcriptions). Free, the audio never leaves your network."
+        "eigen": "The browser records, your server sends the recording to a Whisper service in your network (OpenAI-compatible, e.g. Speaches/faster-whisper-server, or whisper.cpp with --inference-path /v1/audio/transcriptions). Free, the audio never leaves your network. On the NAS, Speaches runs alongside via the compose file: address http://speaches:8000/v1, model Systran/faster-whisper-small."
       },
       "keinSchluessel": "No OpenAI key is stored yet. Enter it above under the providers at OpenAI.",
       "url": "Service address",

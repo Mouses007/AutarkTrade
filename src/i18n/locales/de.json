@@ -1402,7 +1402,7 @@
       "erklaerung": {
         "browser": "Die eingebaute Erkennung des Browsers: Text erscheint schon beim Sprechen, kostet nichts. Chrome und Edge schicken den Ton dafür an Google bzw. Microsoft. Brave, Chromium, Vivaldi, Opera und Firefox können das nicht.",
         "openai": "Der Browser nimmt auf, dein Server schickt die Aufnahme mit deinem OpenAI-Schlüssel an OpenAI. Geht in jedem Browser. Kosten: etwa 0,3 Rappen pro Minute (gpt-4o-mini-transcribe), im KI-Verbrauch als „sprache“ gebucht. Der Text erscheint nach dem Ausschalten des Mikrofons.",
-        "eigen": "Der Browser nimmt auf, dein Server schickt die Aufnahme an einen Whisper-Dienst in deinem Netz (OpenAI-kompatibel, z. B. Speaches/faster-whisper-server, oder whisper.cpp mit --inference-path /v1/audio/transcriptions). Gratis, der Ton verlässt dein Netz nicht."
+        "eigen": "Der Browser nimmt auf, dein Server schickt die Aufnahme an einen Whisper-Dienst in deinem Netz (OpenAI-kompatibel, z. B. Speaches/faster-whisper-server, oder whisper.cpp mit --inference-path /v1/audio/transcriptions). Gratis, der Ton verlässt dein Netz nicht. Auf der NAS läuft Speaches mit der Compose-Datei mit: Adresse http://speaches:8000/v1, Modell Systran/faster-whisper-small."
       },
       "keinSchluessel": "Es ist noch kein OpenAI-Schlüssel hinterlegt. Trag ihn oben bei den Anbietern unter OpenAI ein.",
       "url": "Adresse des Dienstes",
