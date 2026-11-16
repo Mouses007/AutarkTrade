@@ -7233,7 +7233,7 @@
       "k_lDopen": "D-Open",
       "s_lVwap": "Namen der VWAP-Linien am rechten Rand",
       "s_lEma": "Namen der EMA-Linien am rechten Rand",
-      "s_lPoc": "Schild an den naked POCs",
+      "s_lPoc": "Schild an den naked POCs: Perioden-POC (z. B. „POC D“) und Docht-POC einzelner Kerzen („Candle POC“, gestrichelt)",
       "s_lDopen": "Schild am Daily Open",
       "zu": "Einklappen",
       "auf": "Ausklappen",

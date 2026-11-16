@@ -31,7 +31,7 @@ const UNTER = {
         { g: 'chart.vvBox.g_vwap', schalter: [VV('tag', ['showDaily']), VV('woche', ['showWeekly']), VV('monat', ['showMonthly']), VV('swing', ['showSwingHi', 'showSwingLo']), VV('athAtl', ['showATH', 'showATL'])] },
         { g: 'chart.vvBox.g_ema', schalter: [VV('ema', ['showEma21', 'showEma50', 'showEma200']), VV('htf', ['showMtfE1', 'showMtfE2', 'showMtfE3'], { alle: false, ein: ['showMtfE1', 'showMtfE2'] })] },
         { g: 'chart.vvBox.g_marken', schalter: [VV('fib', ['showFib']), VV('pocPer', ['showPocPer']), VV('pocC', ['showPocC']), VV('dopen', ['showDOpen'])] },
-        { g: 'chart.vvBox.g_labels', schalter: [VV('lVwap', ['labelVWAPS']), VV('lEma', ['labelEMAS']), VV('lPoc', ['pocPerLbl']), VV('lDopen', ['dOpenLbl'])] },
+        { g: 'chart.vvBox.g_labels', schalter: [VV('lVwap', ['labelVWAPS']), VV('lEma', ['labelEMAS']), VV('lPoc', ['pocPerLbl', 'pocCLabel']), VV('lDopen', ['dOpenLbl'])] },
     ],
     rsi: [{ g: null, schalter: [IB('ma', ['maAn'])] }],
     lsob: [{ g: null, schalter: [IB('long', ['sigLong']), IB('short', ['sigShort']), IB('verworfen', ['sigVerworfen'])] }],
