@@ -154,6 +154,9 @@ p('https mit Standard-Erkennung: geht', spracheingabeGrund() === null)
     antwort = { ok: false, status: 400, json: async () => ({ fehler: 'fehlt_schluessel' }) }
     s.schalte(); await warte(); s.schalte(); await warte()
     p('Serverfehler mit Code', s.fehler.value === 'server_fehlt_schluessel', s.fehler.value)
+    antwort = { ok: false, status: 502, json: async () => ({ fehler: 'modellFehlt', grund: 'Model x is not installed locally.' }) }
+    s.schalte(); await warte(); s.schalte(); await warte()
+    p('Grund des Dienstes kommt mit', s.fehler.value === 'server_modellFehlt' && s.fehlerGrund.value === 'Model x is not installed locally.')
 
     // Ausschalten, bevor das Mikrofon freigegeben ist: Mikrofon sofort wieder frei, nichts geschickt
     let gib
@@ -168,6 +171,7 @@ p('https mit Standard-Erkennung: geht', spracheingabeGrund() === null)
     const te = (k) => k !== 'kiCoach.mikroServer.gibtsNicht'
     p('Fehlertext network → Hinweis auf den Server-Weg', mikroFehlerText('network', t, te) === 'kiCoach.mikroNetz')
     p('Fehlertext bekannter Servercode', mikroFehlerText('server_limit', t, te) === 'kiCoach.mikroServer.limit')
+    p('Fehlertext mit Grund des Dienstes', mikroFehlerText('server_modellFehlt', t, te, 'nicht da') === 'kiCoach.mikroServer.modellFehlt kiCoach.mikroDienstSagt{"grund":"nicht da"}')
     p('Fehlertext unbekannter Servercode', mikroFehlerText('server_gibtsNicht', t, te).startsWith('kiCoach.mikroServer.unbekannt'))
     delete globalThis.MediaRecorder
 }

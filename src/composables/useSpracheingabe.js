@@ -64,8 +64,14 @@ export function mikroTitelText(s, t) {
 }
 
 /** Fehlermeldung unter dem Chat, '' = keine. */
-export function mikroFehlerText(code, t, te) {
+export function mikroFehlerText(code, t, te, grund = '') {
     if (!code) return ''
+    const text = mikroFehlerKern(code, t, te)
+    // Was der Dienst selbst sagt (z. B. „Model … is not installed locally"), hinten an.
+    return grund ? `${text} ${t('kiCoach.mikroDienstSagt', { grund })}` : text
+}
+
+function mikroFehlerKern(code, t, te) {
     if (code === 'verweigert') return t('kiCoach.mikroVerweigert')
     // Brave & Co.: Schnittstelle da, Dienst nicht erreichbar → auf den Server-Weg zeigen
     if (code === 'network') return t('kiCoach.mikroNetz')
@@ -90,6 +96,7 @@ export function useSpracheingabe({ beiText, sprache = () => 'de-DE', art = einge
     const hoert = ref(false)
     const arbeitet = ref(false)  // Server-Weg: Aufnahme ist unterwegs zur Umschrift
     const fehler = ref('')       // '' | 'verweigert' | 'keinMikrofon' | 'server_<code>' | sonstiger Fehlercode des Browsers
+    const fehlerGrund = ref('')  // Server-Weg: was der Umschrift-Dienst selbst als Grund nennt
     let erkenner = null
 
     /**
@@ -161,6 +168,7 @@ export function useSpracheingabe({ beiText, sprache = () => 'de-DE', art = einge
         const meine = ++gen
         hoert.value = true
         fehler.value = ''
+        fehlerGrund.value = ''
         let strom
         try {
             strom = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -234,7 +242,7 @@ export function useSpracheingabe({ beiText, sprache = () => 'de-DE', art = einge
             })
             const j = await r.json().catch(() => ({}))
             if (meine !== gen) return
-            if (!r.ok) { fehler.value = `server_${j.fehler || r.status}`; return }
+            if (!r.ok) { fehler.value = `server_${j.fehler || r.status}`; fehlerGrund.value = String(j.grund || ''); return }
             const text = String(j.text || '').trim()
             if (text) beiText?.(text)
         } catch (e) {
@@ -271,5 +279,5 @@ export function useSpracheingabe({ beiText, sprache = () => 'de-DE', art = einge
     const schalte = () => (hoert.value ? pause() : start())
     onBeforeUnmount(stopp)
 
-    return { grund, hoert, arbeitet, fehler, start, stopp, schalte }
+    return { grund, hoert, arbeitet, fehler, fehlerGrund, start, stopp, schalte }
 }

@@ -9,7 +9,7 @@
  */
 import {
     normArt, spracheBasis, pruefeSpracheEinstellung, zielFuer, dateiName, sprachCode,
-    kostenUsd, textAusAntwort, OPENAI_BASIS, STANDARD_MODELL,
+    kostenUsd, textAusAntwort, OPENAI_BASIS, STANDARD_MODELL, ordne404, grundAusAntwort, modelleAus,
 } from './sprache-kern.js'
 import { ZIEL_SETTINGS, BEHALTEN_BEIM_IMPORT } from './geheimnisse.js'
 import { VALID_SETTINGS_KEYS } from './api-routes.js'
@@ -75,6 +75,15 @@ p('Antwort: kaputt → leer', textAusAntwort('{kaputt') === '' && textAusAntwort
 p('Adresse ist ein Ziel (nur eigene Route, Backup behält sie)', ZIEL_SETTINGS.includes('spracheUrl') && BEHALTEN_BEIM_IMPORT.includes('spracheUrl'))
 p('nicht über die allgemeine Einstellungs-Route schreibbar',
     !VALID_SETTINGS_KEYS.includes('spracheUrl') && !VALID_SETTINGS_KEYS.includes('spracheArt'))
+
+// 404 der Umschrift: Speaches meldet so auch ein fehlendes MODELL (16.11.2026 auf der NAS)
+p('404 mit Modell-Text → modellFehlt', ordne404('{"detail":"Model \'Systran/faster-whisper-small\' is not installed locally."}') === 'modellFehlt')
+p('404 ohne Modell-Text → adresse', ordne404('{"detail":"Not Found"}') === 'adresse' && ordne404('') === 'adresse')
+p('Grund aus detail', grundAusAntwort('{"detail":"Model x is not installed locally."}') === 'Model x is not installed locally.')
+p('Grund aus OpenAI-Fehler', grundAusAntwort('{"error":{"message":"Invalid model"}}') === 'Invalid model')
+p('Grund: Text ohne Zeilenumbrüche, gekürzt', grundAusAntwort('a\n\nb') === 'a b' && grundAusAntwort('x'.repeat(500)).length === 240)
+p('Modelle: Speaches/OpenAI-Form', JSON.stringify(modelleAus({ data: [{ id: 'Systran/faster-whisper-small' }, { id: 'whisper-1' }] })) === '["Systran/faster-whisper-small","whisper-1"]')
+p('Modelle: Unsinn → leer', modelleAus(null).length === 0 && modelleAus({ data: [{}, 3] }).length === 0)
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)
 process.exit(fehler === 0 ? 0 : 1)

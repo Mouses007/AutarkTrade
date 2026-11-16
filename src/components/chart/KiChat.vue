@@ -58,7 +58,7 @@ const sprache = useSpracheingabe({
     beiText: (text) => { eingabe.value = [vorAufnahme, text].filter(Boolean).join(' ') },
 })
 const mikroTitel = () => mikroTitelText(sprache, t)
-const mikroFehler = () => mikroFehlerText(sprache.fehler.value, t, te)
+const mikroFehler = () => mikroFehlerText(sprache.fehler.value, t, te, sprache.fehlerGrund.value)
 function schalteMikro() {
     if (sprache.grund.value) return
     if (!sprache.hoert.value) vorAufnahme = eingabe.value.trim()

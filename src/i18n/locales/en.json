@@ -1417,7 +1417,16 @@
         "url": "The address is invalid or not allowed.",
         "urlFehlt": "Your own service needs an address.",
         "modell": "The model name contains invalid characters."
-      }
+      },
+      "pruefen": "Check service",
+      "prueftGerade": "Checking …",
+      "erreicht": "Service reached.",
+      "modellDa": "Model {modell} is installed. Voice input is ready.",
+      "modellFehlt": "Model {modell} is not installed in the service.",
+      "modellLaden": "Load {modell} now",
+      "laedtModell": "Loading model … (may take a few minutes)",
+      "modellGeladen": "Model {modell} loaded.",
+      "vorhanden": "Available:"
     }
   },
   "setup": {
@@ -2182,8 +2191,10 @@
       "format": "The server does not know this recording format.",
       "belegt": "Two transcriptions are already running. Wait a moment.",
       "leer": "The recording was empty.",
-      "unbekannt": "Transcription failed ({grund})."
-    }
+      "unbekannt": "Transcription failed ({grund}).",
+      "modellFehlt": "The model is not installed in the Whisper service. Settings › AI › Access › Voice input: “Check service”, then “load”."
+    },
+    "mikroDienstSagt": "The service says: {grund}"
   },
   "playbook": {
     "tradeEvaluations": "Trade Evaluations and Notes",

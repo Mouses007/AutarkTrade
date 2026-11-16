@@ -125,3 +125,33 @@ export function textAusAntwort(antwort) {
     if (antwort && typeof antwort.text === 'string') return antwort.text.trim().slice(0, 20000)
     return ''
 }
+
+/**
+ * Ein 404 des Dienstes einordnen. Speaches antwortet auch dann mit 404, wenn das
+ * MODELL nicht installiert ist (16.11.2026 auf der NAS: PRELOAD noch nicht fertig) —
+ * dann ist die Adresse richtig, und „Adresse prüfen" schickte den Nutzer in die Irre.
+ */
+export function ordne404(roh) {
+    const s = String(roh || '').toLowerCase()
+    return /model|modell/.test(s) ? 'modellFehlt' : 'adresse'
+}
+
+/** Kurzer, lesbarer Grund aus der Fehlerantwort eines Dienstes (`detail`, `error.message`, Text). */
+export function grundAusAntwort(roh) {
+    let s = String(roh || '').trim()
+    try {
+        const j = JSON.parse(s)
+        s = typeof j?.detail === 'string' ? j.detail
+            : typeof j?.error?.message === 'string' ? j.error.message
+                : typeof j?.error === 'string' ? j.error
+                    : typeof j?.message === 'string' ? j.message : s
+    } catch { /* kein JSON */ }
+    // nur eine Zeile, ohne Steuerzeichen, gekürzt — landet so in der Oberfläche
+    return s.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240)
+}
+
+/** Antwort von GET /v1/models → Liste der Modell-IDs (OpenAI- und Speaches-Form). */
+export function modelleAus(antwort) {
+    const liste = Array.isArray(antwort?.data) ? antwort.data : Array.isArray(antwort) ? antwort : []
+    return liste.map((m) => (typeof m === 'string' ? m : m?.id)).filter((x) => typeof x === 'string' && x).slice(0, 500)
+}

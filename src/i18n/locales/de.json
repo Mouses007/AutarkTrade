@@ -1417,7 +1417,16 @@
         "url": "Die Adresse ist ungültig oder nicht erlaubt.",
         "urlFehlt": "Für den eigenen Dienst braucht es eine Adresse.",
         "modell": "Der Modellname enthält unerlaubte Zeichen."
-      }
+      },
+      "pruefen": "Dienst prüfen",
+      "prueftGerade": "Prüfe …",
+      "erreicht": "Dienst erreicht.",
+      "modellDa": "Modell {modell} ist installiert. Die Spracheingabe ist bereit.",
+      "modellFehlt": "Modell {modell} ist im Dienst nicht installiert.",
+      "modellLaden": "{modell} jetzt laden",
+      "laedtModell": "Lade Modell … (kann einige Minuten dauern)",
+      "modellGeladen": "Modell {modell} geladen.",
+      "vorhanden": "Vorhanden:"
     }
   },
   "setup": {
@@ -2182,8 +2191,10 @@
       "format": "Dieses Aufnahmeformat kennt der Server nicht.",
       "belegt": "Es laufen schon zwei Umschriften. Kurz warten.",
       "leer": "Die Aufnahme war leer.",
-      "unbekannt": "Umschrift fehlgeschlagen ({grund})."
-    }
+      "unbekannt": "Umschrift fehlgeschlagen ({grund}).",
+      "modellFehlt": "Das Modell ist im Whisper-Dienst nicht installiert. Unter Einstellungen › KI › Zugang › Spracheingabe: „Dienst prüfen“, dann „laden“."
+    },
+    "mikroDienstSagt": "Der Dienst meldet: {grund}"
   },
   "playbook": {
     "tradeEvaluations": "Trade-Bewertungen und Notizen",

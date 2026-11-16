@@ -4,6 +4,8 @@
  *   GET  /api/sprache/einstellungen   → {art, url, modell, openaiSchluessel: bool, vorgabe}
  *   PUT  /api/sprache/einstellungen   {art, url, modell}
  *   POST /api/sprache/umschrift?sprache=de&sekunden=12  Rohdaten der Aufnahme → {text}
+ *   POST /api/sprache/pruefen      {art, url, modell} → erreicht? Modell da? (kostenlos)
+ *   POST /api/sprache/modell-laden {url, modell} → eigener Dienst lädt das Modell (Speaches)
  *
  * Die Adresse eines eigenen Dienstes ist ein Ziel im Sinn von `ZIEL_SETTINGS`
  * (`geheimnisse.js`): sie bestimmt, wohin der Ton geht. Deshalb wird sie nur
@@ -18,7 +20,7 @@ import { merkeVerbrauch, FUNKTIONEN } from './ai-usage.js'
 import { logWarn } from './logger.js'
 import {
     pruefeSpracheEinstellung, zielFuer, dateiName, sprachCode, kostenUsd, textAusAntwort,
-    normArt, MAX_BYTES, STANDARD_MODELL,
+    normArt, MAX_BYTES, STANDARD_MODELL, ordne404, grundAusAntwort, modelleAus, spracheBasis, gueltigesModell,
 } from './sprache-kern.js'
 
 const ZEIT_MS = 120_000
@@ -70,6 +72,78 @@ export function setupSpracheRoutes(app) {
         }
     })
 
+    /*
+     * Dienst prüfen — mit den Werten des Formulars, damit man vor dem Speichern
+     * testen kann. Kostet nichts: GET /models (bei OpenAI gratis), kein Ton.
+     * Die Adresse geht durch dieselbe Prüfung wie beim Speichern.
+     */
+    async function zielAusFormular(body) {
+        const art = normArt(body?.art)
+        const modell = String(body?.modell || '').trim()
+        if (!gueltigesModell(modell)) return { fehler: 'modell' }
+        if (art === 'eigen') {
+            const basis = spracheBasis(body?.url)
+            if (!basis) return { fehler: 'urlFehlt' }
+            try { await pruefeKiEndpunkt(basis) } catch (e) { return { fehler: 'url', grund: e.message } }
+            return { art, basis, modell: modell || STANDARD_MODELL.eigen, schluessel: '' }
+        }
+        if (art === 'openai') {
+            const st = await ladeStand()
+            if (!st.openaiSchluessel) return { fehler: 'fehlt_schluessel' }
+            return { art, basis: 'https://api.openai.com/v1', modell: modell || STANDARD_MODELL.openai, schluessel: st.openaiSchluessel }
+        }
+        return { fehler: 'fehlt_browser' }
+    }
+
+    app.post('/api/sprache/pruefen', async (req, res) => {
+        let ziel
+        try { ziel = await zielAusFormular(req.body) } catch (e) { return res.status(500).json({ error: e.message }) }
+        if (ziel.fehler) return res.json({ ok: false, fehler: ziel.fehler, grund: ziel.grund || '' })
+        let antwort
+        try {
+            antwort = await fetch(`${ziel.basis}/models`, {
+                headers: ziel.schluessel ? { Authorization: `Bearer ${ziel.schluessel}` } : {},
+                signal: AbortSignal.timeout(15_000),
+            })
+        } catch (e) {
+            return res.json({ ok: false, fehler: e.name === 'TimeoutError' ? 'zeit' : 'nichtErreichbar', grund: e.cause?.code || e.message })
+        }
+        const roh = await antwort.text().catch(() => '')
+        if (!antwort.ok) {
+            const fehler = antwort.status === 401 || antwort.status === 403 ? 'schluesselAbgelehnt' : antwort.status === 404 ? 'adresse' : 'dienst'
+            return res.json({ ok: false, fehler, status: antwort.status, grund: grundAusAntwort(roh) })
+        }
+        let modelle = []
+        try { modelle = modelleAus(JSON.parse(roh)) } catch { /* keine Liste */ }
+        // OpenAI listet hunderte Modelle; gezeigt werden nur Umschrift-Modelle.
+        const gezeigt = ziel.art === 'openai' ? modelle.filter((m) => /whisper|transcribe/.test(m)) : modelle
+        res.json({ ok: true, art: ziel.art, modell: ziel.modell, modellDa: modelle.includes(ziel.modell), modelle: gezeigt.slice(0, 50) })
+    })
+
+    // Nur für den eigenen Dienst (Speaches: POST /v1/models/{id}). Dauert je nach
+    // Modell und Leitung Minuten; eine Ladung zur Zeit.
+    let laedt = false
+    app.post('/api/sprache/modell-laden', async (req, res) => {
+        let ziel
+        try { ziel = await zielAusFormular({ ...req.body, art: 'eigen' }) } catch (e) { return res.status(500).json({ error: e.message }) }
+        if (ziel.fehler) return res.json({ ok: false, fehler: ziel.fehler, grund: ziel.grund || '' })
+        if (laedt) return res.json({ ok: false, fehler: 'belegt' })
+        laedt = true
+        try {
+            const antwort = await fetch(`${ziel.basis}/models/${ziel.modell.split('/').map(encodeURIComponent).join('/')}`, {
+                method: 'POST',
+                signal: AbortSignal.timeout(15 * 60_000),
+            })
+            const roh = await antwort.text().catch(() => '')
+            if (!antwort.ok) return res.json({ ok: false, fehler: 'dienst', status: antwort.status, grund: grundAusAntwort(roh) })
+            res.json({ ok: true, modell: ziel.modell, grund: grundAusAntwort(roh) })
+        } catch (e) {
+            res.json({ ok: false, fehler: e.name === 'TimeoutError' ? 'zeit' : 'nichtErreichbar', grund: e.cause?.code || e.message })
+        } finally {
+            laedt = false
+        }
+    })
+
     // Rohdaten, egal welcher Typ: der Browser schickt, was sein MediaRecorder kann.
     const rohBody = express.raw({ type: () => true, limit: MAX_BYTES })
     app.post('/api/sprache/umschrift', (req, res, next) => {
@@ -115,8 +189,8 @@ export function setupSpracheRoutes(app) {
                 logWarn('sprache', `Umschrift ${ziel.anbieter} HTTP ${antwort.status}: ${roh.slice(0, 300)}`)
                 const fehler = antwort.status === 401 || antwort.status === 403 ? 'schluesselAbgelehnt'
                     : antwort.status === 429 ? 'limit'
-                        : antwort.status === 404 ? 'adresse' : 'dienst'
-                return res.status(502).json({ fehler, status: antwort.status })
+                        : antwort.status === 404 ? ordne404(roh) : 'dienst'
+                return res.status(502).json({ fehler, status: antwort.status, grund: grundAusAntwort(roh) })
             }
             const text = textAusAntwort(roh)
             if (ziel.anbieter === 'openai') {

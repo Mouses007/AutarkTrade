@@ -56,7 +56,7 @@ const sprache = useSpracheingabe({
     beiText: (text) => { eingabe.value = [vorAufnahme, text].filter(Boolean).join(' ') },
 })
 const mikroTitel = computed(() => mikroTitelText(sprache, t))
-const mikroFehler = computed(() => mikroFehlerText(sprache.fehler.value, t, te))
+const mikroFehler = computed(() => mikroFehlerText(sprache.fehler.value, t, te, sprache.fehlerGrund.value))
 // Wohin der Ton geht, hängt am gewählten Weg (Einstellungen › KI › Zugang › Spracheingabe).
 const mikroHinweisText = computed(() => {
     const a = appEinstellungen.value?.spracheArt
