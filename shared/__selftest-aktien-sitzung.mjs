@@ -31,6 +31,12 @@ ok(feiertage(2023).has('2023-01-02'), 'Neujahr am Sonntag → Montag')
 ok(feiertage(2022).has('2022-06-20') && feiertage(2021).size === 9, 'Juneteenth erst seit 2022')
 ok(istHandelstag('2026-11-13', 5) && !istHandelstag('2026-11-14', 6) && !istHandelstag('2026-11-26', 4), 'Handelstag, Samstag, Thanksgiving')
 
+// ── Ausserplanmässige Schliessungen ──
+ok(feiertage(2025).has('2025-01-09') && feiertage(2025).size === 11, 'Staatstrauer 9.1.2025 zählt als Feiertag')
+gleich(sitzungVon(utc(2025, 0, 9, 15, 0)), 'feiertag', '9.1.2025 10:00: geschlossen')
+gleich(sitzungVon(utc(2025, 0, 10, 15, 0)), 'regulaer', 'der Tag danach ist ein Handelstag')
+ok(feiertage(2012).has('2012-10-29') && feiertage(2012).has('2012-10-30'), 'Hurrikan Sandy: zwei Tage')
+
 // ── Sitzungen ──
 gleich(sitzungVon(utc(2026, 10, 13, 15, 0)), 'regulaer', 'Freitag 10:00')
 gleich(sitzungVon(utc(2026, 10, 13, 14, 29)), 'vor', '09:29 ist noch vorbörslich')

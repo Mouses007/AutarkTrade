@@ -164,7 +164,7 @@ export class AktienEbene {
         ctx.font = SCHRIFT
         ctx.textBaseline = 'middle'
         const y = groesse.height - 12
-        let belegtBis = -Infinity
+        const schilder = []
         for (const m of this.marken()) {
             if (m.xLinie == null || m.xLinie < -1) continue
             const draussen = m.xLinie > groesse.width - 4
@@ -175,8 +175,14 @@ export class AktienEbene {
             let x = draussen ? groesse.width - b - 4 : Math.round(m.xLinie) + 4
             // Passt das Schild rechts der Linie nicht mehr ins Bild, steht es links davon.
             if (!draussen && x + b > groesse.width - 2) x = Math.round(m.xLinie) - b - 4
-            if (x < belegtBis + 4) continue
-            belegtBis = x + b
+            schilder.push({ m, text, x, b })
+        }
+        // Wird es eng, gewinnt der kommende Termin, danach der jeweils jüngere.
+        schilder.sort((p, q) => (q.m.kommend - p.m.kommend) || (q.m.zeit - p.m.zeit))
+        const belegt = []
+        for (const { m, text, x, b } of schilder) {
+            if (belegt.some(([von, bis]) => x < bis + 4 && x + b > von - 4)) continue
+            belegt.push([x, x + b])
             ctx.globalAlpha = 0.9
             ctx.fillStyle = this.farben.grund
             ctx.fillRect(x, y - 8, b, 16)

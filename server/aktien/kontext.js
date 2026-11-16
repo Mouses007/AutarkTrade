@@ -27,6 +27,22 @@ const KONTEXT_MS = 10 * 60_000
  * zehn Minuten lang als Coin gerechnet werden.
  */
 const KEIN_TITEL_MS = 30_000
+// Eine lückenhafte Auskunft (Abruf gescheitert, gebremst) nur kurz merken: sonst steht nach einem
+// einzelnen Aussetzer der Kursquelle zehn Minuten «unbekannt» im Chart, und die Simulation rechnet
+// so lange ohne Splits und Zahlentermine. Die Kursquelle selbst bremsen `ladeSplits`/`ladeTermine`.
+const KONTEXT_LUECKE_MS = 60_000
+// Gründe, die sich von allein nicht ändern — erneut zu fragen bringt nichts.
+const BLEIBEND = new Set(['quelleAus', 'keinKursSymbol', 'nichtGefunden'])
+
+/**
+ * Wie lange eine Auskunft gilt. Rein.
+ * @param {object|null} wert   Ergebnis von `baue` (null = kein Aktien-Future)
+ */
+export function kontextHaltbarMs(wert) {
+    if (!wert) return KEIN_TITEL_MS
+    const luecke = (was, grund) => was == null && !BLEIBEND.has(grund)
+    return luecke(wert.splits, wert.splitsGrund) || luecke(wert.termine, wert.termineGrund) ? KONTEXT_LUECKE_MS : KONTEXT_MS
+}
 const SPLITS_MS = 12 * 60 * 60_000
 /** So oft höchstens darf ein Aufrufer die Splits eines Symbols am Speicher vorbei holen (`splitsFrisch`). */
 const FRISCH_MS = 10 * 60_000
@@ -203,7 +219,7 @@ export async function aktienKontext(symbol, { splitsFrisch = false, market, boer
     const schluessel = `${wo}|${sym}`
     const c = kontextCache.get(schluessel)
     const frisch = splitsFrisch && !(Date.now() - (frischGeholt.get(sym) || 0) < FRISCH_MS)
-    if (c && !frisch && Date.now() - c.zeit < (c.wert ? KONTEXT_MS : KEIN_TITEL_MS)) return c.wert
+    if (c && !frisch && Date.now() - c.zeit < kontextHaltbarMs(c.wert)) return c.wert
     if (frisch) {
         frischGeholt.set(sym, Date.now())
         if (c?.wert?.kursSymbol) splitsCache.delete(c.wert.kursSymbol)

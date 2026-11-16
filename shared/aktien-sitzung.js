@@ -29,7 +29,9 @@
  *   nach       13:00 – 17:00   (die Spätsitzungen der Börsen enden um 17:00)
  *   nacht      17:00 – 04:00   (danach ist bis 20:00 keine US-Börse offen)
  *
- * Nicht abgebildet: ausserplanmässige Schliessungen (Staatstrauer, Unwetter).
+ * Ausserplanmässige Schliessungen (Staatstrauer, Sturm) lassen sich nicht
+ * errechnen — die bekannten stehen in `SONDERSCHLIESSUNGEN` und zählen als
+ * Feiertag. Eine neue wird dort von Hand nachgetragen.
  *
  * Rein — kein Netz, keine Datenbank; läuft im Browser und auf dem Server.
  */
@@ -133,6 +135,16 @@ function begangen(jahr, monat, t, { neujahr = false } = {}) {
     return d
 }
 
+/**
+ * Ganztägige Schliessungen ausser der Reihe (NYSE und Nasdaq), von Hand
+ * gepflegt. Kommt eine dazu, hier eintragen — die Rechnung kann sie nicht kennen.
+ */
+export const SONDERSCHLIESSUNGEN = [
+    '2012-10-29', '2012-10-30',   // Hurrikan Sandy
+    '2018-12-05',                 // Staatstrauer George H. W. Bush
+    '2025-01-09',                 // Staatstrauer Jimmy Carter
+]
+
 const feiertageJeJahr = new Map()
 
 /** Börsenfeiertage eines Jahres als Menge von `YYYY-MM-DD`. */
@@ -152,6 +164,7 @@ export function feiertage(jahr) {
             nterWochentag(jahr, 11, 4, 4),         // Thanksgiving
             begangen(jahr, 12, 25),
         ].filter(Boolean).map(alsDatum))
+        for (const d of SONDERSCHLIESSUNGEN) if (d.startsWith(`${jahr}-`)) menge.add(d)
         feiertageJeJahr.set(jahr, menge)
     }
     return menge

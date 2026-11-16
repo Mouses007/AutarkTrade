@@ -1002,12 +1002,13 @@ const overlayAn = (name) => overlayAnFuer(props.panel, name) && !(istNurKrypto(n
 
 // ── Aktien-Futures: Börsensitzungen und Quartalszahlen ───────────────────
 /*
- * Nur im Chart-Arbeitsplatz und nur, wenn das Symbol ein Aktien-Future ist
+ * Im Chart-Arbeitsplatz und in den Strategie-Charts (dort ohne Schalter, beide
+ * Ebenen an) — und nur, wenn das Symbol ein Aktien-Future ist
  * (`aktienKontext.js` fragt im Krypto-Markt gar nicht erst). Bei einem Coin
  * entsteht die Ebene nie — der Chart ist dann derselbe wie vor den Aktien.
  * Unbekannte Termine zeichnen nichts; der Grund steht in der Legende.
  */
-const aktie = computed(() => (props.ansicht ? null : aktieVon(props.panel)))
+const aktie = computed(() => aktieVon(props.panel))
 function aktienNeu() {
     const a = aktie.value
     if (!a || !chart.value || !kerzenSerie.value) {
@@ -1036,7 +1037,7 @@ function aktienNeu() {
     const grund = zahlenAn ? termineGrundSchluessel(a) : null
     if (grund || marktHinweise.value.zahlen) hinweis('zahlen', grund ? t('chart.aktien.termineUnbekannt', { grund: t(grund) }) : null)
 }
-watch(() => [props.panel.symbol, props.panel.markt], () => { if (!props.ansicht) ladeAktienKontext(props.panel.symbol) }, { immediate: true })
+watch(() => [props.panel.symbol, props.panel.markt], () => { ladeAktienKontext(props.panel.symbol) }, { immediate: true })
 // Der Aktien-Kontext kommt nach dem Symbol: dann auch die Krypto-Ebenen neu bewerten (sie ruhen bei Aktien).
 watch(aktie, () => { aktienNeu(); ladeLiquidationen(); ladeHebelzonen() })
 

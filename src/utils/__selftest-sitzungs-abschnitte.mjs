@@ -90,6 +90,12 @@ console.log('\nUS-Feiertag')
     check('… ab Do 01:00 UTC (Mi 20:00 New York)', zu[0] && zeiten[zu[0].von] === Date.UTC(2026, 10, 26, 1))
     check('Mittwoch davor regulär frei', artDerKerze(Date.UTC(2026, 10, 25, 15), 15 * MIN) === null)
     check('Freitag danach regulär frei', artDerKerze(Date.UTC(2026, 10, 27, 15), 15 * MIN) === null)
+    // Der Freitag nach Thanksgiving ist verkürzt: Schluss 13:00 New York = 18:00 UTC
+    check('verkürzter Tag: 17:45 UTC noch frei', artDerKerze(Date.UTC(2026, 10, 27, 17, 45), 15 * MIN) === null)
+    check('verkürzter Tag: ab 18:00 UTC nachbörslich', artDerKerze(Date.UTC(2026, 10, 27, 18), 15 * MIN) === 'rand')
+    check('verkürzter Tag: 4h-Kerze ab 16:00 UTC berührt die Sitzung', artDerKerze(Date.UTC(2026, 10, 27, 16), 4 * H) === null)
+    check('verkürzter Tag: 1h-Kerze 20:00 UTC ist Rand, am Mittwoch davor frei',
+        artDerKerze(Date.UTC(2026, 10, 27, 20), H) === 'rand' && artDerKerze(Date.UTC(2026, 10, 25, 20), H) === null)
     // Montags-Feiertag hängt am Wochenende: Labor Day, Mo 7.9.2026 — eine Fläche von Fr 20:00 bis Mo 20:00
     const lang = reihe(Date.UTC(2026, 8, 4, 12), Date.UTC(2026, 8, 8, 12), H)
     const zuLang = sitzungsAbschnitte(lang, H).filter((x) => x.art === 'zu')
