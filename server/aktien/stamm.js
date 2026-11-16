@@ -60,7 +60,8 @@ async function rohBitget() {
 }
 
 async function rohBitunix() {
-    return (await holeBitunixPaare()).map((p) => ({ symbol: p.symbol, base: p.basis, quote: 'USDT', maxLeverage: p.maxLeverage, launchTime: p.launchTime }))
+    // Auch Paare, die Bitunix nur in der Oberfläche führt: handelbar sind sie (z. B. CBRSUSDT).
+    return (await holeBitunixPaare({ auchOhneApi: true })).map((p) => ({ symbol: p.symbol, base: p.basis, quote: 'USDT', maxLeverage: p.maxLeverage, launchTime: p.launchTime }))
 }
 
 async function rohPionex() {

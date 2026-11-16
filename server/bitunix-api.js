@@ -195,8 +195,18 @@ function normalizeOpenPosition(p) {
  * `maxLeverage` und `minTradeVolume` kommen mit — ein Coin, den Bitunix nur mit
  * 5× führt, ist eine andere Sache als einer mit 200×, und das gehört später in
  * die Ergebniszeile der Rangliste.
+ *
+ * `auchOhneApi`: für den Titel-Stamm der Aktien («wo ist der Titel handelbar»)
+ * zählen auch die Paare, die Bitunix nur in der Oberfläche führt — von Hand
+ * handelbar sind sie. Sie tragen dann `nurOberflaeche: true`. Bis 16.11.2026
+ * fehlten sie dort (CBRSUSDT stand bei Bitunix, die Titel-Seite nannte nur
+ * Binance und Bitget).
  */
-export async function holeBitunixPaare() {
+export const bitunixPaarZulaessig = (p, { auchOhneApi = false } = {}) => p?.symbolStatus === 'OPEN'
+    && (auchOhneApi || p.isApiSupported !== false)
+    && p.quote === 'USDT'
+
+export async function holeBitunixPaare({ auchOhneApi = false } = {}) {
     const steuerung = new AbortController()
     const wecker = setTimeout(() => steuerung.abort(), 15000)
     try {
@@ -208,9 +218,7 @@ export async function holeBitunixPaare() {
             throw new Error(roh?.msg || 'Unerwartete Antwort')
         }
         const paare = roh.data
-            .filter((p) => p.symbolStatus === 'OPEN'
-                && p.isApiSupported !== false
-                && p.quote === 'USDT')
+            .filter((p) => bitunixPaarZulaessig(p, { auchOhneApi }))
             .map((p) => ({
                 symbol: String(p.symbol).toUpperCase(),
                 basis: p.base,
@@ -218,6 +226,7 @@ export async function holeBitunixPaare() {
                 minMenge: Number(p.minTradeVolume) || 0,
                 // Handelsstart laut Börse (ms) — für den Instrument-Stamm der Aktien.
                 launchTime: Number(p.launchTime) || null,
+                ...(p.isApiSupported === false ? { nurOberflaeche: true } : {}),
             }))
         // Eine leere Liste ist immer ein Fehler, nie ein Ergebnis: sie würde
         // sonst als „nichts handelbar" durchgereicht und jede Rangliste leeren.

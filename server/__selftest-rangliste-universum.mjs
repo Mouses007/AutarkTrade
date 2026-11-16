@@ -13,6 +13,7 @@
  */
 
 import { loeseUniversumAuf, normalisiereSymbole, UNIVERSUM_ARTEN } from './coin-universum.js'
+import { bitunixPaarZulaessig } from './bitunix-api.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -41,8 +42,18 @@ const bitunixRoh = [
 // Dieselbe Filterregel wie in `holeBitunixPaare` — hier nachgebildet, damit der
 // Test die REGEL prüft und nicht nur eine schon gefilterte Liste durchreicht.
 const bitunixGefiltert = () => new Map(bitunixRoh
-    .filter((p) => p.symbolStatus === 'OPEN' && p.isApiSupported !== false && p.quote === 'USDT')
+    .filter((p) => bitunixPaarZulaessig(p))
     .map((p) => [p.symbol, { symbol: p.symbol, maxLeverage: p.maxLeverage, minMenge: 0 }]))
+
+// Die echte Regel aus `bitunix-api.js`: für Ranglisten nur über die API handelbare Paare,
+// für den Titel-Stamm der Aktien auch die, die Bitunix nur in der Oberfläche führt (CBRSUSDT, 16.11.2026).
+{
+    const namen = (opt) => bitunixRoh.filter((p) => bitunixPaarZulaessig(p, opt)).map((p) => p.symbol)
+    check('Bitunix-Paare für Ranglisten: ohne API-Freigabe, Vorschau, USDC und USD fallen weg',
+        !namen().includes('NOAPIUSDT') && !namen().includes('VORSCHAUUSDT') && !namen().includes('BTCUSDC') && !namen().includes('BTCUSD') && namen().includes('BTCUSDT'), namen().join(','))
+    check('Bitunix-Paare für den Aktien-Stamm (`auchOhneApi`): das Paar ohne API-Freigabe zählt, Vorschau und USDC weiterhin nicht',
+        namen({ auchOhneApi: true }).includes('NOAPIUSDT') && !namen({ auchOhneApi: true }).includes('VORSCHAUUSDT') && !namen({ auchOhneApi: true }).includes('BTCUSDC'), namen({ auchOhneApi: true }).join(','))
+}
 
 const handelbar = async () => bitunixGefiltert()
 const testbar = async () => new Set([
