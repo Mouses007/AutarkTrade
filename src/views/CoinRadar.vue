@@ -167,6 +167,9 @@
 
         <!-- ══ Rangliste ═════════════════════════════════════════════ -->
         <div v-show="reiter === 'rangliste'" class="at-mo-3">
+            <!-- Steht darüber eine Coin-Ansicht, trennt eine Überschrift die Rangliste davon ab;
+                 sonst wirkt ihre Zusammenfassung wie ein Teil der Ansicht. -->
+            <h2 v-if="ep && lauf" class="crAbschnittKopf">{{ t('coinradar.ranglisteUeberschrift') }}</h2>
 
             <Hinweis v-if="ladeFehler" art="warn">{{ ladeFehler }}</Hinweis>
             <div v-if="!lauf && !laeuft && !ladeFehler" class="at-mittig at-gedaempft at-py-5">
@@ -1716,6 +1719,16 @@ onBeforeUnmount(() => {
 }
 
 /* ── Kennzahlen ─────────────────────────────────────────── */
+.crAbschnittKopf {
+    margin: 2rem 0 1rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--line);
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
 .crKennzahlen {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

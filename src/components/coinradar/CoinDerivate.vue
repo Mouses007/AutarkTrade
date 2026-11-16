@@ -163,7 +163,10 @@ const oiDiagramm = computed(() => {
                     <h4 class="ca-h4">{{ t('coinAnsicht.oiVerlauf', { n: Math.round(o.stunden / 24) }) }}</h4>
                     <Diagramm :option="oiDiagramm" :hoehe="110" />
                 </template>
-                <p v-if="o.deutung !== 'neutral'" class="ca-klein">{{ t('oi.read_' + o.deutung) }}.</p>
+                <!-- Die Deutung beruht auf den letzten 24 h der Stundenreihe (Marktradar), nicht auf dem Diagramm darüber. -->
+                <p v-if="o.deutung !== 'neutral'" class="ca-klein">{{ o.preisDelta24hPct != null && o.oiDelta24hPct != null
+                    ? t('coinAnsicht.oiDeutung24h', { preis: prozent(o.preisDelta24hPct, 1), oi: prozent(o.oiDelta24hPct, 1), deutung: t('oi.read_' + o.deutung) })
+                    : t('oi.read_' + o.deutung) + '.' }}</p>
 
                 <template v-if="o.longPct != null">
                     <h4 class="ca-h4">{{ t('coinAnsicht.kontenquote') }}</h4>

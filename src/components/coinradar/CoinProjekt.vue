@@ -41,8 +41,14 @@ const KANAELE = ['homepage', 'whitepaper', 'twitter', 'telegram', 'github']
 const kanaeleText = computed(() => {
     const c = props.info
     if (!c) return ''
-    const n = KANAELE.filter((k) => c[k]).length
-    return `${t('coinradar.coinInfoKanaeleHinweis', { n, gesamt: KANAELE.length })} ${t(c.github ? 'coinradar.coinInfoGithubJa' : 'coinradar.coinInfoGithubNein')}`
+    // Nicht alle fünf aufzählen, sondern die fehlenden nennen — sonst bleibt offen, welcher fehlt.
+    const NAMEN = { homepage: t('coinradar.coinInfoWebsite'), whitepaper: 'Whitepaper', twitter: 'X', telegram: 'Telegram', github: 'GitHub' }
+    const fehlt = KANAELE.filter((k) => !c[k]).map((k) => NAMEN[k])
+    const n = KANAELE.length - fehlt.length
+    const kanaele = fehlt.length
+        ? t('coinradar.coinInfoKanaeleFehlen', { n, gesamt: KANAELE.length, fehlt: fehlt.join(', ') })
+        : t('coinradar.coinInfoKanaeleAlle', { gesamt: KANAELE.length })
+    return `${kanaele} ${t(c.github ? 'coinradar.coinInfoGithubJa' : 'coinradar.coinInfoGithubNein')}`
 })
 const links = computed(() => {
     const c = props.info

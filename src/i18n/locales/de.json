@@ -5223,6 +5223,7 @@
     "tradeZahl": "Nach Trade-Zahl"
   },
   "coinradar": {
+    "ranglisteUeberschrift": "Rangliste des letzten Laufs",
     "abgebrochen": "Lauf abgebrochen.",
     "ausfuehrung5k": "Order über 5 000 USD",
     "ausloeser_auto": "automatisch",
@@ -5240,6 +5241,8 @@
     "coinInfoMehr": "Mehr anzeigen",
     "coinInfoWeniger": "Weniger anzeigen",
     "coinInfoKanaeleHinweis": "{n} von {gesamt} üblichen öffentlichen Kanälen hinterlegt (Website, Whitepaper, GitHub, X, Telegram).",
+    "coinInfoKanaeleFehlen": "{n} von {gesamt} üblichen öffentlichen Kanälen hinterlegt; es fehlt: {fehlt}.",
+    "coinInfoKanaeleAlle": "Alle {gesamt} üblichen öffentlichen Kanäle hinterlegt (Website, Whitepaper, GitHub, X, Telegram).",
     "coinInfoGithubJa": "Quellcode ist öffentlich auf GitHub einsehbar — ein Hinweis auf ein sichtbar arbeitendes Team.",
     "coinInfoGithubNein": "Kein öffentliches GitHub-Repo hinterlegt.",
     "dauerhaftTitel": "Wer hält sich oben",
@@ -9743,7 +9746,7 @@
     "fdv": "Voll verwässert (FDV)",
     "umlauf": "Im Umlauf",
     "umsatzPerp": "Umsatz 24 h (Perpetual)",
-    "umsatzGesamt": "Umsatz 24 h (alle Märkte)",
+    "umsatzGesamt": "Spot-Umsatz 24 h (CoinGecko)",
     "alter": "Alter",
     "rangKurz": "Rang {n}",
     "fdvFach": "{n}-fach der Marktkapitalisierung",
@@ -9778,6 +9781,7 @@
     "fundingPositiv": "{n} % der {zahlungen} Zahlungen waren positiv (Longs zahlten).",
     "fundingOhneVerlauf": "Kein Funding-Verlauf verfügbar.",
     "oiVerlauf": "Open Interest, {n} Tage (in Kontrakten)",
+    "oiDeutung24h": "Letzte 24 h: Preis {preis}, Bestand {oi}. {deutung}.",
     "oiNichtVerfuegbar": "Open Interest und Kontenquote sind für dieses Paar nicht verfügbar.",
     "kontenquote": "Kontenquote",
     "kontenquoteAria": "{lang} % der Konten long, {kurz} % short",
