@@ -21,6 +21,7 @@ import { erzeugeEinordnung } from './coin-radar/einordnung.js'
 import { holeCoinInfo } from './coin-radar/coin-info.js'
 import { tiefensuche, tiefensucheVertrag } from './coin-radar/tiefensuche.js'
 import { pruefeEinzeln } from './coin-radar/einzel.js'
+import { setupCoinAnsichtRoutes } from './coin-radar/ansicht.js'
 import { sendeWennAus, istAus, ausAntwort } from './quellen/aus.js'
 import { legeAnCoinRadar, legeAnAktienRadar, HORIZONTE } from './radar-ergebnisse.js'
 import { bereinigeAktienEinstellungen, fehlerText, HUERDEN_GRENZEN, GEWICHT_GRENZEN } from './coin-radar/aktien-einstellungen.js'
@@ -69,6 +70,8 @@ const FUEHRUNG_KEY = 'coinradar_lauf'
 const FUEHRUNG_TTL_MS = 10 * 60 * 1000
 
 export function setupCoinRadarRoutes(app) {
+    // Coin-Ansicht: Tagesverlauf und Kontext eines Coins (`coin-radar/ansicht.js`).
+    setupCoinAnsichtRoutes(app)
     // ── Einstellungen ───────────────────────────────────────────────────
     app.get('/api/coin-radar/einstellungen', async (req, res) => {
         try {

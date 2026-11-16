@@ -19,6 +19,14 @@
  * behält das Bild immer; entfernt wird es beim Ausliefern, damit ein
  * umgelegter Schalter sofort gilt.
  *
+ * Coin-Ansicht (16.11.2026): Aus DERSELBEN Antwort von `coins/{id}` — sie wird
+ * seit jeher mit `market_data=true` geholt — liest `stammdatenAus` jetzt auch
+ * Marktdaten, Mengen, Allzeithoch/-tief, Genesis-Datum und die übrigen Links.
+ * Kein zusätzlicher Abruf, dieselbe Ratenbremse, derselbe 24-h-Vorrat. Darum
+ * trägt `markt.stand`, von wann die Zahlen sind: Kurs und Umsatz sind bis zu
+ * einem Tag alt und nur Massstab (Mengen, Allzeithoch) — den aktuellen Kurs
+ * nimmt die Ansicht von der Börse.
+ *
  * ⚠ CoinGecko führt seit Jahren KEIN strukturiertes „Team"-Feld mehr. Was
  * hier steht, ist die Projektbeschreibung plus Links — daraus lässt sich ein
  * Team allenfalls lesen, nicht zuverlässig ableiten. Kein Feld täuscht das vor.
@@ -92,25 +100,81 @@ async function holeCoinInfoRoh(symbol) {
         throw e
     }
 
-    const daten = {
-        name: j?.name || treffer.name || basis,
+    const daten = stammdatenAus(j, treffer, basis)
+    cache.set(basis, { ts: Date.now(), daten })
+    return daten
+}
+
+/** `null` bleibt `null`: `Number(null)` wäre 0 und damit eine Behauptung. */
+function zahl(w) {
+    if (w === null || w === undefined || w === '') return null
+    const n = Number(w)
+    return Number.isFinite(n) ? n : null
+}
+/** Wie `zahl`, aber nur echte Grössen — eine Menge oder ein Kurs von 0 ist „nicht gemeldet". */
+const positiv = (w) => { const n = zahl(w); return n !== null && n > 0 ? n : null }
+const zeit = (w) => { const t = w ? Date.parse(w) : NaN; return Number.isFinite(t) ? t : null }
+const texte = (liste) => (Array.isArray(liste) ? liste.filter((x) => typeof x === 'string' && x.trim()) : [])
+
+/**
+ * Die Antwort von `coins/{id}` in die Form des Hauses bringen — rein, damit
+ * die gelesenen Felder ohne Netz prüfbar sind (`__selftest-coin-info.mjs`
+ * gegen `server/fixtures/coingecko-coin-handgeschrieben.json`).
+ *
+ * Alles in USD. Unbekanntes ist `null`, nie 0: Eine Höchstmenge von 0 hiesse
+ * „es gibt keine Coins", gemeint ist „CoinGecko nennt keine".
+ *
+ * @param {object} j        Antwort von `coins/{id}`
+ * @param {object} treffer  der Suchtreffer (`id`, `name`, `thumb`, `market_cap_rank`)
+ * @param {string} basis    Basissymbol, z. B. "BTC"
+ */
+export function stammdatenAus(j, treffer = {}, basis = '') {
+    const m = j?.market_data || {}
+    const usd = (feld) => zahl(feld?.usd)
+    const hoechst = positiv(m.max_supply)
+    return {
+        id: String(j?.id || treffer?.id || ''),
+        name: j?.name || treffer?.name || basis,
         symbol: String(j?.symbol || basis).toUpperCase(),
-        bild: j?.image?.small || treffer.thumb || '',
+        bild: j?.image?.small || treffer?.thumb || '',
         // CoinGecko liefert die Beschreibung mit HTML-Links; angezeigt wird Text.
         // Linear statt `<[^>]*>` (SEC-SRV-001: quadratisch bei `<` ohne `>`).
         beschreibung: ohneTags(String(j?.description?.en || ''), '', { leer: true }).trim(),
         kategorien: Array.isArray(j?.categories) ? j.categories.filter(Boolean) : [],
-        marketCapRang: j?.market_cap_rank ?? treffer.market_cap_rank ?? null,
-        homepage: (j?.links?.homepage || []).find(Boolean) || '',
-        whitepaper: j?.links?.whitepaper || '',
+        marketCapRang: j?.market_cap_rank ?? treffer?.market_cap_rank ?? null,
+        homepage: texte(j?.links?.homepage)[0] || '',
+        whitepaper: typeof j?.links?.whitepaper === 'string' ? j.links.whitepaper : '',
         twitter: j?.links?.twitter_screen_name ? `https://x.com/${j.links.twitter_screen_name}` : '',
         telegram: j?.links?.telegram_channel_identifier ? `https://t.me/${j.links.telegram_channel_identifier}` : '',
-        github: (j?.links?.repos_url?.github || []).find(Boolean) || '',
-        explorer: (j?.links?.blockchain_site || []).find(Boolean) || '',
-        coingeckoUrl: `https://www.coingecko.com/en/coins/${treffer.id}`,
+        github: texte(j?.links?.repos_url?.github)[0] || '',
+        explorer: texte(j?.links?.blockchain_site)[0] || '',
+        reddit: typeof j?.links?.subreddit_url === 'string' ? j.links.subreddit_url : '',
+        forum: texte(j?.links?.official_forum_url)[0] || '',
+        coingeckoUrl: `https://www.coingecko.com/en/coins/${j?.id || treffer?.id || ''}`,
         // Verträge je Kette, wie CoinGecko sie führt — für die Tiefensuche.
         plattformen: j?.platforms && typeof j.platforms === 'object' ? j.platforms : {},
+        // „2009-01-03" → ms (UTC). Fehlt bei den meisten jüngeren Token.
+        genesis: zeit(j?.genesis_date),
+        algorithmus: typeof j?.hashing_algorithm === 'string' ? j.hashing_algorithm : '',
+        markt: {
+            stand: zeit(m.last_updated || j?.last_updated),
+            preisUsd: positiv(usd(m.current_price)),
+            marktkapUsd: positiv(usd(m.market_cap)),
+            // CoinGecko rechnet die FDV mit der Höchst-, sonst der Gesamtmenge.
+            fdvUsd: positiv(usd(m.fully_diluted_valuation)),
+            umsatz24hUsd: positiv(usd(m.total_volume)),
+            umlauf: positiv(m.circulating_supply),
+            gesamt: positiv(m.total_supply),
+            hoechst,
+            // Ausdrücklich unbegrenzt (ETH, DOGE) ist etwas anderes als „nicht gemeldet".
+            hoechstUnbegrenzt: hoechst === null && m.max_supply_infinite === true,
+            athUsd: positiv(usd(m.ath)),
+            athAm: zeit(m.ath_date?.usd),
+            atlUsd: positiv(usd(m.atl)),
+            atlAm: zeit(m.atl_date?.usd),
+            aenderung7dPct: zahl(m.price_change_percentage_7d),
+            aenderung30dPct: zahl(m.price_change_percentage_30d),
+            aenderung1jPct: zahl(m.price_change_percentage_1y),
+        },
     }
-    cache.set(basis, { ts: Date.now(), daten })
-    return daten
 }

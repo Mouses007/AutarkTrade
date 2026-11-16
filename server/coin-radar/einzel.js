@@ -55,6 +55,7 @@ import {
     bewerte, pruefeHuerden, STANDARD_GEWICHTE, STANDARD_HUERDEN,
 } from './bewertung.js'
 import { vergleicheMitBtc, BTC_REFERENZ, BTC_ZEITEINHEIT } from './btc-vergleich.js'
+import { spanne24h } from './ansicht-kern.js'
 
 const BITUNIX = 'https://fapi.bitunix.com'
 
@@ -369,6 +370,13 @@ export async function pruefeEinzeln(eingabe, einst = {}, quellen = {}) {
         fundingJahresRate: zahl(jahresRate),
         naechsteZahlung: zahl(roh.naechsteZahlung),
         ausfuehrung,
+        /*
+         * Für die Kurskachel der Coin-Ansicht: Hoch, Tief und Veränderung der
+         * letzten 24 Stunden aus den Kerzen, die ohnehin da sind — kein
+         * weiterer Abruf. `null`, wenn keine Zeiteinheit die 24 Stunden deckt
+         * (frisch gelistet). In Note und Hürden geht davon nichts ein.
+         */
+        tag: spanne24h(kerzen, TIMEFRAME_MS, zahl(roh.preis) ?? zahl(ze[haupt]?.preis), jetzt, zahl(roh.preisAenderung24h)),
     })
 
     /*
