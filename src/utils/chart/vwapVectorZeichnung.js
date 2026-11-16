@@ -28,6 +28,7 @@ export class VwapVectorZeichnung {
         this.p = {}
         this.kerzen = []
         this.schilder = []      // belegte Flächen der Schilder (Klick öffnet die Einstellungen)
+        this.niveaus = []       // gezeichnete waagrechte Linien {preis, name, y, x1, x2} — Rechtsklick „Alarm an …"
         this.requestUpdate = () => {}
         const ansicht = (z, fn) => ({
             zOrder: () => z,
@@ -94,8 +95,16 @@ export class VwapVectorZeichnung {
         return [breite * 3, breite * 2]
     }
 
+    /** Eine gezeichnete Linie für den Rechtsklick merken (nur, was im Bild liegt). */
+    merke(preis, name, x1, x2) {
+        const y = this.Y(preis)
+        if (y == null || preis == null || !name) return
+        this.niveaus.push({ preis, name, y, x1: x1 ?? -Infinity, x2: x2 ?? Infinity })
+    }
+
     unten(ctx, groesse) {
         this.schilder = []      // unten zeichnet zuerst, oben danach — beide sammeln
+        this.niveaus = []
         const r = this.r, p = this.p
         if (!r || !this.kerzen.length) return
         const n = this.kerzen.length
@@ -124,6 +133,7 @@ export class VwapVectorZeichnung {
             const x1 = this.X(f.von), x2 = this.X(letzte)
             this.waagerecht(ctx, x1, x2, y, fibFarbe[f.stufe], 1)
             this.schild(ctx, String(f.stufe), x2, y, fibFarbe[f.stufe], breite)
+            this.merke(f.preis, `Fib ${f.stufe}`, x1, x2)
         }
     }
 
@@ -168,6 +178,7 @@ export class VwapVectorZeichnung {
             const x2 = this.X(p.pocPerExt ? letzte + p.lblOffPocPer : l.ab)
             this.waagerecht(ctx, x1, x2, y, p.cPocPer, p.pocPerWid)
             if (p.pocPerLbl) this.schild(ctx, `POC ${pocTf}`, x2, y, p.cPocPer, breite)
+            this.merke(l.preis, `POC ${pocTf}`, x1, x2)
         }
 
         // 7 Candle-POC: Docht-Level (gestrichelt) und Punkte je Kerze
@@ -176,6 +187,7 @@ export class VwapVectorZeichnung {
             const x2 = this.X(letzte + p.lblOffPocC)
             this.waagerecht(ctx, this.X(l.von), x2, y, p.cPocC, p.pocCWidth, [5, 4])
             if (p.pocCLabel) this.schild(ctx, 'Candle POC', x2, y, p.cPocC, breite)
+            this.merke(l.preis, 'Candle POC', this.X(l.von), x2)
         }
         if (r.candlePoc) {
             ctx.fillStyle = rgba(p.cPocCAll, 0.75)
@@ -194,6 +206,7 @@ export class VwapVectorZeichnung {
             const x2 = this.X(letzte + p.lblOffDO)
             this.waagerecht(ctx, this.X(r.dailyOpen.von), x2, y, p.cDOpen, 1, [4, 4])
             if (p.dOpenLbl) this.schild(ctx, 'D-Open', x2, y, p.cDOpen, breite)
+            this.merke(r.dailyOpen.preis, 'D-Open', this.X(r.dailyOpen.von), x2)
         }
 
         // 5 Engulfing: Dreieck unter (bull) bzw. über (bear) der Kerze

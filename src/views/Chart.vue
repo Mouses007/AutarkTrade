@@ -871,9 +871,10 @@ function alarmLinienFuer(p) {
     return alarme.value.filter((a) => a.aktiv && a.art === 'preis' && a.symbol === p.symbol && a.markt === p.markt)
 }
 
-function alarmBeiPreis(preis) {
+function alarmBeiPreis(preis, notiz = '') {
     const p = aktivesPanel.value
-    alarmVorlage.value = { symbol: p.symbol, markt: p.markt, art: 'preis', preis }
+    // `notiz`: Name der Indikator-Linie beim Rechtsklick „Alarm an Candle POC …" — steht dann in der Meldung
+    alarmVorlage.value = { symbol: p.symbol, markt: p.markt, art: 'preis', preis, ...(typeof notiz === 'string' && notiz ? { notiz } : {}) }
 }
 
 /*
@@ -1484,7 +1485,7 @@ watch(sichtbareAnzahl, async () => {
                         @bereich="bereich(i)" @indikator="indikatorAktion(i, $event)"
                         :werkzeug="i === aktivIndex ? werkzeug : null" :magnet="!!daten.zeichnen?.magnet"
                         :zeichnungen-versteckt="!!daten.zeichnen?.versteckt" @werkzeug-fertig="werkzeug = null"
-                        :alarm-linien="alarmLinienFuer(p)" @alarm-bei-preis="(x) => { fokus(i); alarmBeiPreis(x) }"
+                        :alarm-linien="alarmLinienFuer(p)" @alarm-bei-preis="(x, n) => { fokus(i); alarmBeiPreis(x, n) }"
                         @alarm-verschieben="alarmVerschieben" @alarm-aendern="alarmAusChart" @alarm-bearbeiten="alarmBearbeiten"
                         @alarm-auf-zeichnung="(z) => { fokus(i); alarmAufZeichnung(z) }"
                         @alarm-momentum="() => { fokus(i); alarmMomentum() }" @alarm-lsob="(tr) => { fokus(i); alarmLsob(tr) }"

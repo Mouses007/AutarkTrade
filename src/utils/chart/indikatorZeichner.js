@@ -619,6 +619,25 @@ export class IndikatorZeichner {
         return best
     }
 
+    /**
+     * Welche waagrechte Linie des VWAP Vector (Candle POC, POC D/W/M, D-Open,
+     * Fibonacci) liegt bei (x, y) im Kursfenster? Toleranz `rand` px senkrecht;
+     * waagrecht zählt die Linie samt Schild rechts. → { preis, name } oder null,
+     * bei mehreren die nächste. Für den Rechtsklick „Alarm an …".
+     */
+    niveauBei(x, y, rand = 6) {
+        let best = null
+        for (const e of this.eintraege) {
+            if (e.def.zeichner !== 'vwapVector' || e.instanz.sichtbar === false || (e.pane ?? 0) !== 0) continue
+            for (const n of e.zeichnung?.niveaus || []) {
+                const d = Math.abs(n.y - y)
+                if (d > rand || x < n.x1 - rand || x > n.x2 + 80) continue
+                if (!best || d < best.d) best = { d, preis: n.preis, name: n.name }
+            }
+        }
+        return best ? { preis: best.preis, name: best.name } : null
+    }
+
     /** Vektorkerzen: Farben an das Panel geben; ohne VWAP Vector einmal null (zurück zur Vorgabe). */
     farbenMelden(nurLetzte) {
         const e = this.eintraege.find((x) => x.def.zeichner === 'vwapVector' && x.werte._vv?.stufen)

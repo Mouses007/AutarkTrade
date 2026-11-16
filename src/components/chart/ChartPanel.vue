@@ -1202,7 +1202,9 @@ function rechtsklick(e) {
     const zeit = zeitT != null ? vonLwc(zeitT) : null
     // Liegt eine LSOB-Box unter dem Zeiger? Dann bietet das Menü einen Alarm auf genau diese Box an.
     const lsob = zeichner?.lsobBoxBei(zeit, preis) || null
-    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung, zeit, lsob }
+    // Liegt eine Linie des VWAP Vector darunter (Candle POC, POC D, D-Open, Fib)? Dann Alarm genau auf ihrem Preis.
+    const niveau = zeichner?.niveauBei(e.clientX - r.left, y) || null
+    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung, zeit, lsob, niveau }
 }
 
 /** Liegt y (px im Panel) im Fenster eines Momentum-Radar-Indikators? */
@@ -1218,6 +1220,13 @@ function momentumFensterBei(y) {
 
 function alarmHier() {
     if (kontext.value) emit('alarmBeiPreis', Number(kontext.value.preis.toFixed(preisStellen.value)))
+    kontext.value = null
+}
+
+/** Rechtsklick auf eine Indikator-Linie: Preisalarm auf ihrem Niveau, ihr Name als Notiz. */
+function alarmAnNiveau() {
+    const n = kontext.value?.niveau
+    if (n) emit('alarmBeiPreis', Number(n.preis.toFixed(preisStellen.value)), n.name)
     kontext.value = null
 }
 
@@ -2243,6 +2252,8 @@ defineExpose({
                     <Symbol name="glocke" /> {{ t('chart.alarm.aufZeichnung') }}</button>
                 <hr />
             </template>
+            <button v-if="kontext.niveau" @click="alarmAnNiveau"><Symbol name="glocke" />
+                {{ t('chart.alarm.anNiveau', { name: kontext.niveau.name, preis: kerzenSerie?.priceFormatter().format(kontext.niveau.preis) }) }}</button>
             <button @click="alarmHier"><Symbol name="glocke" /> {{ t('chart.alarm.hier') }}</button>
             <button v-if="kontext.lsob" @click="emit('alarmLsob', kontext.lsob); kontext = null">
                 <Symbol name="glocke" /> {{ t('chart.alarm.lsobHier') }}</button>

@@ -6954,7 +6954,8 @@
       "wischen": "Remove triggered ({n})",
       "wischenTitel": "Delete every alert that fired and therefore switched itself off (one-time, LSOB box after the break). Repeating and manually paused ones stay.",
       "wischenFrage": "Delete this triggered alert?\n{namen} | Delete these {n} triggered alerts?\n{namen}",
-      "indikatorFenster": "Drawing is in an indicator pane — no price alert possible"
+      "indikatorFenster": "Drawing is in an indicator pane — no price alert possible",
+      "anNiveau": "Alert at {name} ({preis})"
     },
     "quelle": {
       "titel": "Price source: Binance (live via websocket, deep history — only with market data source Binance) or your trading exchange's prices (polled)",
