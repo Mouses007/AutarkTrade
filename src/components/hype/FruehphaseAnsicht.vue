@@ -355,6 +355,7 @@ import Symbol from '@/components/basis/Symbol.vue'
  * Durchgangs alle drei Sekunden — danach alle zwei Minuten, solange offen.
  */
 import { ref, computed, watch, nextTick, onBeforeUnmount, h, defineComponent } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useKiSeitenStand } from '../../composables/useKiSeitenStand.js'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -1065,7 +1066,11 @@ const FavoritKarte = defineComponent({
                     f.name && f.name !== f.symbol ? h('span', { class: 'fpGrau fpLangName' }, f.name) : null,
                     f.contractAddress ? h('a', { href: dexLink(f.chain, f.contractAddress), target: '_blank', rel: 'noopener noreferrer', class: 'at-ml-auto at-klein' }, 'DexScreener ↗') : null,
                 ]),
-                h('div', { class: 'fpGrau at-klein' }, t('hypeFrueh.beobachtungNichtMehr')),
+                h('div', { class: 'fpGrau at-klein' }, [
+                    t('hypeFrueh.beobachtungNichtMehr'), ' ',
+                    // Alarme, Verlauf, Markt jetzt und Tiefensuche stehen auf der Fokus-Karte der Frühphase.
+                    f.contractAddress ? h(RouterLink, { to: { path: '/hype-radar/fruehphase', query: { token: f.contractAddress } } }, () => t('hypeFrueh.favoritOeffnen')) : null,
+                ]),
                 hatZahl(d.ts) ? h('div', { class: 'fpKennzahlen' }, [
                     [t('hypeFrueh.kzPreis'), hatZahl(d.preis) ? `${Number(d.preis).toPrecision(3)} USD` : '—'],
                     [t('hypeFrueh.kzLiquiditaet'), hatZahl(d.liq) ? `${geld(d.liq)} USD` : '—'],

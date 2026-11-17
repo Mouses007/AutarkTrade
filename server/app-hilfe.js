@@ -361,7 +361,7 @@ const SEITEN_ZU_MODUS = {
     tradeImport: 'journal', accounts: 'journal', exkursionen: 'journal', setup: 'journal',
     marktradar: 'live', nachrichten: 'live', openinterest: 'live', liquidity: 'live',
     liquidations: 'live', livetrading: 'live', liveSessions: 'live', liveAuswertung: 'live',
-    hypeRadar: 'research', hypeFrueh: 'research', hypeBoersen: 'research', hypeBerichte: 'research', coinRadar: 'research', coinVerlauf: 'research', coinAbverkauf: 'research', coinFavoriten: 'research',
+    hypeRadar: 'research', hypeFrueh: 'research', hypeBoersen: 'research', hypeBerichte: 'research', hypeFavoriten: 'research', coinRadar: 'research', coinVerlauf: 'research', coinAbverkauf: 'research', coinFavoriten: 'research',
     newcomerRadar: 'research', aktienRadar: 'research', aktienMarktlage: 'research', aktienStamm: 'research', aktienFavoriten: 'research',
     strategieBibliothek: 'agent', strategieLabor: 'agent', strategieInstanzen: 'agent',
     lernen: 'lernen', lernenKarten: 'lernen', lernenStatistik: 'lernen',

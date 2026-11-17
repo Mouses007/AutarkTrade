@@ -5605,6 +5605,7 @@
     "beobachtungSeite": "Token, die du mit dem Stern beobachtest. Sie werden in jedem Durchgang der Frühphase gemessen und nie verdrängt; der Wachhund meldet sich nach seinen Regeln. Der Stern hier oder in der Frühphase nimmt einen Token wieder heraus. Alle Favoriten beider Radare an einem Ort zeigt «Favoriten» unter Coin-Radar.",
     "beobachtungLeer": "Noch nichts beobachtet. Der Stern an einem Token nimmt ihn hier auf — er wird dann in jedem Durchgang gemessen, nie verdrängt, und der Wachhund meldet sich nach seinen Regeln, auch wenn die Frühphase den Token fallen lässt.",
     "beobachtungNichtMehr": "Nicht mehr in der Frühphase — der letzte Stand des Wachhunds:",
+    "favoritOeffnen": "Alarme, Verlauf und Tiefensuche öffnen",
     "beobachtungNochKeinStand": "Nicht mehr in der Frühphase, und der Wachhund hat noch nicht gemessen.",
     "alleZeigen": "Alle beobachteten anzeigen ({n})",
     "alleVerbergen": "Alle beobachteten verbergen",
@@ -9762,6 +9763,8 @@
     "laeuft": "Die Sparten werden gerade bei der Kursquelle nachgefragt – die Liste füllt sich von selbst."
   },
   "coinFavoriten": {
+    "zurAnsicht": "{symbol} im Research öffnen (Kurs, Derivate, Projekt)",
+    "zumHype": "{symbol} im Hype-Radar öffnen (Alarme, Verlauf, Tiefensuche)",
     "ladeFehler": "Die Favoriten konnten nicht geladen werden",
     "entfernenFehler": "Der Favorit konnte nicht entfernt werden",
     "grundUnbekannt": "unbekannt",

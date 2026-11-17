@@ -64,6 +64,15 @@ const statusText = (f) => (f.status === 'bewertet' ? t('coinFavoriten.status_bew
     : f.status === 'huerde' ? t('coinFavoriten.status_huerde', { grund: grund(f.huerdeGrund) })
         : t('coinFavoriten.status_' + f.status))
 const chartZiel = (f) => ({ path: '/chart', query: { symbol: f.symbol } })
+/*
+ * Wohin ein Klick führt. Hype-Funde (DEX-Token) haben keinen Chart und keine
+ * Coin-Ansicht; sie öffnen in der Frühphase — dort steht der Token, oder, wenn
+ * die Frühphase ihn nicht mehr führt, seine Karte mit Alarmen, Verlauf, dem
+ * Markt jetzt und der Tiefensuche. Bis 17.11.2026 liess sich ein Hype-Fund
+ * hier gar nicht anklicken.
+ */
+const hypeZiel = (f) => (f.contractAddress ? { path: '/hype-radar/fruehphase', query: { token: f.contractAddress } } : { path: '/hype-radar/favoriten' })
+const ansichtZiel = (f) => ({ path: '/coin-radar', query: { symbol: f.symbol } })
 </script>
 
 <template>
@@ -95,8 +104,8 @@ const chartZiel = (f) => ({ path: '/chart', query: { symbol: f.symbol } })
                 <tbody>
                     <tr v-for="f in favoriten" :key="f.id">
                         <td class="symbol">
-                            <router-link v-if="f.art === 'boerse'" :to="chartZiel(f)" :title="t('coinFavoriten.zumChart', { symbol: f.symbol })">{{ f.symbol }}</router-link>
-                            <template v-else>{{ f.symbol }}</template>
+                            <router-link v-if="f.art === 'boerse'" :to="ansichtZiel(f)" :title="t('coinFavoriten.zurAnsicht', { symbol: f.symbol })">{{ f.symbol }}</router-link>
+                            <router-link v-else :to="hypeZiel(f)" :title="t('coinFavoriten.zumHype', { symbol: f.symbol })">{{ f.symbol }}</router-link>
                             <div v-if="f.name" class="vermerk">{{ f.name }}</div>
                         </td>
                         <td>
@@ -120,7 +129,9 @@ const chartZiel = (f) => ({ path: '/chart', query: { symbol: f.symbol } })
                             <span v-else class="leise">{{ t('coinFavoriten.ruhig') }}</span>
                         </td>
                         <td class="aktionen">
+                            <Knopf v-if="f.art === 'boerse'" klein nur-symbol art="leise" symbol="suche" :titel="t('coinFavoriten.zurAnsicht', { symbol: f.symbol })" :to="ansichtZiel(f)" />
                             <Knopf v-if="f.art === 'boerse'" klein nur-symbol art="leise" symbol="chart" :titel="t('coinFavoriten.zumChart', { symbol: f.symbol })" :to="chartZiel(f)" />
+                            <Knopf v-else klein nur-symbol art="leise" symbol="suche" :titel="t('coinFavoriten.zumHype', { symbol: f.symbol })" :to="hypeZiel(f)" />
                             <Knopf klein nur-symbol art="leise" symbol="papierkorb" :titel="t('coinFavoriten.entfernenTitel', { symbol: f.symbol })" @click="entferne(f)" />
                         </td>
                     </tr>
