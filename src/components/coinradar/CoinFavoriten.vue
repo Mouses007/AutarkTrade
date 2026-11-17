@@ -1,7 +1,7 @@
 <script setup>
 /**
- * Favoriten Coins: die bestehende Favoritenliste beider Radare auf einer
- * Seite (`server/coin-radar/favoriten.js`).
+ * Favoriten Coins: die Sterne des Coin-Radars (`server/coin-radar/favoriten.js`).
+ * Hype-Funde stehen seit 17.11.2026 unter Hype-Radar › Favoriten.
  *
  * Kein neuer Favoritenbegriff: es ist die Liste, an der die Sterne von
  * Coin-Radar und Hype-Radar schon hängen und die der Wachhund überwacht.
@@ -90,7 +90,6 @@ const ansichtZiel = (f) => ({ path: '/coin-radar', query: { symbol: f.symbol } }
                 <thead>
                     <tr>
                         <th>{{ t('coinradar.spalteSymbol') }}</th>
-                        <th>{{ t('coinFavoriten.herkunft') }}</th>
                         <th :title="t('coinFavoriten.standInfo')">{{ t('coinFavoriten.letzterStand') }}</th>
                         <th class="rechts" :title="t('coinradar.spalteNoteHilfe')">{{ t('coinradar.spalteNote') }}</th>
                         <th class="rechts" :title="t('coinradar.spalteAtrHilfe')">{{ t('coinradar.spalteAtr') }}</th>
@@ -107,10 +106,6 @@ const ansichtZiel = (f) => ({ path: '/coin-radar', query: { symbol: f.symbol } }
                             <router-link v-if="f.art === 'boerse'" :to="ansichtZiel(f)" :title="t('coinFavoriten.zurAnsicht', { symbol: f.symbol })">{{ f.symbol }}</router-link>
                             <router-link v-else :to="hypeZiel(f)" :title="t('coinFavoriten.zumHype', { symbol: f.symbol })">{{ f.symbol }}</router-link>
                             <div v-if="f.name" class="vermerk">{{ f.name }}</div>
-                        </td>
-                        <td>
-                            {{ t('coinFavoriten.art_' + f.art) }}
-                            <div v-if="f.art === 'dex' && f.chain" class="vermerk">{{ f.chain }}</div>
                         </td>
                         <td>
                             <Pille :ton="STATUS_TON[f.status]" :title="t('coinFavoriten.statusInfo_' + f.status)">{{ statusText(f) }}</Pille>

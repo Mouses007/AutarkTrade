@@ -9772,7 +9772,7 @@
     "grundUnbekannt": "unknown",
     "stand": "Figures from the coin radar run of {zeit}.",
     "leerTitel": "No favourites yet",
-    "leerText": "A star in the coin radar ranking or in the hype radar puts a coin on this list. It is the same list the watchdog monitors.",
+    "leerText": "A star in the coin radar ranking puts a coin on this list; the watchdog then monitors it. Starred tokens from the hype radar are under Hype radar › Favourites.",
     "herkunft": "Origin",
     "art_boerse": "Coin radar",
     "art_dex": "Hype radar",
@@ -9799,7 +9799,7 @@
     "aktionen": "Actions",
     "zumChart": "Open {symbol} in the chart",
     "entfernenTitel": "Remove {symbol} from the favourites (its alerts are deleted too)",
-    "hinweis": "A watchlist, not a buy signal. It is the favourites list of both radars: a star removed here is removed there too, and the watchdog stops monitoring the coin."
+    "hinweis": "A watchlist, not a buy signal. A star removed here is removed in the ranking too, and the watchdog stops monitoring the coin. Starred tokens from the hype radar are under Hype radar › Favourites."
   },
   "aktienEngine": {
     "rutschAusserhalb": "Stocks: extra slippage outside the session (basis points)",

@@ -9772,7 +9772,7 @@
     "grundUnbekannt": "unbekannt",
     "stand": "Kennzahlen aus dem Coin-Radar-Lauf vom {zeit}.",
     "leerTitel": "Noch keine Favoriten",
-    "leerText": "Ein Stern in der Rangliste des Coin-Radars oder im Hype-Radar setzt einen Coin auf diese Liste. Es ist dieselbe Liste, die der Wachhund überwacht.",
+    "leerText": "Ein Stern in der Rangliste des Coin-Radars setzt einen Coin auf diese Liste; der Wachhund überwacht ihn dann. Token mit Stern aus dem Hype-Radar stehen unter Hype-Radar › Favoriten.",
     "herkunft": "Herkunft",
     "art_boerse": "Coin-Radar",
     "art_dex": "Hype-Radar",
@@ -9799,7 +9799,7 @@
     "aktionen": "Aktionen",
     "zumChart": "{symbol} im Chart öffnen",
     "entfernenTitel": "{symbol} aus den Favoriten entfernen (seine Alarme werden mit gelöscht)",
-    "hinweis": "Eine Merkliste, kein Kaufsignal. Es ist die Favoritenliste beider Radare: ein Stern, der hier wegfällt, fällt auch dort weg, und der Wachhund beobachtet den Coin nicht mehr."
+    "hinweis": "Eine Merkliste, kein Kaufsignal. Ein Stern, der hier wegfällt, fällt auch in der Rangliste weg, und der Wachhund beobachtet den Coin nicht mehr. Token mit Stern aus dem Hype-Radar stehen unter Hype-Radar › Favoriten."
   },
   "aktienEngine": {
     "rutschAusserhalb": "Aktien: Rutsch-Aufschlag ausserhalb der Sitzung (Basispunkte)",

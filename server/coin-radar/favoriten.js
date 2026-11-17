@@ -1,8 +1,8 @@
 /**
  * Favoriten Coins: die Seite «Favoriten» im Coin-Radar.
  *
- *   GET /api/coin-radar/favoriten   die bestehende Favoritenliste (`hype_favoriten`) mit dem
- *                                   Stand des letzten Coin-Radar-Laufs bzw. der letzten Hype-Prüfung
+ *   GET /api/coin-radar/favoriten   die Coin-Radar-Favoriten aus `hype_favoriten` mit dem
+ *                                   Stand des letzten Coin-Radar-Laufs (Hype-Funde: Seite unter Hype-Radar)
  *
  * Liest nur. Anheften, Entfernen und Stummschalten bleiben die Routen des
  * Hype-Radars (`/api/hype-radar/favoriten`), der Wachhund läuft unverändert.
@@ -15,7 +15,9 @@ import { logWarn } from '../logger.js'
 const json = (text, sonst) => { try { return JSON.parse(text) ?? sonst } catch { return sonst } }
 
 export async function leseCoinFavoriten(knex) {
-    const favoriten = await knex('hype_favoriten').orderBy('erstelltAm', 'desc')
+    // Nur die Sterne des Coin-Radars. Hype-Funde (Kette + Vertrag) haben seit 17.11.2026
+    // ihre eigene Seite «Favoriten» unter Hype-Radar; hier standen sie doppelt.
+    const favoriten = (await knex('hype_favoriten').orderBy('erstelltAm', 'desc')).filter(istBoersenFavorit)
     const lauf = await knex('coinradar_laeufe').where({ status: 'fertig', anlageklasse: 'krypto' }).orderBy('id', 'desc').first()
     const kopf = lauf ? { id: lauf.id, zeit: Number(lauf.beendetAm || lauf.erstelltAm) || null } : null
     if (!favoriten.length) return { lauf: kopf, favoriten: [] }

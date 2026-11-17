@@ -275,13 +275,13 @@ const vorher = JSON.stringify([await knex('hype_favoriten').orderBy('id'), await
 const coins = await leseCoinFavoriten(knex)
 gleich(JSON.stringify([await knex('hype_favoriten').orderBy('id'), await knex('hype_alarme').orderBy('id')]), vorher, 'die Seite ändert weder Favoriten noch Alarme')
 gleich(coins.lauf, { id: kryptoLauf, zeit: 81_000 }, 'der letzte fertige KRYPTO-Lauf, nicht der Aktien-Lauf')
-gleich(coins.favoriten.map((f) => f.symbol), ['SOLUSDT', 'DOGEUSDT', 'XRPUSDT', 'PEPE'], 'alle vier Favoriten, bewertete zuerst, DEX-Funde zuletzt')
+gleich(coins.favoriten.map((f) => f.symbol), ['SOLUSDT', 'DOGEUSDT', 'XRPUSDT'], 'nur die drei Coin-Radar-Favoriten, bewertete zuerst — der Hype-Fund PEPE steht unter Hype-Radar (seit 17.11.2026)')
 const jeCoin = Object.fromEntries(coins.favoriten.map((f) => [f.symbol, f]))
 gleich([jeCoin.SOLUSDT.status, jeCoin.SOLUSDT.rang, jeCoin.SOLUSDT.note, jeCoin.SOLUSDT.alarmeUngelesen], ['bewertet', 4, 77, 1], 'SOL: Rang, Note, ein ungelesener Alarm')
 gleich([jeCoin.XRPUSDT.status, jeCoin.XRPUSDT.huerdeGrund, jeCoin.XRPUSDT.note, jeCoin.XRPUSDT.atrPct, jeCoin.XRPUSDT.stumm], ['huerde', 'spread_zu_weit', null, null, true],
     'XRP: an der Hürde gescheitert, keine Note und keine Kennzahl aus der Null-Vorgabe, stumm')
 gleich(jeCoin.DOGEUSDT.status, 'nichtImLauf', 'DOGE: nicht im Lauf, bleibt sichtbar')
-gleich([jeCoin.PEPE.art, jeCoin.PEPE.status, jeCoin.PEPE.pruefung.hypeScore, jeCoin.PEPE.pruefung.zeit], ['dex', 'geprueft', 66, 20], 'Hype-Fund: die JÜNGSTE Prüfung')
+ok(!jeCoin.PEPE, 'kein Hype-Fund in den Coin-Radar-Favoriten')
 gleich(coinFavoritenZeilen([{ id: 9, symbol: 'ABC', chain: 'base', contractAddress: '0x1', quelle: 'hype' }])[0].status, 'ohnePruefung', 'Hype-Fund ohne gespeicherte Prüfung sagt das')
 gleich(coinFavoritenZeilen([{ id: 9, symbol: 'BTCUSDT', quelle: 'coinradar' }])[0].status, 'keinLauf', 'ohne Lauf: «noch kein Lauf»')
 
