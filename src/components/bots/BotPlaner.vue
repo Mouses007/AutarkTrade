@@ -244,6 +244,9 @@ const planLage = computed(() => {
     const abstand = n >= 2 ? (plan.value.art === 'geometric' ? Math.pow(o / u, 1 / n) - 1 : (o - u) / n / ((o + u) / 2)) : null
     return { unter: k > 0 ? 1 - u / k : null, ueber: k > 0 ? o / k - 1 : null, abstand }
 })
+// Die Liquidation der gezeigten Variante liegt im Band: der Hebel passt nicht zum Band
+const liqImBand = computed(() => !!planErg.value && !veraltet.value && !spot.value && (planErg.value.warnungen || []).includes('liqImBand'))
+function hebelSetzen(n) { eingabe.value.hebel = String(n); rechnen() }
 async function kopiere(text) { try { await navigator.clipboard.writeText(String(text)) } catch { /* ohne Zwischenablage */ } }
 
 // ── Starten ──────────────────────────────────────────────────────────────
@@ -357,6 +360,11 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 <p v-if="!erg" class="leise">{{ t('bots.plan.planLeer') }}</p>
                 <Hinweis v-else-if="veraltet" art="warn">{{ t('bots.plan.veraltet') }}</Hinweis>
                 <Hinweis v-else-if="!planErg && planVollstaendig" art="info">{{ t('bots.plan.geaendert') }}</Hinweis>
+                <Hinweis v-if="liqImBand" art="fehler" :titel="t('bots.plan.liqImBandTitel')">
+                    <p class="grund">{{ t('bots.plan.liqImBandText', { hebel: erg.eingabe.hebel, liq: preis(planErg.start.liq), unten: preis(planErg.variante.unten), oben: preis(planErg.variante.oben) }) }}
+                        {{ planErg.start.hebelPassend ? t('bots.plan.liqImBandHebel', { n: planErg.start.hebelPassend }) : t('bots.plan.liqImBandKein') }}</p>
+                    <Knopf v-if="planErg.start.hebelPassend" art="haupt" klein @click="hebelSetzen(planErg.start.hebelPassend)">{{ t('bots.plan.hebelSetzen', { n: planErg.start.hebelPassend }) }}</Knopf>
+                </Hinweis>
                 <p v-if="stufeFehlt && planErg && !veraltet" class="leise">{{ t('bots.plan.stufeFehlt', { stufe: t(`bots.plan.stufe.${eingabe.stufe}`) }) }}</p>
 
                 <ol class="schritte" :class="{ blass: veraltet }">
@@ -442,7 +450,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 <Hinweis v-if="eigenFehler" art="fehler">{{ eigenFehler }}</Hinweis>
                 <div class="knoepfe">
                     <Knopf v-if="!planErg || veraltet" art="normal" symbol="rechner" :laedt="eigenLaedt" :disabled="!planVollstaendig || !eingabeOk" @click="eigenRechnen">{{ t('bots.plan.eigenRechnen') }}</Knopf>
-                    <Knopf v-if="steuerungAktiv" art="haupt" symbol="hochladen" :disabled="!planVollstaendig || !eingabeOk" @click="dialogOffen = true">{{ t('bots.plan.starten') }}</Knopf>
+                    <Knopf v-if="steuerungAktiv" :art="liqImBand ? 'normal' : 'haupt'" symbol="hochladen" :disabled="!planVollstaendig || !eingabeOk" @click="dialogOffen = true">{{ t('bots.plan.starten') }}</Knopf>
                 </div>
                 <p v-if="!steuerungAktiv" class="leise">{{ t('bots.plan.ohneSteuerung') }}</p>
             </Karte>

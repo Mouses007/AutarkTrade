@@ -9027,6 +9027,11 @@
       "alleVarianten": "All {n} variants",
       "lageDetail": "Situation in detail: {coin}",
       "waehlen": "Select",
+      "liqImBandTitel": "The leverage is too high for this range",
+      "liqImBandText": "With {hebel}x the estimated liquidation is at {liq} and thus inside the range ({unten} – {oben}): the bot would be liquidated before the price reaches the edge.",
+      "liqImBandHebel": "With at most {n}x the liquidation stays outside the range.",
+      "liqImBandKein": "Even with 1x it is inside the range — choose a tighter range.",
+      "hebelSetzen": "Set leverage to {n}x and recalculate",
       "warn": {
         "gridsGekuerzt": "Fewer grids: with this investment the quantity per grid would be below Pionex's minimum.",
         "liqImBand": "The estimated liquidation lies inside the band — the bot would be liquidated before reaching the other edge.",

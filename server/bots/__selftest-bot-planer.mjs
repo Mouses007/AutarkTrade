@@ -261,6 +261,11 @@ console.log('Regeln aus der Messung vom 17.11.2026: Dichte, Modus, Short-Band, S
     const eL = { coin: 'TST', coinM: false, richtung: 'LONG', einsatz: 100, hebel: 3, tage: 30 }
     const eng = rechnePlanVariante(eL, { unten: 150, oben: 260, anzahl: 300, art: 'arithmetic' }, kerzen, { kurs: 200 })
     const weit = rechnePlanVariante(eL, { unten: 150, oben: 260, anzahl: 40, art: 'arithmetic' }, kerzen, { kurs: 200 })
+    // Hebel zu hoch für das Band: die Liquidation liegt im Band; der Planer nennt den höchsten passenden Hebel
+    const hoch = rechnePlanVariante({ ...eL, hebel: 10 }, { unten: 120, oben: 300, anzahl: 60, art: 'geometric' }, kerzen, { kurs: 200 })
+    const hp = hoch.start.hebelPassend
+    const mit = (h) => rechnePlanVariante({ ...eL, hebel: h }, { unten: 120, oben: 300, anzahl: 60, art: 'geometric' }, kerzen, { kurs: 200 })
+    p('Liquidation im Band (10x): passender Hebel genannt, damit ausserhalb, einer mehr wieder im Band', hoch.warnungen.includes('liqImBand') && hp >= 1 && hp < 10 && !mit(hp).warnungen.includes('liqImBand') && mit(hp + 1).warnungen.includes('liqImBand') && mit(hp).start.hebelPassend === null, JSON.stringify({ hp, liq: hoch.start.liq }))
     p('Warnung «abstandEng» unter 0,5 % Abstand, darüber nicht', eng.warnungen.includes('abstandEng') && !weit.warnungen.includes('abstandEng'), JSON.stringify([eng.warnungen, weit.warnungen]))
 }
 

@@ -9027,6 +9027,11 @@
       "alleVarianten": "Alle {n} Varianten",
       "lageDetail": "Lage im Detail: {coin}",
       "waehlen": "Wählen",
+      "liqImBandTitel": "Der Hebel ist für dieses Band zu hoch",
+      "liqImBandText": "Mit {hebel}x liegt die geschätzte Liquidation bei {liq} und damit im Band ({unten} – {oben}): der Bot würde liquidiert, bevor der Kurs den Rand erreicht.",
+      "liqImBandHebel": "Mit höchstens {n}x bleibt die Liquidation ausserhalb des Bands.",
+      "liqImBandKein": "Auch mit 1x liegt sie im Band — ein engeres Band wählen.",
+      "hebelSetzen": "Hebel auf {n}x setzen und neu rechnen",
       "warn": {
         "gridsGekuerzt": "Weniger Grids: mit diesem Einsatz läge die Menge je Grid unter der Mindestmenge von Pionex.",
         "liqImBand": "Die geschätzte Liquidation liegt im Band — der Bot würde liquidiert, bevor er die Gegengrenze erreicht.",
