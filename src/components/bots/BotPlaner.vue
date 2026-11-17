@@ -258,7 +258,9 @@ const planBot = computed(() => ({
     grid: { unten: Number(plan.value.unten), oben: Number(plan.value.oben), anzahl: Number(plan.value.anzahl) },
     hebel: spot.value ? 1 : Number(eingabe.value.hebel), einsatz: { basis: Number(eingabe.value.einsatz) }, stops: {},
 }))
-const vorgabe = computed(() => ({ unten: plan.value.unten, oben: plan.value.oben, anzahl: plan.value.anzahl, hebel: eingabe.value.hebel, einsatz: eingabe.value.einsatz }))
+// Stop-Loss und Take-Profit gehen mit dem Start mit (Futures-Grid, gerichtet)
+const mitStops = computed(() => !spot.value && planRichtung.value !== 'NEUTRAL')
+const vorgabe = computed(() => ({ unten: plan.value.unten, oben: plan.value.oben, anzahl: plan.value.anzahl, hebel: eingabe.value.hebel, einsatz: eingabe.value.einsatz, ...(mitStops.value && plan.value.stopLoss ? { stopLoss: plan.value.stopLoss } : {}), ...(mitStops.value && plan.value.takeProfit ? { takeProfit: plan.value.takeProfit } : {}) }))
 const feste = computed(() => ({ coin: planBot.value.coin, coinM: eingabe.value.coinM && !spot.value, spot: spot.value, richtung: planRichtung.value, art: plan.value.art, ...(spot.value ? { hebel: '1' } : {}) }))
 
 // ── KI ───────────────────────────────────────────────────────────────────
@@ -428,7 +430,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                             <label class="wert"><span>{{ t('bots.feld.stopLoss') }}</span><input v-model="plan.stopLoss" class="at-feld" inputmode="decimal" :placeholder="t('bots.feld.keiner')"></label>
                             <label class="wert"><span>{{ t('bots.feld.takeProfit') }}</span><input v-model="plan.takeProfit" class="at-feld" inputmode="decimal" :placeholder="t('bots.feld.keiner')"></label>
                         </div>
-                        <p v-if="plan.stopLoss || plan.takeProfit" class="satz warn">{{ t('bots.plan.stopsNachStart') }}</p>
+                        <p v-if="plan.stopLoss || plan.takeProfit" class="satz">{{ t('bots.plan.stopsMitStart') }}</p>
                     </li>
                     <li v-if="planErg?.rueckblick">
                         <h4>{{ t('bots.plan.schrittRueckblick', { tage: erg.eingabe.tage }) }}</h4>

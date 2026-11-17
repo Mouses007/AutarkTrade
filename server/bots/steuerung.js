@@ -236,6 +236,26 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     const trend = String(roh.trend || 'long')
     const { base, quote } = basisQuote(bot)
     const daten = { top, bottom, row: anzahl, grid_type: art, trend, leverage: hebel, quoteInvestment: String(einsatz) }
+    // Stop-Loss / Take-Profit gleich beim Erstellen (Pionex-Doku, gelesen 17.11.2026: `lossStopType`/`lossStop`,
+    // `profitStopType`/`profitStop` in `create`). Bis dahin setzte die App sie erst nach dem Start in einem
+    // zweiten Schritt — der Bot lief dazwischen ohne Stop. `checkParams` kennt diese Felder NICHT: Pionex prüft
+    // sie vorab nicht, darum prüft der Code Seite und Rundung selbst, und Soll/Ist nach dem Start zeigt sie.
+    const sl = zahl(eingabe.stopLoss), tp = zahl(eingabe.takeProfit)
+    if (Number.isNaN(sl)) return { fehler: 'stopLoss' }
+    if (Number.isNaN(tp)) return { fehler: 'takeProfit' }
+    const stopNachher = {}
+    const startWarn = []
+    if (sl != null || tp != null) {
+        const seite = seitenPruefung(bot, sl, tp, kurs)
+        if (seite) return { fehler: seite }
+        const slText = sl != null ? ip(sl) : null, tpText = tp != null ? ip(tp) : null
+        if (sl != null && !(Number(slText) > 0)) return { fehler: 'stopLossNull' }
+        if (tp != null && !(Number(tpText) > 0)) return { fehler: 'takeProfitNull' }
+        if (slText) { daten.lossStopType = 'price'; daten.lossStop = slText; stopNachher.stopLoss = usdAusInstrument(bot, slText) }
+        if (tpText) { daten.profitStopType = 'price'; daten.profitStop = tpText; stopNachher.takeProfit = usdAusInstrument(bot, tpText) }
+        gerundetWarnung([[sl, stopNachher.stopLoss], [tp, stopNachher.takeProfit]], startWarn)
+        startWarn.push('stopsBeimStart')
+    }
     // Art des Bots übernehmen (Coin-M: cateType, Margin-Münze, UI-Kennung), soweit vorhanden
     for (const feld of ['investCoin', 'cateType', 'uiExtraData']) if (roh[feld]) daten[feld] = roh[feld]
     const pruefDaten = { top, bottom, row: anzahl, grid_type: art, trend, leverage: hebel, quote_investment: String(einsatz), extra_margin: false }
@@ -243,8 +263,8 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
         aktion,
         pruefen: { pfad: `${PFAD}/checkParams`, body: { base, quote, buOrderData: pruefDaten } },
         senden: { pfad: `${PFAD}/create`, body: { base, quote, buOrderData: daten } },
-        nachher: { unten: usdAusInstrument(bot, bot.coinM ? top : bottom), oben: usdAusInstrument(bot, bot.coinM ? bottom : top), anzahl, art, hebel, einsatz },
-        warnungen: ['neuerBot', 'marktpreis', ...(istZahl(basis) && einsatz > 2 * basis ? ['grosserBetrag'] : [])],
+        nachher: { unten: usdAusInstrument(bot, bot.coinM ? top : bottom), oben: usdAusInstrument(bot, bot.coinM ? bottom : top), anzahl, art, hebel, einsatz, ...stopNachher },
+        warnungen: ['neuerBot', 'marktpreis', ...(istZahl(basis) && einsatz > 2 * basis ? ['grosserBetrag'] : []), ...startWarn],
     }
 }
 

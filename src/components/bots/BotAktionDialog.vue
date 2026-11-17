@@ -34,7 +34,7 @@ const FELDER = {
     stops: ['stopLoss', 'takeProfit'],
     reduzieren: ['anteil'],
     pausieren: [], fortsetzen: [], beenden: [],
-    starten: ['unten', 'oben', 'anzahl', 'hebel', 'einsatz'],
+    starten: ['unten', 'oben', 'anzahl', 'hebel', 'einsatz', 'stopLoss', 'takeProfit'],
 }
 const eingabe = ref({})
 const pruefung = ref(null)
@@ -56,7 +56,9 @@ function waehleEinheit(e) {
 }
 const felderFuer = computed(() => {
     if (props.aktion === 'reduzieren') return [einheit.value === 'betrag' ? 'betrag' : 'anteil']
-    return (FELDER[props.aktion] || []).filter((f) => !(f === 'hebel' && props.bot.typ === 'spot_grid'))
+    // Spot-Grid hat keinen Hebel; Stops beim Start gibt es nur gerichtet und nur für Futures-Grids
+    const ohneStops = props.aktion === 'starten' && (props.bot.typ === 'spot_grid' || props.bot.richtung === 'NEUTRAL')
+    return (FELDER[props.aktion] || []).filter((f) => !(f === 'hebel' && props.bot.typ === 'spot_grid') && !(ohneStops && (f === 'stopLoss' || f === 'takeProfit')))
 })
 const offen = computed({ get: () => props.modelValue, set: (v) => emit('update:modelValue', v) })
 const mc = computed(() => props.bot.marginCoin)
@@ -83,8 +85,9 @@ watch(eingabe, () => { pruefung.value = null; haken.value = false }, { deep: tru
 const platzhalter = computed(() => ({
     unten: preis(props.bot.grid?.unten), oben: preis(props.bot.grid?.oben), anzahl: String(props.bot.grid?.anzahl ?? ''),
     hebel: String(props.bot.hebel ?? ''), einsatz: String(props.bot.einsatz?.basis ?? props.bot.einsatz?.aktuell ?? ''), betrag: '0',
-    stopLoss: stopPlatzhalter(props.bot.stops?.stopLoss),
-    takeProfit: stopPlatzhalter(props.bot.stops?.takeProfit),
+    // Neuer Bot: leer heisst «keiner» — die Stops des alten Bots werden nicht übernommen
+    stopLoss: props.aktion === 'starten' ? t('bots.feld.keiner') : stopPlatzhalter(props.bot.stops?.stopLoss),
+    takeProfit: props.aktion === 'starten' ? t('bots.feld.keiner') : stopPlatzhalter(props.bot.stops?.takeProfit),
 }))
 // Nur Preis-Stops als Preis zeigen: ein Stop nach Gewinnquote (`profit_ratio`, Wert −0.2) stand sonst
 // als «Preis −0.20» im Feld (Audit STG-11)

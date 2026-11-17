@@ -101,6 +101,18 @@ const neu = baueAktion(coinm, 'starten', { unten: 60, oben: 150, anzahl: 150, he
 p('checkParams snake_case, create camelCase', neu.pruefen.pfad.endsWith('/checkParams') && neu.pruefen.body.buOrderData.quote_investment === '3' && neu.senden.body.buOrderData.quoteInvestment === '3')
 p('Coin-M: base USDT.PERP, quote SOL, cateType und investCoin übernommen', neu.senden.body.base === 'USDT.PERP' && neu.senden.body.quote === 'SOL' && neu.senden.body.buOrderData.cateType === 'FUTURE_GRID_COIN_MARGINED' && neu.senden.body.buOrderData.investCoin === 'SOL')
 p('Richtung (trend) vom alten Bot', neu.senden.body.buOrderData.trend === 'short' && neu.senden.body.buOrderData.leverage === 2)
+{
+    // Stops gleich beim Erstellen (17.11.2026)
+    const mitStop = baueAktion(linear, 'starten', { stopLoss: String(linear.kurs * 0.5), takeProfit: String(linear.kurs * 2) })
+    const d = mitStop.senden?.body.buOrderData || {}
+    p('Start mit Stops: lossStop/profitStop als Preis im create-Körper, im Soll, nicht in checkParams', d.lossStopType === 'price' && Number(d.lossStop) > 0 && d.profitStopType === 'price' && Number(d.profitStop) > Number(d.lossStop) && mitStop.nachher.stopLoss > 0 && mitStop.nachher.takeProfit > mitStop.nachher.stopLoss && !('lossStop' in mitStop.pruefen.body.buOrderData) && mitStop.warnungen.includes('stopsBeimStart'), JSON.stringify(mitStop.fehler || d))
+    const ohne = baueAktion(linear, 'starten', {})
+    p('Start ohne Stops: keine Stop-Felder, keine Warnung', !('lossStop' in ohne.senden.body.buOrderData) && !('profitStop' in ohne.senden.body.buOrderData) && !ohne.warnungen.includes('stopsBeimStart') && ohne.nachher.stopLoss === undefined)
+    const falscheSeite = linear.richtung === 'SHORT' ? { stopLoss: String(linear.kurs * 0.5) } : { stopLoss: String(linear.kurs * 2) }
+    p('Start: Stop-Loss auf der falschen Seite des Kurses abgewiesen, «1e3» ebenso', baueAktion(linear, 'starten', falscheSeite).fehler === 'stopLoss' && baueAktion(linear, 'starten', { stopLoss: '1e3' }).fehler === 'stopLoss')
+    const cm = baueAktion(coinm, 'starten', coinm.richtung === 'SHORT' ? { stopLoss: String(coinm.kurs * 1.5) } : { stopLoss: String(coinm.kurs * 0.6) })
+    p('Start Coin-M: Stop als inverser Instrument-Preis, Soll in USD wie eingegeben', !cm.fehler && Math.abs(1 / Number(cm.senden.body.buOrderData.lossStop) - cm.nachher.stopLoss) < 1e-6 * cm.nachher.stopLoss && Math.abs(cm.nachher.stopLoss / (coinm.kurs * (coinm.richtung === 'SHORT' ? 1.5 : 0.6)) - 1) < 0.001, JSON.stringify(cm.fehler || cm.nachher))
+}
 p('Hebel 1,5 → hebel (ganze Zahl)', baueAktion(coinm, 'starten', { hebel: 1.5 }).fehler === 'hebel')
 p('linear: base COIN.PERP, quote USDT', baueAktion(linear, 'starten', {}).senden?.body.base === 'SUI.PERP')
 
