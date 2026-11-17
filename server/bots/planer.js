@@ -8,8 +8,9 @@
  * Ablauf (routen in planer-routen.js):
  *  1. Der Code misst die Lage (Kurs, Tages-ATR, Niveaus auf 1w/1d/4h) und baut
  *     Kandidaten: Bänder eng/mittel/breit um den Kurs und Bänder knapp jenseits
- *     gemessener Niveaus, je mit dichten und weiten Grids, gerichtet auch mit
- *     Stop-Loss.
+ *     gemessener Niveaus, gerichtet auch mit Stop-Loss. Eine Grid-Dichte je Band
+ *     (¼ Tages-ATR, mindestens 0,6 %), Long und Neutral geometrisch, Short
+ *     arithmetisch — nachgemessen am 17.11.2026 (siehe planKandidaten).
  *  2. Jeder Kandidat läuft durch die geeichte Grid-Simulation — RELATIV zum
  *     Kurs: dasselbe Band in Prozent um den Kurs, gestartet vor N Tagen. Ein
  *     Band in absoluten Preisen von heute sagt über die letzten Wochen nichts.
@@ -76,6 +77,8 @@ export function notbremsePreis(richtung, liq, variante) {
 /** Ab so vielen Grids ist es ein Grid; darunter warnt der Planer oben (Einsatz zu klein). */
 export const SINNVOLLE_GRIDS = 20
 export const WENIG_GRIDS = 10
+/** Unter diesem Abstand je Grid (Anteil) warnt der Planer: Gebühren und Durchstich fressen den Zyklus (Messung 17.11.2026). */
+export const ABSTAND_ENG = 0.005
 
 const istZahl = (v) => typeof v === 'number' && Number.isFinite(v)
 const leer = (v) => v === undefined || v === null || v === ''
@@ -295,19 +298,24 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
     const a = atr
     const long = richtung === 'LONG', neutral = richtung === 'NEUTRAL'
     const baender = []
-    const band = (titel, u, o, lang = false) => {
+    // `stufe` (eng | mittel | breit | lang | chart | niveaus) sagt der Oberfläche, was für ein Band es ist
+    const band = (titel, u, o, lang = false, stufe = lang ? 'lang' : 'niveaus') => {
         if (!(u > 0) || !(o > u) || !(u < kurs && kurs < o)) return
         // Fast gleiche Bänder nur einmal
         if (baender.some((b) => Math.abs(b.unten - u) < 0.5 * a && Math.abs(b.oben - o) < 0.5 * a)) return
-        baender.push({ titel, unten: runde(u, 5), oben: runde(o, 5), lang })
+        baender.push({ titel, unten: runde(u, 5), oben: runde(o, 5), lang, stufe })
     }
     // Abstände in Tages-ATR unter/über dem Kurs; gerichtet mehr Raum in Gewinnrichtung.
     // Im Testcontainer 11.11.2026 gegen SOL/BTC/ETH: 4/6 und 14 ATR ergaben bei 5 % ATR
     // „eng" ±25 % und „breit" −70 % — zu weit für das, was die Namen sagen.
+    // Short bekommt GEGEN die Richtung mehr Platz als Long (nachgemessen 17.11.2026: BTC/ETH/SOL, 393
+    // Starts über 90 Tage, 3x): gespiegelt (4/3, 8/6, 12/10) wurden 24 / 22 / 16 % der Short-Bots
+    // liquidiert, mit 4/6, 6/12, 10/20 noch 18 / 10 / 3 %, bei besserem Mittel. Kurse steigen
+    // seltener stark als sie fallen, dann aber weiter.
     const um = neutral
         ? [['eng', 4, 4], ['mittel', 7, 7], ['breit', 11, 11]]
-        : long ? [['eng', 3, 4], ['mittel', 6, 8], ['breit', 10, 12]] : [['eng', 4, 3], ['mittel', 8, 6], ['breit', 12, 10]]
-    for (const [name, unter, ueber] of um) band(`Band ${name} um den Kurs`, kurs - unter * a, kurs + ueber * a)
+        : long ? [['eng', 3, 4], ['mittel', 6, 8], ['breit', 10, 12]] : [['eng', 4, 6], ['mittel', 6, 12], ['breit', 10, 20]]
+    for (const [name, unter, ueber] of um) band(`Band ${name} um den Kurs`, kurs - unter * a, kurs + ueber * a, false, name)
     // Langfrist (14.11.2026, Wunsch des Entwicklers): ein Bot soll Schwankungen abernten und
     // nicht beim ersten Rücksetzer unter ein enges Band ausgestoppt werden. Breites Band von
     // einer tiefen Unterstützung (≥ 8 % unter dem Kurs: Chart-Niveaus, Wochen-Niveaus) bis
@@ -342,11 +350,11 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
     const cu = (chart || []).filter((n) => n.preis < kurs).sort((x, y) => y.preis - x.preis).slice(0, 3)
     const co = (chart || []).filter((n) => n.preis > kurs).sort((x, y) => x.preis - y.preis).slice(0, 3)
     if (neutral) {
-        for (const nu of cu.slice(0, 2)) for (const no of co.slice(0, 2)) if (no.preis - nu.preis >= 3 * a) band(`Band Chart ${nu.name} bis ${no.name}`, nu.preis - 0.5 * a, no.preis + 0.5 * a)
+        for (const nu of cu.slice(0, 2)) for (const no of co.slice(0, 2)) if (no.preis - nu.preis >= 3 * a) band(`Band Chart ${nu.name} bis ${no.name}`, nu.preis - 0.5 * a, no.preis + 0.5 * a, false, 'chart')
     } else if (long) {
-        for (const nu of cu) band(`Band ab Chart ${nu.name}`, nu.preis - 0.5 * a, Math.max(kurs + 6 * a, (co[0]?.preis ?? 0) + 0.5 * a))
+        for (const nu of cu) band(`Band ab Chart ${nu.name}`, nu.preis - 0.5 * a, Math.max(kurs + 6 * a, (co[0]?.preis ?? 0) + 0.5 * a), false, 'chart')
     } else {
-        for (const no of co) band(`Band bis Chart ${no.name}`, Math.min(kurs - 6 * a, (cu[0]?.preis ?? Infinity) - 0.5 * a), no.preis + 0.5 * a)
+        for (const no of co) band(`Band bis Chart ${no.name}`, Math.min(kurs - 6 * a, (cu[0]?.preis ?? Infinity) - 0.5 * a), no.preis + 0.5 * a, false, 'chart')
     }
     // An Niveaus der hohen Zeitrahmen: Grenzen ½ Tages-ATR jenseits, mindestens 3 ATR breit
     const nv = niveausAusZeitrahmen(zr, kurs)
@@ -356,32 +364,31 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
     }
 
     const liste = []
-    const neu = (titel, variante) => { if (liste.length < MAX_KANDIDATEN) liste.push({ id: `P${liste.length + 1}`, titel, variante }) }
+    const neu = (b, titel, variante, zusatz = {}) => { if (liste.length < MAX_KANDIDATEN) liste.push({ id: `P${liste.length + 1}`, titel, stufe: b.stufe, variante, ...zusatz }) }
     const atrAnteil = a / kurs
-    // Abstand je Grid: dicht ≈ 0,1 Tages-ATR (min 0,25 %), weit ≈ 0,25 Tages-ATR (min 0,6 %).
-    // Unter ~0,1 % fressen die Gebühren (2 × Maker 0,02 %) den Zyklus.
-    const dichten = [['dichte Grids', Math.max(0.0025, 0.1 * atrAnteil)], ['weite Grids', Math.max(0.006, 0.25 * atrAnteil)]]
+    // EINE Dichte je Band: ¼ Tages-ATR, mindestens 0,6 %. Nachgemessen 17.11.2026 (Long-Band 6/8 ATR, 3x,
+    // Median über 90 Tage): Abstand 0,15 % −0,7 %, 0,3 % +7,0 %, 0,5 % +8,9 %, 1 % +10,2 %, 3 % +10,8 % des
+    // Einsatzes — unter etwa 0,5 % fressen Gebühren und Durchstich den Zyklus, darüber ist die Anzahl fast
+    // egal. Die frühere zweite Variante «dichte Grids» (0,1 ATR, min 0,25 %) kostete 1–3 Prozentpunkte.
+    const schritt = Math.max(0.006, 0.25 * atrAnteil)
+    // Long und Neutral geometrisch, Short arithmetisch (gleiche Messung): geometrisch senkte bei Long die
+    // Liquidationen (6/8: 11,5 → 9,2 %, 15/30: 15,3 → 4,1 %) bei gleichem Mittel, bei Short hob es sie
+    // (8/6: 21,9 → 23,4 %, 30/15: 13,7 → 22,6 %).
+    const art = richtung === 'SHORT' ? 'arithmetic' : 'geometric'
     for (const b of baender) {
+        const anzahl = anzahlFuerSchritt(b.unten, b.oben, schritt, art)
+        if (anzahl == null) continue
         if (b.lang) {
-            // Langfrist: weite Grids, geometrisch; gerichtet zusätzlich mit Notbremse vor der Liquidation
-            const anzahl = anzahlFuerSchritt(b.unten, b.oben, dichten[1][1], 'geometric')
-            if (anzahl == null) continue
-            neu(`${b.titel}, weite Grids, ohne Stop`, { unten: b.unten, oben: b.oben, anzahl, art: 'geometric' })
-            if (!neutral && !ohneStop) liste.length < MAX_KANDIDATEN && liste.push({ id: `P${liste.length + 1}`, titel: `${b.titel}, weite Grids, Notbremse vor der Liquidation`, variante: { unten: b.unten, oben: b.oben, anzahl, art: 'geometric' }, stopNahLiq: true })
+            // Langfrist: gerichtet zusätzlich mit Notbremse vor der Liquidation
+            neu(b, `${b.titel}, weite Grids, ohne Stop`, { unten: b.unten, oben: b.oben, anzahl, art })
+            if (!neutral && !ohneStop) neu(b, `${b.titel}, weite Grids, Notbremse vor der Liquidation`, { unten: b.unten, oben: b.oben, anzahl, art }, { stopNahLiq: true })
             continue
         }
-        const gesehen = new Set()
-        for (const [dName, schritt] of dichten) {
-            const anzahl = anzahlFuerSchritt(b.unten, b.oben, schritt)
-            if (anzahl == null || gesehen.has(anzahl)) continue
-            gesehen.add(anzahl)
-            neu(`${b.titel}, ${dName}`, { unten: b.unten, oben: b.oben, anzahl, art: 'arithmetic' })
-        }
-        // Gerichtet: dieselbe dichte Variante mit Stop-Loss 1 Tages-ATR jenseits der Gegengrenze
+        neu(b, b.titel, { unten: b.unten, oben: b.oben, anzahl, art })
+        // Gerichtet: dieselbe Variante mit Stop-Loss 1 Tages-ATR jenseits der Gegengrenze
         if (!neutral && !ohneStop) {
             const sl = long ? b.unten - a : b.oben + a
-            const anzahl = anzahlFuerSchritt(b.unten, b.oben, dichten[0][1])
-            if (sl > 0 && anzahl != null) neu(`${b.titel}, dichte Grids, Stop-Loss ${runde(sl, 4)}`, { unten: b.unten, oben: b.oben, anzahl, art: 'arithmetic', stopLoss: runde(sl, 5) })
+            if (sl > 0) neu(b, `${b.titel}, Stop-Loss ${runde(sl, 4)}`, { unten: b.unten, oben: b.oben, anzahl, art, stopLoss: runde(sl, 5) })
         }
     }
     return liste
@@ -507,6 +514,8 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
     if (istZahl(liqAbstand) && liqAbstand < 0.1) warnungen.push('liqNah')
     if (istZahl(variante.stopLoss) && istZahl(liq) && (e.richtung === 'LONG' ? variante.stopLoss <= liq : variante.stopLoss >= liq)) warnungen.push('stopHinterLiq')
     if (istZahl(heute.grid.nettoJeZyklus) && heute.grid.nettoJeZyklus <= 0) warnungen.push('gebuehrFrisst')
+    // Enger als ABSTAND_ENG: gemessen kostet das gegenüber 1 % Abstand mehrere Prozentpunkte im Quartal
+    else if (istZahl(heute.grid.abstand?.mitte) && heute.grid.abstand.mitte < ABSTAND_ENG) warnungen.push('abstandEng')
     // Was es kostet, wenn der Kurs ohne Umweg zur Gefahren-Kante läuft: Long nach unten (bis
     // zur Unterkante, mit Stop bis zum Stop), Short nach oben, Neutral das Schlechtere beider.
     // Ein Weg von heute aus, mit Gebühren, ohne Funding — Grössenordnung, keine Vorhersage.

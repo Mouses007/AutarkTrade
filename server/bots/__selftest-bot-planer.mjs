@@ -246,5 +246,23 @@ console.log('Audit 16.11.2026: Prompt-Beträge, Zeichnungstext, Mindestmenge')
     p('gekürzte Varianten erfüllen die Mindestmenge', gekuerzt > 0 && schlecht === 0, `${gekuerzt} gekürzt, ${schlecht} darunter`)
 }
 
+console.log('Regeln aus der Messung vom 17.11.2026: Dichte, Modus, Short-Band, Stufen')
+{
+    const nur = (richtung) => planKandidaten({ kurs: 160, atr: 6, zr: null, richtung })
+    const lo = nur('LONG'), sh = nur('SHORT'), ne = nur('NEUTRAL')
+    const schritt = (c) => (c.variante.art === 'geometric' ? Math.pow(c.variante.oben / c.variante.unten, 1 / c.variante.anzahl) - 1 : (c.variante.oben - c.variante.unten) / c.variante.anzahl / ((c.variante.oben + c.variante.unten) / 2))
+    p('Eine Dichte je Band: Abstand nie unter 0,6 %', [...lo, ...sh, ...ne].every((c) => schritt(c) >= 0.006 * 0.97), JSON.stringify([...lo, ...sh, ...ne].map((c) => Number(schritt(c).toFixed(4)))))
+    p('Kein Titel nennt mehr «dichte Grids»', [...lo, ...sh, ...ne].every((c) => !c.titel.includes('dichte')))
+    p('Long und Neutral geometrisch, Short arithmetisch', lo.every((c) => c.variante.art === 'geometric') && ne.every((c) => c.variante.art === 'geometric') && sh.every((c) => c.variante.art === 'arithmetic'))
+    const stufe = (l, s) => l.find((c) => c.stufe === s && c.variante.stopLoss == null && !c.stopNahLiq)
+    p('Jede Stufe (eng, mittel, breit, lang) kommt je Richtung vor', ['eng', 'mittel', 'breit', 'lang'].every((s) => stufe(lo, s) && stufe(sh, s) && stufe(ne, s)))
+    const m = stufe(sh, 'mittel').variante, b = stufe(sh, 'breit').variante
+    p('Short: mehr Platz nach oben als nach unten (mittel 6/12, breit 10/20 ATR)', nah(m.unten, 160 - 36) && nah(m.oben, 160 + 72) && nah(b.unten, 100) && nah(b.oben, 280), JSON.stringify([m, b]))
+    const eL = { coin: 'TST', coinM: false, richtung: 'LONG', einsatz: 100, hebel: 3, tage: 30 }
+    const eng = rechnePlanVariante(eL, { unten: 150, oben: 260, anzahl: 300, art: 'arithmetic' }, kerzen, { kurs: 200 })
+    const weit = rechnePlanVariante(eL, { unten: 150, oben: 260, anzahl: 40, art: 'arithmetic' }, kerzen, { kurs: 200 })
+    p('Warnung «abstandEng» unter 0,5 % Abstand, darüber nicht', eng.warnungen.includes('abstandEng') && !weit.warnungen.includes('abstandEng'), JSON.stringify([eng.warnungen, weit.warnungen]))
+}
+
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)
 process.exit(fehl ? 1 : 0)
