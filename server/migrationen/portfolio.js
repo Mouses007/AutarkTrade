@@ -169,6 +169,33 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
             await knex(tabelle).where('kontrakt', echt.toLowerCase()).update({ kontrakt: echt }).catch(() => {})
         }
     }
+    // Frühphase: von Hand geführte Liste von Hochrisiko-Coins (`fruehphase-liste.js`) und ihr Kursverlauf.
+    if (!(await knex.schema.hasTable('portfolio_fruehphase'))) {
+        await knex.schema.createTable('portfolio_fruehphase', (t) => {
+            t.increments('id')
+            t.string('kette').notNullable()          // sol | evm:<chainId>
+            t.string('kontrakt').notNullable()
+            t.string('symbol')
+            t.string('name')
+            t.text('notiz')
+            t.double('einsatzUsd')                   // von Hand: was der Kauf gekostet hat
+            t.double('menge')                        // von Hand; leer = Bestand der Wallets
+            t.double('kursBeiAufnahme')
+            t.double('mcBeiAufnahme')
+            t.bigInteger('createdAt')
+            t.unique(['kette', 'kontrakt'])
+        })
+    }
+    if (!(await knex.schema.hasTable('portfolio_fruehphase_kurse'))) {
+        await knex.schema.createTable('portfolio_fruehphase_kurse', (t) => {
+            t.increments('id')
+            t.integer('coinId').notNullable().index()
+            t.bigInteger('zeit').notNullable()
+            t.double('usd').notNullable()
+            t.double('mc')
+            t.double('liq')
+        })
+    }
     // { quelle: true } — Konten, deren neue Bewegungen gemeldet werden (`wacht.js`).
     await addColumnIfNotExists('settings', 'portfolioWacht', (t) => t.text('portfolioWacht'))
     // Sparplan: id der Gegenzeile (Lastschrift ↔ Kauf), gesetzt vom Abruf (`ordneSparplaene`).

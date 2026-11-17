@@ -26,6 +26,7 @@ import { stelleZu } from '../hype-radar/zustellung.js'
 import { leseEinstellungen } from '../hype-radar/einstellungen.js'
 import { melde } from '../benachrichtigungen.js'
 import { KETTEN } from '../../shared/portfolio-adresse.js'
+import { merkeFruehphaseKurse } from './fruehphase-liste.js'
 
 export const BOERSEN = ['bitunix', 'bitget', 'pionex', 'bitpanda']
 const TAKT_MS = 15 * 60e3
@@ -394,6 +395,8 @@ export async function rufeAb({ nur = null } = {}) {
         ergebnis.gemeldet = await meldeKontoBewegungen(neueBewegungen, bestandsWechsel).catch((e) => { console.warn(' -> Portfolio-Überwachung:', e.message); return 0 })
         laeuft.schritt = 'tageswert'
         await merkeTageswert()
+        // Frühphase-Liste: Messpunkt je Coin, auch wenn die Seite zu ist.
+        if (!nur) await merkeFruehphaseKurse().catch((e) => console.warn(' -> Portfolio-Frühphase:', e.message))
     } finally {
         letzterLauf = { ende: Date.now(), ...ergebnis }
         laeuft = null

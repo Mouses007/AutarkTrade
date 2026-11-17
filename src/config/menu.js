@@ -162,6 +162,7 @@ export const PAGES = [
     { id: 'portfolioDca', mode: 'portfolio', path: '/portfolio/dca', symbol: 'wiederholen', titleKey: 'portfolio.menuDca', group: 'portfolioGruppe' },
     { id: 'portfolioBewegungen', mode: 'portfolio', path: '/portfolio/bewegungen', symbol: 'verlauf', titleKey: 'portfolio.menuBewegungen', group: 'portfolioGruppe' },
     { id: 'portfolioStaking', mode: 'portfolio', path: '/portfolio/staking', symbol: 'schloss', titleKey: 'portfolio.menuStaking', group: 'portfolioGruppe' },
+    { id: 'portfolioFruehphase', mode: 'portfolio', path: '/portfolio/fruehphase', symbol: 'rakete', titleKey: 'portfolio.menuFruehphase', group: 'portfolioGruppe' },
     { id: 'portfolioSteuer', mode: 'portfolio', path: '/portfolio/steuer', symbol: 'waage', titleKey: 'portfolio.menuSteuer', group: 'portfolioGruppe' },
     { id: 'portfolioTotalverluste', mode: 'portfolio', path: '/portfolio/totalverluste', symbol: 'archiv', titleKey: 'portfolio.menuTotalverluste', group: 'portfolioGruppe' },
     { id: 'portfolioQuellen', mode: 'portfolio', path: '/portfolio/quellen', symbol: 'geldboerse', titleKey: 'portfolio.menuQuellen', group: 'portfolioGruppe' },

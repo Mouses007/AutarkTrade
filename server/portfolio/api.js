@@ -34,6 +34,10 @@
  *   PUT    /futures-stichtag {jahr, boerse, usd|null, quelle}  Futures-Guthaben 31.12. laut Auszug
  *   PUT    /totalverlust     {asset, an, abJahr}  Coin als Totalverlust markieren (raus aus Portfolio, Steuer ab abJahr)
  *   GET    /totalverluste                  Seite Totalverluste (Zeilen + Statistik)
+ *   GET    /fruehphase                     Seite Frühphase: eigene Hochrisiko-Coins mit Kurs, Wert, Verlauf
+ *   POST   /fruehphase       {adresse, einsatzUsd?, menge?, notiz?}  Coin über die Vertragsadresse aufnehmen
+ *   PUT    /fruehphase/:id   {einsatzUsd, menge, notiz}
+ *   DELETE /fruehphase/:id
  *   PUT    /kanton           {kz|null}     Wohnkanton für den Steuerbericht
  *   PUT    /quellen/genutzt-bis {quelle, datum|null}  Ort nicht mehr genutzt ab (raus aus aktueller Ansicht)
  *   POST   /estv/:jahr                     ESTV-Kursliste eines Jahres neu holen
@@ -51,6 +55,7 @@ import { setzeTotalverlust } from './totalverlust.js'
 import { setzeSpam } from './spam.js'
 import { totalverlustUebersicht } from './totalverlust-seite.js'
 import { stakingUebersicht } from './staking.js'
+import { fruehphaseAnsicht, nimmAuf as fruehAufnehmen, aendere as fruehAendern, entferne as fruehEntfernen } from './fruehphase-liste.js'
 import { wachtAus, setzeWacht, wachtbar } from './wacht.js'
 import { istDcaKauf, dcaArt, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon, dcaKursWege, dcaAktienBestand } from './dca.js'
 import { bitpandaAktienArten, bitpandaMehrdeutige, aktienKlasseVon } from './aktien-art.js'
@@ -610,6 +615,20 @@ export function setupPortfolioRoutes(app) {
             }
             res.json({ ok: true })
         } catch (e) { fehler(res, e) }
+    })
+
+    // Frühphase: von Hand geführte Hochrisiko-Coins. Fliesst nicht in Übersicht und Steuerbericht.
+    app.get('/api/portfolio/fruehphase', async (req, res) => {
+        try { res.json({ ok: true, ...(await fruehphaseAnsicht()) }) } catch (e) { fehler(res, e) }
+    })
+    app.post('/api/portfolio/fruehphase', async (req, res) => {
+        try { res.json({ ok: true, id: await fruehAufnehmen(req.body || {}) }) } catch (e) { fehler(res, e, e.status || 500) }
+    })
+    app.put('/api/portfolio/fruehphase/:id', async (req, res) => {
+        try { await fruehAendern(req.params.id, req.body || {}); res.json({ ok: true }) } catch (e) { fehler(res, e, e.status || 500) }
+    })
+    app.delete('/api/portfolio/fruehphase/:id', async (req, res) => {
+        try { await fruehEntfernen(req.params.id); res.json({ ok: true }) } catch (e) { fehler(res, e) }
     })
 
     app.get('/api/portfolio/totalverluste', async (req, res) => {

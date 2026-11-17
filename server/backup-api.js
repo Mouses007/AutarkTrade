@@ -174,6 +174,8 @@ const BACKUP_TABLES = [
     'portfolio_bestaende',
     'portfolio_steuerkurse',
     'portfolio_verlauf',
+    'portfolio_fruehphase',
+    'portfolio_fruehphase_kurse',
 ]
 
 /**
@@ -195,6 +197,8 @@ const BACKUP_TABLES = [
 // hält beide Listen deckungsgleich.
 const DELETE_ORDER = [
     // Portfolio: Bewegungen/Bestände (fachlich an Adressen) vor Adressen vor Wallets.
+    'portfolio_fruehphase_kurse',
+    'portfolio_fruehphase',
     'portfolio_verlauf',
     'portfolio_steuerkurse',
     'portfolio_bestaende',
