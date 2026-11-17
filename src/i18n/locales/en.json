@@ -154,7 +154,8 @@
     "aktienRadar": "Stock radar",
     "aktienMarktlage": "Market conditions",
     "aktienFavoriten": "Favourites",
-    "coinFavoriten": "Favourites"
+    "coinFavoriten": "Favourites",
+    "hypeFavoriten": "Favourites"
   },
   "filters": {
     "zeitraum": "Time period of displayed trades",
@@ -5600,6 +5601,8 @@
     "keinKandidat": "Not a candidate: {g}",
     "istKandidat": "Meets every condition of a candidate",
     "beobachtungTitel": "Watchlist",
+    "beobachtungVerweis": "{n} starred tokens in the watchlist — it is under",
+    "beobachtungSeite": "Tokens you watch with the star. They are measured in every early-stage run and never pushed out; the watchdog reports by its rules. The star here or in the early stage removes a token again. All favourites of both radars in one place: «Favourites» under Coin radar.",
     "beobachtungLeer": "Nothing watched yet. The star on a token adds it here — it is then measured in every run, never crowded out, and the watchdog reports by its rules, even after the early phase drops the token.",
     "beobachtungNichtMehr": "No longer in the early phase — the watchdog's last reading:",
     "beobachtungNochKeinStand": "No longer in the early phase, and the watchdog has not measured yet.",

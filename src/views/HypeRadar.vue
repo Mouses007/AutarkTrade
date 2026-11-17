@@ -929,6 +929,11 @@
             <FruehphaseAnsicht :aktiv="reiter === 'fruehphase'" :einst="einst" :fokus="String(route.query.token || '')" @favoriten="ladeFavoriten" />
         </div>
 
+        <!-- ══ Favoriten: die Beobachtungsliste (Token mit Stern) als eigene Seite ══ -->
+        <div v-show="reiter === 'favoriten'" class="at-mo-3">
+            <FruehphaseAnsicht teil="beobachtung" :aktiv="reiter === 'favoriten'" :einst="einst" @favoriten="ladeFavoriten" />
+        </div>
+
         <!-- ══ Börsen ═══════════════════════════════════════════════ -->
         <div v-show="reiter === 'boersen'" class="at-mo-3">
             <BoersenAnsicht :aktiv="reiter === 'boersen'" :einst="einst" />
@@ -1536,12 +1541,12 @@ const istTelefon = useIstTelefon()
  */
 const route = useRoute()
 const router = useRouter()
-const REITER = ['berichte', 'fruehphase', 'boersen']
+const REITER = ['berichte', 'fruehphase', 'boersen', 'favoriten']
 /*
  * Frühphase und Börsen haben eigene Knöpfe und rufen kein Sprachmodell — die
  * Scan-Knöpfe und die Warnung zu fehlenden KI-Schlüsseln gehören dort nicht hin.
  */
-const eigeneAnsicht = computed(() => ['fruehphase', 'boersen'].includes(route.params.reiter))
+const eigeneAnsicht = computed(() => ['fruehphase', 'boersen', 'favoriten'].includes(route.params.reiter))
 
 /*
  * Das Zahnrad ist ein Feld für alle vier Ansichten. Jede zeigt zuerst ihre
@@ -1551,13 +1556,13 @@ const eigeneAnsicht = computed(() => ['fruehphase', 'boersen'].includes(route.pa
  */
 const EINST_TEILE = { haupt: ['haupt', 'ki'], frueh: ['frueh'], boersen: ['boersen'] }
 const EINST_GEMEINSAM = ['projekt', 'wachhund', 'kanaele']
-const einstAnsicht = computed(() => ({ fruehphase: 'frueh', boersen: 'boersen' }[route.params.reiter] || 'haupt'))
+const einstAnsicht = computed(() => ({ fruehphase: 'frueh', favoriten: 'frueh', boersen: 'boersen' }[route.params.reiter] || 'haupt'))
 const teilSichtbar = (teil) => EINST_GEMEINSAM.includes(teil) || EINST_TEILE[einstAnsicht.value].includes(teil)
 function teilStil(teil) {
     const i = EINST_TEILE[einstAnsicht.value].indexOf(teil)
     return { order: i >= 0 ? i : 100 + EINST_GEMEINSAM.indexOf(teil) }
 }
-const infoAbschnitt = computed(() => ({ fruehphase: 'info.hypeFrueh', boersen: 'info.hypeBoersen' }[route.params.reiter] || 'info.hypeRadar'))
+const infoAbschnitt = computed(() => ({ fruehphase: 'info.hypeFrueh', favoriten: 'info.hypeFrueh', boersen: 'info.hypeBoersen' }[route.params.reiter] || 'info.hypeRadar'))
 const reiter = computed(() => (REITER.includes(route.params.reiter) ? route.params.reiter : 'dashboard'))
 
 /*

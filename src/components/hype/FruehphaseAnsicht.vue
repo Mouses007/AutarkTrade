@@ -1,7 +1,7 @@
 <template>
     <div class="fp">
         <!-- Kopf: Stand des letzten Durchgangs und der Knopf für einen von Hand. -->
-        <div class="fpKopf">
+        <div v-if="teil !== 'beobachtung'" class="fpKopf">
             <div class="fpStand">
                 <span v-if="!einst?.fruehAktiv" class="fpAus">
                     <Symbol name="pauseKreis" class="at-mr-1" />{{ t('hypeFrueh.taktAus') }}
@@ -24,7 +24,7 @@
         <!-- Aus einem Alarm angesprungen, aber der Token ist vergessen: was es
              noch über ihn gibt — Alarme, Gedächtnis, Erfolgskontrolle und der
              Markt jetzt. Oben, damit man es nicht unter der Rohliste sucht. -->
-        <section v-if="fokusFehlt" id="fp-fokus" class="fpFokusKarte">
+        <section v-if="fokusFehlt && teil !== 'beobachtung'" id="fp-fokus" class="fpFokusKarte">
             <div class="fpFokusKopf">
                 <b>{{ fokusName }}</b>
                 <span class="fpGrau">{{ fokusInfo?.markt?.chain || fokusInfo?.gedaechtnis?.chain || '' }} · {{ kurz(fokusFehlt.contract) }}</span>
@@ -122,27 +122,28 @@
 
         <!-- Welche Quelle lieferte, welche fiel aus — ohne das sieht eine
              leere Liste aus wie „nichts los". -->
-        <div v-if="quellen.length" class="fpQuellen">
+        <div v-if="quellen.length && teil !== 'beobachtung'" class="fpQuellen">
             <span v-for="q in quellen" :key="q.name" class="fpQuelle" :class="{ aus: !q.ok && !q.abgeschaltet, abgeschaltet: q.abgeschaltet, teils: q.ok && q.fehler }"
                 :title="q.fehler">
                 <Symbol :name="q.ok ? 'haken' : (q.abgeschaltet ? 'info' : 'schliessen')" /> {{ q.text }}
             </span>
         </div>
         <!-- Ohne CoinGecko-Schlüssel fehlen neue Pools, Käufer und Kerzen — das sagt der Kasten, mit Weg zur Einstellung. -->
-        <QuelleAus v-if="ohneSchluessel" :aus="ohneSchluessel" klein class="at-mo-1" />
+        <QuelleAus v-if="ohneSchluessel && teil !== 'beobachtung'" :aus="ohneSchluessel" klein class="at-mo-1" />
 
         <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">{{ meldung }}</Hinweis>
 
-        <p class="fpHinweis">{{ t('hypeFrueh.erklaerung') }}</p>
+        <p v-if="teil === 'beobachtung'" class="fpHinweis">{{ t('hypeFrueh.beobachtungSeite') }}</p>
+        <p v-else class="fpHinweis">{{ t('hypeFrueh.erklaerung') }}</p>
         <!-- Seit S12 ohne pump.fun, Telegram und Reddit — die Spur vor dem ersten Pool ist schmaler. -->
         <!-- S15: mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" ist die Spur wieder die alte — dann kein Hinweis. -->
-        <p v-if="!frei" class="fpHinweis">{{ t('hypeFrueh.spurHinweis') }}</p>
+        <p v-if="!frei && teil !== 'beobachtung'" class="fpHinweis">{{ t('hypeFrueh.spurHinweis') }}</p>
 
         <div v-if="ladeFehler" class="at-schlecht at-klein">{{ ladeFehler }}</div>
         <div v-else-if="daten === null" class="at-gedaempft at-klein"><Kreisel still /></div>
         <template v-else>
             <!-- ── Kandidaten: nur, was alle Bedingungen erfüllt ─────────────── -->
-            <section class="fpBlock">
+            <section v-if="teil !== 'beobachtung'" class="fpBlock">
                 <div class="fpBlockKopf">
                     <span class="fpBlockTitel"><Symbol name="ziel" class="at-mr-1" />{{ t('hypeFrueh.kandidatenTitel') }}</span>
                     <span class="fpZahl">{{ daten.kandidaten.length }}</span>
@@ -161,8 +162,13 @@
                 <p v-if="trichterText" class="fpGrau at-klein at-mo-2 at-mu-0">{{ trichterText }}</p>
             </section>
 
-            <!-- ── Beobachtungsliste: die Favoriten mit Stern ──────────────── -->
-            <section class="fpBlock">
+            <!-- ── Beobachtungsliste: die Favoriten mit Stern — eigene Seite «Favoriten»;
+                 in der Frühphase nur noch ein Verweis darauf ──────────────── -->
+            <p v-if="teil !== 'beobachtung'" class="fpGrau at-klein at-mo-2">
+                <Symbol name="stern" class="at-mr-1" />{{ t('hypeFrueh.beobachtungVerweis', { n: daten.beobachtung.length }) }}
+                <router-link to="/hype-radar/favoriten">{{ t('nav.hypeFavoriten') }}</router-link>
+            </p>
+            <section v-else class="fpBlock">
                 <div class="fpBlockKopf">
                     <span class="fpBlockTitel"><Symbol name="stern" class="at-mr-1" />{{ t('hypeFrueh.beobachtungTitel') }}</span>
                     <span class="fpZahl">{{ daten.beobachtung.length }}</span>
@@ -177,7 +183,7 @@
             </section>
 
             <!-- ── Alle beobachteten: die Rohliste, nur auf Klick ──────────── -->
-            <section class="fpBlock">
+            <section v-if="teil !== 'beobachtung'" class="fpBlock">
                 <div class="fpBlockKopf">
                     <button type="button" class="ctl-pill" @click="rohUmschalten">
                         <Symbol class="at-mr-1" :name="rohOffen ? 'hoch' : 'liste'" />
@@ -271,14 +277,14 @@
                     </div>
                 </template>
             </section>
-            <RadarQuellen :quellen="quellenZeile" />
+            <RadarQuellen v-if="teil !== 'beobachtung'" :quellen="quellenZeile" />
         </template>
 
         <!-- Erfolgskontrolle: findet die Note unter gleich gut geprüften Token
              die besseren? Jeder Spitzen-Token gegen einen Partner aus demselben
              Durchgang (meldefähig, unter der Note, gleicher Zustand, ähnliches
              Alter); das Feld ist die Grundrate. Jeder Anteil mit Nenner. -->
-        <div class="fpGuete">
+        <div v-if="teil !== 'beobachtung'" class="fpGuete">
             <div class="fpDetailTitel">{{ t('hypeFrueh.gueteTitel') }}</div>
             <p class="fpGrau at-klein at-mu-1">{{ t('hypeFrueh.gueteHinweis') }}</p>
             <!-- Ohne eine einzige Messung keine leere Tabelle, sondern ein Satz. -->
@@ -370,6 +376,12 @@ const props = defineProps({
     einst: { type: Object, default: null },
     /** Vertrag eines Tokens, der geöffnet werden soll (Klick auf einen Alarm). */
     fokus: { type: String, default: '' },
+    /**
+     * Welcher Teil: `frueh` = die Frühphase (Kandidaten, Rohliste, Erfolgskontrolle),
+     * `beobachtung` = nur die Beobachtungsliste, als eigene Seite «Favoriten» im
+     * Hype-Radar-Menü (seit 17.11.2026; vorher stand sie in der Frühphase).
+     */
+    teil: { type: String, default: 'frueh' },
 })
 /** `favoriten`: ein Stern wurde gesetzt oder entfernt — die Übersicht lädt ihre Liste neu. */
 const emit = defineEmits(['favoriten'])
@@ -567,7 +579,7 @@ function urteilZeilen(hz) {
 }
 
 watch(() => props.aktiv, (a) => {
-    if (a && !guete.value) ladeGuete()
+    if (a && !guete.value && props.teil !== 'beobachtung') ladeGuete()
 }, { immediate: true })
 
 watch(() => props.aktiv, (a) => {
@@ -623,7 +635,7 @@ async function fokussiere(contract) {
     await nextTick()
     document.getElementById('fp-' + z.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
-watch(() => [props.aktiv, props.fokus], ([a, f]) => { if (a && f) fokussiere(f) }, { immediate: true })
+watch(() => [props.aktiv, props.fokus], ([a, f]) => { if (a && f && props.teil !== 'beobachtung') fokussiere(f) }, { immediate: true })
 
 /** Was es über einen vergessenen Token noch gibt (`/api/hype-radar/frueh/token`). */
 const fokusInfo = ref(null)

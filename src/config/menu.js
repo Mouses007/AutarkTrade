@@ -111,6 +111,9 @@ export const PAGES = [
     // Börsen-Beobachter: neue Listungen und die Leiter Alpha → mittlere → grosse Börsen.
     { id: 'hypeBoersen', mode: 'research', path: '/hype-radar/boersen', symbol: 'gebaeude', titleKey: 'hype.tab_boersen', group: 'hypeGruppe', markt: 'krypto' },
     { id: 'hypeBerichte', mode: 'research', path: '/hype-radar/berichte', symbol: 'dokument', titleKey: 'hype.tab_berichte', group: 'hypeGruppe', markt: 'krypto' },
+    // Die Beobachtungsliste (Token mit Stern) als eigene Seite, wie die Favoriten beim Coin-Radar.
+    // Stand bis 17.11.2026 in der Frühphase zwischen Kandidaten und Rohliste.
+    { id: 'hypeFavoriten', mode: 'research', path: '/hype-radar/favoriten', symbol: 'stern', titleKey: 'nav.hypeFavoriten', group: 'hypeGruppe', markt: 'krypto' },
     /*
      * Der Coin-Radar steht daneben und nicht darunter: Es sind zwei Fragen,
      * nicht eine Frage mit zwei Ansichten. Der Hype-Radar sucht draussen nach
