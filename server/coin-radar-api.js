@@ -22,6 +22,7 @@ import { holeCoinInfo } from './coin-radar/coin-info.js'
 import { tiefensuche, tiefensucheVertrag } from './coin-radar/tiefensuche.js'
 import { pruefeEinzeln } from './coin-radar/einzel.js'
 import { setupCoinAnsichtRoutes } from './coin-radar/ansicht.js'
+import { berichtOhneFuture } from './coin-radar/ansicht-kern.js'
 import { sendeWennAus, istAus, ausAntwort } from './quellen/aus.js'
 import { legeAnCoinRadar, legeAnAktienRadar, HORIZONTE } from './radar-ergebnisse.js'
 import { bereinigeAktienEinstellungen, fehlerText, HUERDEN_GRENZEN, GEWICHT_GRENZEN } from './coin-radar/aktien-einstellungen.js'
@@ -270,7 +271,20 @@ export function setupCoinRadarRoutes(app) {
                 einst = { ...VORGABEN }
             }
 
-            const bericht = await pruefeEinzeln(eingabe, einst)
+            let bericht = await pruefeEinzeln(eingabe, einst)
+            /*
+             * Kein Perpetual — aber vielleicht kennt CoinGecko den Coin
+             * (HONEY/Hivemapper). Dann öffnet die Ansicht «ohne Future» mit
+             * CoinGecko-Daten. Nur bei genau diesem Kürzel (`berichtOhneFuture`);
+             * ohne CoinGecko (aus, Störung) bleibt die bisherige Antwort.
+             */
+            if (bericht?.gefunden === false && bericht.fehler === 'unbekannt') {
+                try {
+                    bericht = berichtOhneFuture(bericht, await holeCoinInfo(bericht.symbol)) || bericht
+                } catch (e) {
+                    if (!istAus(e)) logWarn('coin-radar', `Einzelprüfung ohne Future (${bericht.symbol}): ${e.message}`)
+                }
+            }
             res.json({ bericht, konstanten: KONSTANTEN })
         } catch (e) {
             if (sendeWennAus(res, e)) return

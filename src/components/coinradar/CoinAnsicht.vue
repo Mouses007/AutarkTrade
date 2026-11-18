@@ -28,6 +28,13 @@
  * Karte für sich, mit eigenem Lade- und Fehlerzustand. Die Tiefensuche kostet
  * Abrufe bei Dritten und läuft deshalb nie von selbst.
  *
+ * OHNE FUTURE (`bericht.ohneFuture`, 18.11.2026): Führt keine Börse ein
+ * Perpetual, kennt CoinGecko den Coin aber (HONEY/Hivemapper), öffnet die
+ * Ansicht trotzdem — gekennzeichnet, mit Kurs, Änderungen und Kennzahlen von
+ * CoinGecko und dem CoinGecko-Verlauf (nur Schlusskurse). Ohne Derivate,
+ * Messung, Chart-Knopf, Börsen und Favorit (der Coin-Radar-Favorit verlangt
+ * ein Perpetual).
+ *
  * Die Ansicht beschreibt einen Zustand. Sie empfiehlt nichts.
  */
 import { ref, computed, watch } from 'vue'
@@ -75,6 +82,11 @@ const SPANNEN = [{ id: 'm1', tage: 31 }, { id: 'm6', tage: 183 }, { id: 'j1', ta
 const HANDELSPLAETZE = ['bitunix', 'bitget', 'pionex']
 
 const symbol = computed(() => props.bericht.symbol)
+/** Kein Perpetual — Daten von CoinGecko. */
+const ohneFuture = computed(() => props.bericht.ohneFuture === true)
+/** CoinGecko-Verlauf: ein Schlusskurs je Tag, ein Jahr. */
+const nurSchluss = computed(() => verlauf.value?.nurSchluss === true)
+const spannenListe = computed(() => (nurSchluss.value ? SPANNEN.filter((s) => s.tage <= (verlauf.value?.tage || 365) + 1) : SPANNEN))
 const basis = computed(() => basisKurz(symbol.value))
 const faktor = computed(() => buendelFaktor(symbol.value))
 const preis = computed(() => props.bericht.preis ?? null)
@@ -161,7 +173,7 @@ const unterzeile = computed(() => {
     const teile = []
     if (info.value?.marketCapRang) teile.push(t('coinradar.coinInfoRang', { n: info.value.marketCapRang }))
     for (const k of (info.value?.kategorien || []).slice(0, 2)) teile.push(k)
-    teile.push(t(faktor.value > 1 ? 'coinAnsicht.perpBuendel' : 'coinAnsicht.perp', { n: gross(faktor.value, 0) }))
+    if (!ohneFuture.value) teile.push(t(faktor.value > 1 ? 'coinAnsicht.perpBuendel' : 'coinAnsicht.perp', { n: gross(faktor.value, 0) }))
     return teile.join(' · ')
 })
 /**
@@ -179,13 +191,14 @@ const plaetze = computed(() => {
 const plaetzeUnbekannt = computed(() => (props.bericht.boersen?.unbekannt || []).filter((b) => HANDELSPLAETZE.includes(b)).map((b) => BOERSE_NAME[b] || b))
 /** Der Chart folgt der Quelle der Messung: ein Paar, das Binance nicht führt, lädt er von Bitunix. */
 const chartZiel = computed(() => boerseUrl('tradingview', symbol.value, props.bericht.quelle === 'bitunix' ? 'BITUNIX' : 'BINANCE'))
-const quelleName = computed(() => (props.bericht.quelle === 'bitunix' ? 'Bitunix' : (verlauf.value?.quelleName || t('coinAnsicht.marktdatenquelle'))))
+const quelleName = computed(() => (ohneFuture.value ? 'CoinGecko' : props.bericht.quelle === 'bitunix' ? 'Bitunix' : (verlauf.value?.quelleName || t('coinAnsicht.marktdatenquelle'))))
 
 /* ── Kursband ──────────────────────────────────────────────────────── */
 const tag = computed(() => props.bericht.tag || null)
 const lageTag = computed(() => lageInSpanne(preis.value, tag.value?.tief, tag.value?.hoch))
 const jahr = computed(() => jahresSpanne(verlauf.value?.kerzen, preis.value, props.bericht.gemessenAm))
 const lageJahr = computed(() => lageInSpanne(preis.value, jahr.value?.tief, jahr.value?.hoch))
+// Ohne Future ist der Kurs der von CoinGecko; gerechnet wird wie sonst (FDV mit der Höchstmenge), nur die Fusszeile sagt es anders.
 const werte = computed(() => marktwerte(info.value?.markt, stueck.value))
 /** Allzeithoch und -tief in der Einheit des Kontrakts (bei Bündeln × 1000), nur wenn der Coin sichtlich derselbe ist. */
 const allzeit = computed(() => {
@@ -260,12 +273,14 @@ const streifen = computed(() => {
     const dilution = w.marktkap && w.fdv ? Math.max(1, w.fdv / w.marktkap) : null
     const alter = info.value?.genesis
         ? { wert: alterText(info.value.genesis), neben: t('coinAnsicht.seitGenesis', { datum: datum(info.value.genesis) }) }
-        : verlauf.value?.ersterTag
+        : nurSchluss.value
+            ? { wert: '—', neben: '' }
+            : verlauf.value?.ersterTag
             ? { wert: alterText(verlauf.value.ersterTag), neben: t('coinAnsicht.seitHandel', { datum: datum(verlauf.value.ersterTag), boerse: quelleName.value }) }
             : verlauf.value?.kerzen?.length
                 ? { wert: t('coinAnsicht.alterUeber', { n: 2 }), neben: t('coinAnsicht.seitHandelUeber', { boerse: quelleName.value }) }
                 : { wert: verlaufLaedt.value ? '…' : '—', neben: '' }
-    return [
+    const zellen = [
         { id: 'marktkap', wert: cg(usd(w.marktkap)), neben: info.value?.marketCapRang ? t('coinAnsicht.rangKurz', { n: info.value.marketCapRang }) : '' },
         { id: 'fdv', wert: cg(usd(w.fdv)), neben: dilution ? t('coinAnsicht.fdvFach', { n: zahl(dilution, 2) }) : '' },
         { id: 'umlauf', wert: cg(gross(m?.umlauf)), neben: w.umlaufAnteilPct != null ? t('coinAnsicht.umlaufVon_' + w.deckeArt, { n: zahl(w.umlaufAnteilPct, 0) }) : '' },
@@ -273,10 +288,19 @@ const streifen = computed(() => {
         { id: 'umsatzGesamt', wert: cg(usd(m?.umsatz24hUsd)), neben: w.umsatzZuMarktkapPct != null ? t('coinAnsicht.umsatzZuKap', { n: zahl(w.umsatzZuMarktkapPct, 1) }) : '' },
         { id: 'alter', wert: alter.wert, neben: alter.neben },
     ]
+    // Ohne Future gibt es keinen Perp-Umsatz; es bleibt der Spot-Umsatz von CoinGecko.
+    return ohneFuture.value ? zellen.filter((z) => z.id !== 'umsatzPerp') : zellen
+})
+/** Änderungen 7 T / 30 T / 1 J aus dem CoinGecko-Markt (nur ohne Future; mit Future trägt der Verlauf das). */
+const aenderungen = computed(() => {
+    const a = props.bericht.aenderungen
+    if (!ohneFuture.value || !a) return []
+    return [['d7', a.d7], ['d30', a.d30], ['j1', a.j1]].filter(([, w]) => w != null).map(([id, w]) => ({ id, w }))
 })
 
 const quellen = computed(() => [
-    { name: quelleName.value, art: 'daten' },
+    // Ohne Future kommt alles von CoinGecko — die Pflichtzeile genügt.
+    ...(ohneFuture.value ? [] : [{ name: quelleName.value, art: 'daten' }]),
     ...(info.value ? [{ name: 'CoinGecko', url: 'https://www.coingecko.com/', art: 'powered' }] : []),
 ])
 </script>
@@ -307,18 +331,20 @@ const quellen = computed(() => [
                 </Pille>
             </div>
             <div class="knoepfe">
-                <button type="button" :class="['stern', { an: favorit }]" :aria-pressed="favorit ? 'true' : 'false'"
+                <button v-if="!ohneFuture" type="button" :class="['stern', { an: favorit }]" :aria-pressed="favorit ? 'true' : 'false'"
                     :title="favorit ? t('coinradar.favEntfernen') : t('coinradar.favHinzu')" @click="emit('favorit')">
                     <Symbol name="stern" :gefuellt="favorit" />
                     <span>{{ t(favorit ? 'favoriten.istFavorit' : 'favoriten.merken') }}</span>
                 </button>
-                <Knopf klein art="haupt" symbol="chart" :to="chartZiel">{{ t('coinAnsicht.zumChart') }}</Knopf>
+                <Knopf v-if="!ohneFuture" klein art="haupt" symbol="chart" :to="chartZiel">{{ t('coinAnsicht.zumChart') }}</Knopf>
                 <Knopf klein nur-symbol symbol="aktualisieren" :titel="t('coinAnsicht.neuMessen')" :laedt="misst" @click="emit('neu-messen')" />
                 <Knopf klein nur-symbol art="leise" symbol="schliessen" :titel="t('coinradar.epSchliessen')" @click="emit('schliessen')" />
             </div>
         </header>
 
-        <p v-if="bericht.ergaenzt" class="ca-klein">{{ t('coinradar.epErgaenzt', { s: bericht.symbol }) }}</p>
+        <!-- Kein Perpetual: deutlich sagen, woher die Zahlen kommen und was fehlt. -->
+        <Hinweis v-if="ohneFuture" art="info" class="ohneFuture">{{ t('coinAnsicht.ohneFuture', { basis }) }}</Hinweis>
+        <p v-if="bericht.ergaenzt && !ohneFuture" class="ca-klein">{{ t('coinradar.epErgaenzt', { s: bericht.symbol }) }}</p>
         <!-- Der Kurs passt nicht zu dem, was CoinGecko unter diesem Kürzel führt: Stammdaten mit Vorsicht. -->
         <Hinweis v-if="info && werte.passt === false" art="warn">
             {{ t('coinAnsicht.kursPasstNicht', { name: info.name, cg: kurs(info.markt.preisUsd), boerse: kurs(stueck) }) }}
@@ -327,11 +353,17 @@ const quellen = computed(() => [
         <!-- Kursband -->
         <section class="band">
             <div class="stand">
-                <p class="preis">{{ kurs(preis) }}<span class="einheit">USDT</span></p>
+                <p class="preis">{{ kurs(preis) }}<span class="einheit">{{ ohneFuture ? 'USD' : 'USDT' }}</span></p>
                 <p :class="['delta', 'ca-' + richtung(tag?.aenderungPct)]">
                     {{ prozent(tag?.aenderungPct) }} <span class="ca-klein">{{ t('coinAnsicht.in24h') }}</span>
                 </p>
                 <p class="ca-klein">{{ t('coinAnsicht.stand', { zeit: uhr(bericht.gemessenAm), quelle: quelleName }) }}</p>
+                <p v-if="aenderungen.length" class="aenderungen">
+                    <span v-for="a in aenderungen" :key="a.id">
+                        <span class="ca-klein">{{ t('coinAnsicht.aenderung_' + a.id) }}</span>
+                        <b :class="'ca-' + richtung(a.w)">{{ prozent(a.w, 1) }}</b>
+                    </span>
+                </p>
 
                 <div class="lage">
                     <div class="ca-lageKopf"><span>{{ t('coinAnsicht.spanne24h') }}</span><b v-if="lageTag != null">{{ t('titel.lageProzent', { n: zahl(lageTag, 0) }) }}</b></div>
@@ -340,7 +372,7 @@ const quellen = computed(() => [
                 </div>
                 <div class="lage">
                     <div class="ca-lageKopf">
-                        <span>{{ jahr && !jahr.voll ? t('coinAnsicht.spanneSeit', { n: jahr.tage }, jahr.tage) : t('titel.jahresspanne') }}</span>
+                        <span>{{ jahr && !jahr.voll && !nurSchluss ? t('coinAnsicht.spanneSeit', { n: jahr.tage }, jahr.tage) : t('titel.jahresspanne') }}<template v-if="nurSchluss"> · {{ t('coinAnsicht.ausSchluss') }}</template></span>
                         <b v-if="lageJahr != null">{{ t('titel.lageProzent', { n: zahl(lageJahr, 0) }) }}</b>
                     </div>
                     <div class="skala"><i v-if="lageJahr != null" :style="{ width: lageJahr + '%' }"></i></div>
@@ -349,7 +381,7 @@ const quellen = computed(() => [
                 <div class="lage">
                     <div class="ca-lageKopf">
                         <span>{{ t('coinAnsicht.allzeit') }}</span>
-                        <b v-if="allzeit">{{ allzeit.ueber ? t('coinAnsicht.allzeitUeber') : t('coinAnsicht.allzeitAbstand', { n: prozent(allzeit.abstandPct, 0) }) }}</b>
+                        <b v-if="allzeit">{{ allzeit.ueber ? t('coinAnsicht.allzeitUeber') : t('coinAnsicht.allzeitAbstand', { n: prozent(allzeit.abstandPct, Math.abs(allzeit.abstandPct) >= 99 ? 1 : 0) }) }}</b>
                     </div>
                     <div class="skala"><i v-if="allzeit?.lage != null" :style="{ width: allzeit.lage + '%' }"></i></div>
                     <div class="ca-lageFuss">
@@ -371,7 +403,7 @@ const quellen = computed(() => [
                     <span v-else-if="linieAenderung != null" :class="['delta', 'ca-' + richtung(linieAenderung)]">{{ prozent(linieAenderung, 1) }}</span>
                     <button v-if="verlauf?.btc?.length" type="button" class="btc" :class="{ aktiv: mitBtc }" :aria-pressed="mitBtc ? 'true' : 'false'"
                         :title="t('coinAnsicht.gegenBtcTitel')" @click="mitBtc = !mitBtc">{{ t('coinAnsicht.gegenBtc') }}</button>
-                    <button v-for="s in SPANNEN" :key="s.id" type="button" :class="{ aktiv: spanne === s.id }"
+                    <button v-for="s in spannenListe" :key="s.id" type="button" :class="{ aktiv: spanne === s.id }"
                         :aria-pressed="spanne === s.id ? 'true' : 'false'" @click="spanne = s.id">{{ t('titel.spanne_' + s.id) }}</button>
                 </div>
                 <div class="flaeche">
@@ -381,6 +413,7 @@ const quellen = computed(() => [
                     <Diagramm v-else-if="diagramm" :option="diagramm" :hoehe="270" />
                     <p v-else class="ca-klein">{{ t(mitBtc ? 'coinAnsicht.vergleichFehlt' : 'coinAnsicht.verlaufFehlt') }}</p>
                 </div>
+                <p v-if="nurSchluss && diagramm" class="ca-klein">{{ t('coinAnsicht.verlaufCoinGecko') }}</p>
             </div>
         </section>
 
@@ -400,8 +433,8 @@ const quellen = computed(() => [
         <p v-else-if="info === null" class="ca-klein">{{ t('coinAnsicht.cgKenntNicht', { symbol: basis }) }}</p>
         <p v-else-if="info && !werte.frisch && werte.passt !== false" class="ca-klein">{{ t('coinAnsicht.cgStand', { zeit: zeit(info.markt.stand) }) }}</p>
 
-        <!-- Derivate · Radar-Messung -->
-        <div class="reihe zwei">
+        <!-- Derivate · Radar-Messung (ohne Future gibt es beides nicht — der Hinweis oben sagt es) -->
+        <div v-if="!ohneFuture" class="reihe zwei">
             <CoinDerivate :bericht="bericht" />
             <CoinMessung :bericht="bericht" :konstanten="konstanten" />
         </div>
@@ -413,8 +446,8 @@ const quellen = computed(() => [
         <!-- Projekt · Token-Angebot · Im Haus -->
         <div class="reihe drei">
             <CoinProjekt :symbol="basis" :info="info" :laedt="infoLaedt" :aus="infoAus" :fehler="infoFehler" />
-            <CoinAngebot :info="info" :werte="werte" :laedt="infoLaedt" :aus="infoAus" />
-            <CoinKontext :symbol="symbol" :favorit="favorit" />
+            <CoinAngebot :info="info" :werte="werte" :laedt="infoLaedt" :aus="infoAus" :ohne-future="ohneFuture" />
+            <CoinKontext :symbol="symbol" :favorit="favorit && !ohneFuture" />
         </div>
 
         <!-- Tiefensuche: der Token HINTER dem Perpetual. Kostet Abrufe bei Dritten — nur auf Knopfdruck. -->
@@ -981,6 +1014,19 @@ a {
 
 .reihe.drei {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.aenderungen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.9rem;
+    margin-top: 0.3rem !important;
+    font-size: 0.86rem;
+}
+
+.aenderungen b {
+    margin-left: 0.25rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .reihe.zwei {

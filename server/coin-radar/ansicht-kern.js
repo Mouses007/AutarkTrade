@@ -155,3 +155,88 @@ export function eigeneTrades(trades = []) {
         letzter: Math.max(...trades.map((t) => Number(t.einstieg?.t) || 0)) || null,
     }
 }
+
+/* ── Coin ohne Future (CoinGecko statt Börse) ───────────────────────────── */
+
+/** Wie weit der CoinGecko-Verlauf zurückreicht (öffentlicher Endpunkt: höchstens 365 Tage). */
+export const CG_VERLAUF_TAGE = 365
+
+/**
+ * CoinGecko `market_chart` (`prices: [[ms, kurs], …]`, `interval=daily`) →
+ * Tagesreihe im Format von `tageKompakt` (`[t, hoch, tief, schluss]`).
+ *
+ * CoinGecko liefert je Tag EINEN Kurs, Stand 00:00 UTC — das ist der Schluss
+ * des Vortags. Der Punkt wird deshalb dem Vortag zugeschrieben (`t` = Beginn
+ * des Vortags, wie die Eröffnungszeit einer Börsen-Tageskerze); so liegen
+ * Coin und BTC-Vergleichslinie auf denselben Tagen. Hoch und Tief sind nicht
+ * bekannt und stehen deshalb gleich dem Schluss — erfunden wird nichts, die
+ * Antwort trägt `nurSchluss`. Der letzte Punkt mitten im Tag (der laufende
+ * Kurs) fällt weg; den laufenden Kurs zeigt die Ansicht ohnehin.
+ *
+ * @param {object} j  Antwort von `/coins/{id}/market_chart`
+ * @returns {Array<[number, number, number, number]>} aufsteigend, ein Eintrag je Tag
+ */
+export function tageAusMarketChart(j) {
+    const jeTag = new Map()
+    for (const p of Array.isArray(j?.prices) ? j.prices : []) {
+        const t = Number(p?.[0])
+        const c = Number(p?.[1])
+        if (!Number.isFinite(t) || !(c > 0)) continue
+        const tag = Math.floor(t / TAG_MS) * TAG_MS
+        // Nur Tagesgrenzen (CoinGecko stempelt sie auf 00:00, gelegentlich ein paar Minuten später).
+        if (t - tag > 2 * 3_600_000) continue
+        jeTag.set(tag - TAG_MS, c)
+    }
+    return [...jeTag.entries()].sort((a, b) => a[0] - b[0]).map(([t, c]) => [t, c, c, c])
+}
+
+const basisAus = (symbol) => String(symbol || '').toUpperCase().replace(/USDT$|USDC$|USD$/, '').replace(/^1000+/, '')
+
+/**
+ * Coin-Ansicht «ohne Future»: Die Einzelprüfung fand kein Perpetual, aber
+ * CoinGecko kennt das Kürzel. Dann entsteht ein Bericht, der die Ansicht mit
+ * CoinGecko-Daten öffnet — gekennzeichnet (`ohneFuture`), ohne Messung,
+ * Derivate und Börsen.
+ *
+ * Nichts geraten: nur bei «unbekannt» (nicht bei Eingabefehlern) und nur, wenn
+ * CoinGecko GENAU dieses Kürzel führt (`holeCoinInfo` nimmt bei mehrdeutigen
+ * Kürzeln den bedeutendsten exakten Treffer, nie einen Ähnlichen). Die
+ * Vorschläge ähnlicher Futures bleiben am Bericht.
+ *
+ * @param {object} bericht  Antwort von `pruefeEinzeln` (`gefunden: false`)
+ * @param {object|null} info  `holeCoinInfo`
+ * @returns {object|null}
+ */
+export function berichtOhneFuture(bericht, info, jetzt = Date.now()) {
+    if (!bericht || bericht.gefunden !== false || bericht.fehler !== 'unbekannt') return null
+    const basis = basisAus(bericht.symbol)
+    if (!info || !basis || String(info.symbol || '').toUpperCase() !== basis) return null
+    const m = info.markt || {}
+    const preis = Number(m.preisUsd) > 0 ? Number(m.preisUsd) : null
+    const hoch = Number(m.hoch24hUsd) > 0 ? Number(m.hoch24hUsd) : null
+    const tief = Number(m.tief24hUsd) > 0 ? Number(m.tief24hUsd) : null
+    return {
+        gefunden: true,
+        ohneFuture: true,
+        symbol: bericht.symbol,
+        eingabe: bericht.eingabe || '',
+        quelle: 'coingecko',
+        cg: { id: info.id || '', name: info.name || basis },
+        preis,
+        gemessenAm: Number(m.stand) || jetzt,
+        tag: preis === null ? null : {
+            hoch: hoch !== null && tief !== null && hoch >= tief ? Math.max(hoch, preis) : null,
+            tief: hoch !== null && tief !== null && hoch >= tief ? Math.min(tief, preis) : null,
+            aenderungPct: endlich(m.aenderung24hPct) ? Number(m.aenderung24hPct) : null,
+        },
+        aenderungen: {
+            d7: endlich(m.aenderung7dPct) ? Number(m.aenderung7dPct) : null,
+            d30: endlich(m.aenderung30dPct) ? Number(m.aenderung30dPct) : null,
+            j1: endlich(m.aenderung1jPct) ? Number(m.aenderung1jPct) : null,
+        },
+        umsatz24h: null,
+        boersen: null,
+        aufBitunix: false,
+        vorschlaege: Array.isArray(bericht.vorschlaege) ? bericht.vorschlaege : [],
+    }
+}

@@ -144,8 +144,8 @@
 
             <!-- Nicht gefunden. Ein blosses „unbekannt" ist bei Meme-Tickern
                  die nutzloseste Antwort — deshalb Vorschläge zum Anklicken. -->
-            <div v-if="epFehler" class="crEinzelFehler">
-                <div>{{ epFehler }}</div>
+            <div v-if="epFehler || epVorschlaege.length" class="crEinzelFehler">
+                <div v-if="epFehler">{{ epFehler }}</div>
                 <div v-if="epVorschlaege.length" class="crEinzelChips">
                     <span class="crEinzelChipsTitel">{{ t('coinradar.epMeintest') }}</span>
                     <button v-for="v in epVorschlaege" :key="v" type="button"
@@ -1296,6 +1296,8 @@ async function epMessen() {
             return
         }
         ep.value = b
+        // Ohne Future (Daten von CoinGecko): ähnlich geschriebene Futures trotzdem anbieten — vielleicht war eines gemeint.
+        if (b.ohneFuture) epVorschlaege.value = b.vorschlaege || []
     } catch (e) {
         ep.value = null
         epFehler.value = e.response?.data?.error || e.message

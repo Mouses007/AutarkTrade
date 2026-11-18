@@ -28,6 +28,8 @@ const props = defineProps({
     werte: { type: Object, default: null },
     laedt: { type: Boolean, default: false },
     aus: { type: Object, default: null },
+    /** Coin ohne Future: der Kurs ist der von CoinGecko, nicht der einer Börse. */
+    ohneFuture: { type: Boolean, default: false },
 })
 const { t } = useI18n()
 const { zahl, gross, usd, anteil, zeit } = useCoinFormat()
@@ -72,7 +74,7 @@ const hatEtwas = computed(() => balken.value.length || props.werte?.marktkap != 
             <p v-if="dilution" class="einordnung">{{ t('coinAnsicht.verwaesserung_' + dilution.stufe, { n: zahl(dilution.offenPct, 0) }) }}</p>
 
             <p class="ca-klein ca-fuss">
-                {{ t(werte?.frisch ? 'coinAnsicht.angebotFrisch' : 'coinAnsicht.angebotCoingecko', { zeit: zeit(markt.stand) }) }}
+                {{ t(ohneFuture ? 'coinAnsicht.angebotOhneFuture' : werte?.frisch ? 'coinAnsicht.angebotFrisch' : 'coinAnsicht.angebotCoingecko', { zeit: zeit(markt.stand) }) }}
             </p>
             <RadarQuellen :quellen="['coingecko']" />
         </template>

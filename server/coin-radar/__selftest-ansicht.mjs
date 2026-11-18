@@ -16,7 +16,9 @@ axios.defaults.adapter = async (c) => { throw new Error('Netz gesperrt (axios): 
 
 const {
     spanne24h, tageKompakt, ersterHandelstag, rangVerlauf, eigeneTrades, VERLAUF_TAGE,
+    tageAusMarketChart, berichtOhneFuture, CG_VERLAUF_TAGE,
 } = await import('./ansicht-kern.js')
+const { QuelleAus } = await import('../quellen/aus.js')
 const { holeTagesverlauf } = await import('./ansicht.js')
 
 let gut = 0
@@ -158,13 +160,97 @@ await pruefe('BTC selbst bekommt keine Vergleichslinie; BTC-Ausfall bricht nicht
     assert.equal(eth.btc, null)
 })
 
-await pruefe('unbekanntes Symbol → gefunden: false, kein Abruf', async () => {
+await pruefe('unbekanntes Symbol (auch bei CoinGecko) → gefunden: false, kein Börsenabruf', async () => {
     const r = await holeTagesverlauf('GIBTSNICHTUSDT', {
         jetzt: JETZT, ausCache: ohneCache,
         handelbar: async () => new Map(), testbar: async () => new Set(['BTCUSDT']),
         marktdatenTage: async () => { throw new Error('darf nicht') }, bitunixTage: async () => { throw new Error('darf nicht') },
+        coinInfo: async () => null,
+        cgMarketChart: async () => { throw new Error('darf nicht') },
     })
     assert.deepEqual(r, { gefunden: false, symbol: 'GIBTSNICHTUSDT' })
+})
+
+// ── Ohne Future: CoinGecko-Tagesreihe ───────────────────────────────────
+const MITTERNACHT = Math.floor(JETZT / TAG) * TAG
+await pruefe('tageAusMarketChart: Mitternachtskurs = Schluss des Vortags, laufender Punkt fällt weg', () => {
+    const j = { prices: [
+        [MITTERNACHT - 2 * TAG, 0.02],
+        [MITTERNACHT - TAG + 60_000, 0.021],     // ein paar Sekunden nach Mitternacht
+        [MITTERNACHT, 0.019],
+        [MITTERNACHT + 5 * 3_600_000, 0.0195],   // laufender Kurs mitten im Tag
+        [MITTERNACHT - TAG, 0.0211],             // doppelt für denselben Tag: der spätere in der Liste gilt
+        ['x', 1], [MITTERNACHT - 3 * TAG, 0], [MITTERNACHT - 4 * TAG, null],
+    ] }
+    const r = tageAusMarketChart(j)
+    assert.deepEqual(r, [
+        [MITTERNACHT - 3 * TAG, 0.02, 0.02, 0.02],
+        [MITTERNACHT - 2 * TAG, 0.0211, 0.0211, 0.0211],
+        [MITTERNACHT - TAG, 0.019, 0.019, 0.019],
+    ])
+    assert.deepEqual(tageAusMarketChart(null), [])
+    assert.deepEqual(tageAusMarketChart({ prices: 'kaputt' }), [])
+    assert.equal(CG_VERLAUF_TAGE, 365)
+})
+
+const HONEY_INFO = {
+    id: 'hivemapper', name: 'Hivemapper', symbol: 'HONEY',
+    markt: { stand: JETZT - 60_000, preisUsd: 0.0123, hoch24hUsd: 0.013, tief24hUsd: 0.012, aenderung24hPct: -2.5,
+        aenderung7dPct: -8, aenderung30dPct: null, aenderung1jPct: -84 },
+}
+await pruefe('berichtOhneFuture: unbekanntes Perp, CoinGecko kennt genau dieses Kürzel', () => {
+    const b = berichtOhneFuture({ gefunden: false, fehler: 'unbekannt', symbol: 'HONEYUSDT', eingabe: 'honey', vorschlaege: ['HONEYXUSDT'] }, HONEY_INFO, JETZT)
+    assert.equal(b.gefunden, true)
+    assert.equal(b.ohneFuture, true)
+    assert.equal(b.symbol, 'HONEYUSDT')
+    assert.equal(b.quelle, 'coingecko')
+    assert.equal(b.preis, 0.0123)
+    assert.deepEqual(b.tag, { hoch: 0.013, tief: 0.012, aenderungPct: -2.5 })
+    assert.deepEqual(b.aenderungen, { d7: -8, d30: null, j1: -84 })
+    assert.equal(b.gemessenAm, JETZT - 60_000)
+    assert.equal(b.umsatz24h, null)
+    assert.equal(b.boersen, null)
+    assert.deepEqual(b.vorschlaege, ['HONEYXUSDT'], 'Vorschläge ähnlicher Futures bleiben')
+})
+await pruefe('berichtOhneFuture: nichts geraten', () => {
+    const unbekannt = { gefunden: false, fehler: 'unbekannt', symbol: 'HONEYUSDT' }
+    assert.equal(berichtOhneFuture(unbekannt, null), null, 'CoinGecko kennt es nicht')
+    assert.equal(berichtOhneFuture(unbekannt, { ...HONEY_INFO, symbol: 'HONEYX' }), null, 'anderes Kürzel')
+    assert.equal(berichtOhneFuture({ gefunden: false, fehler: 'zu_lang', symbol: 'X' }, HONEY_INFO), null, 'Eingabefehler')
+    assert.equal(berichtOhneFuture({ gefunden: true, symbol: 'HONEYUSDT' }, HONEY_INFO), null, 'Perp gefunden')
+    const ohnePreis = berichtOhneFuture(unbekannt, { ...HONEY_INFO, markt: {} }, JETZT)
+    assert.equal(ohnePreis.preis, null)
+    assert.equal(ohnePreis.tag, null)
+    assert.equal(ohnePreis.gemessenAm, JETZT)
+    const kaputteSpanne = berichtOhneFuture(unbekannt, { ...HONEY_INFO, markt: { ...HONEY_INFO.markt, hoch24hUsd: 0.01 } }, JETZT)
+    assert.equal(kaputteSpanne.tag.hoch, null, 'Hoch unter Tief ist keine Spanne')
+})
+
+await pruefe('Tagesverlauf ohne Future: CoinGecko, nurSchluss, BTC-Linie auf denselben Tagen', async () => {
+    const r = await holeTagesverlauf('HONEYUSDT', {
+        jetzt: JETZT, ausCache: ohneCache,
+        handelbar: async () => new Map(), testbar: async () => new Set(['BTCUSDT']),
+        marktdatenTage: async (s) => { assert.equal(s, 'BTCUSDT'); return tage(5, 60000) },
+        bitunixTage: async () => { throw new Error('darf nicht') },
+        coinInfo: async () => HONEY_INFO,
+        cgMarketChart: async (id) => { assert.equal(id, 'hivemapper'); return { prices: [[MITTERNACHT - TAG, 0.02], [MITTERNACHT, 0.019], [JETZT, 0.0123]] } },
+    })
+    assert.equal(r.gefunden, true)
+    assert.equal(r.quelle, 'coingecko')
+    assert.equal(r.quelleName, 'CoinGecko')
+    assert.equal(r.nurSchluss, true)
+    assert.equal(r.ersterTag, null)
+    assert.equal(r.tage, 365)
+    assert.deepEqual(r.kerzen.map((k) => k[0]), [MITTERNACHT - 2 * TAG, MITTERNACHT - TAG])
+    assert.equal(r.btc.length, 5)
+})
+
+await pruefe('Tagesverlauf ohne Future: CoinGecko aus → QuelleAus geht an die Route', async () => {
+    await assert.rejects(() => holeTagesverlauf('HONEYUSDT', {
+        jetzt: JETZT, ausCache: ohneCache,
+        handelbar: async () => new Map(), testbar: async () => new Set(['BTCUSDT']),
+        coinInfo: async () => { throw new QuelleAus('CoinGecko', 'schluesselFehlt') },
+    }), (e) => e.code === 'quelleAus' && e.grund === 'schluesselFehlt')
 })
 
 // ── Rang-Verlauf ────────────────────────────────────────────────────────

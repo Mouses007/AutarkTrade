@@ -21,6 +21,13 @@
  * Zusammenfassen gleichzeitiger Anfragen und Altstand bei Störung); BTC als
  * Vergleichslinie teilt sich einen Eintrag über alle Coins.
  *
+ * OHNE FUTURE (18.11.2026). Führt keine Börse ein Perpetual, kennt CoinGecko
+ * den Coin aber, kommt der Verlauf von CoinGecko (`market_chart`, ein Jahr,
+ * nur Schlusskurse, `nurSchluss: true`, `quelle: 'coingecko'`) — dasselbe
+ * Format, damit die Chart-Karte weiterläuft. Die BTC-Linie bleibt von der
+ * Marktdatenquelle; die CoinGecko-Punkte sind auf deren Tage gelegt
+ * (`tageAusMarketChart`).
+ *
  * KONTEXT. Liest nur die eigene Datenbank: letzte Läufe des Coin-Radars,
  * Abverkaufs-Wache, neue Listungen des Börsen-Beobachters, Favorit und
  * dessen Alarme, aktive Chart-Alarme, eigene Trades. Kein Abruf nach aussen,
@@ -41,11 +48,16 @@ import { BTC_REFERENZ } from './btc-vergleich.js'
 import { holeLage, starteRecherche } from './lage.js'
 import {
     tageKompakt, ersterHandelstag, rangVerlauf, eigeneTrades, VERLAUF_TAGE, RANG_LAEUFE,
+    tageAusMarketChart, CG_VERLAUF_TAGE,
 } from './ansicht-kern.js'
+import { holeCoinInfo } from './coin-info.js'
+import { holeCoinGecko } from '../hype-radar/quellen.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,24}$/
 const TAG_MS = 86_400_000
 const VERLAUF_TTL_MS = 30 * 60 * 1000
+/** CoinGecko-Tagesreihe: ein Punkt je Tag, ändert sich höchstens einmal täglich. */
+const CG_VERLAUF_TTL_MS = 3 * 60 * 60 * 1000
 const BITUNIX = 'https://fapi.bitunix.com'
 /** Bitunix gibt je Abruf höchstens 200 Kerzen heraus (gemessen, siehe `einzel.js`). */
 const BITUNIX_SEITE = 200
@@ -67,6 +79,53 @@ async function bitunixTage(symbol, jetzt, tage) {
     return alle.filter((k) => k.t >= jetzt - tage * TAG_MS)
 }
 
+/** BTC-Tageslinie `[[t, schluss], …]` über die Marktdatenquelle — ein Zusatz, fällt still weg. */
+async function btcLinie(quellen, jetzt, zwischen) {
+    try {
+        const e = await zwischen(`coinansicht_tage|md|${BTC_REFERENZ}`, VERLAUF_TTL_MS, async () => ({
+            kerzen: tageKompakt(await (quellen.marktdatenTage
+                || ((sym, von, bis) => getHistoricalCandles(sym, '1d', von, bis)))(BTC_REFERENZ, jetzt - VERLAUF_TAGE * TAG_MS, jetzt)),
+        }))
+        return e.kerzen.map((k) => [k[0], k[3]])
+    } catch (e) {
+        if (!istAus(e)) logWarn('coin-radar', `Coin-Ansicht: BTC-Vergleich nicht abrufbar: ${e.message}`)
+        return null
+    }
+}
+
+/**
+ * Coin ohne Future: Tagesverlauf von CoinGecko (`/coins/{id}/market_chart`,
+ * ein Jahr, ein Schlusskurs je Tag) — über `holeCoinGecko`, also mit eigenem
+ * Schlüssel oder, nur mit «Quellen mit eingeschränkten Nutzungsbedingungen»
+ * an, über den öffentlichen Endpunkt. Ohne beides wirft der Abruf `QuelleAus`,
+ * und die Route antwortet mit dem Zustand. Kennt CoinGecko das Kürzel nicht:
+ * `{gefunden: false}` wie bisher.
+ */
+async function cgTagesverlauf(symbol, quellen, jetzt, zwischen) {
+    const info = await (quellen.coinInfo || holeCoinInfo)(symbol)
+    if (!info?.id) return { gefunden: false, symbol }
+    const eigene = await zwischen(`coinansicht_tage|cg|${info.id}`, CG_VERLAUF_TTL_MS, async () => ({
+        kerzen: tageAusMarketChart(await (quellen.cgMarketChart || ((id) => holeCoinGecko(
+            `/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${CG_VERLAUF_TAGE}&interval=daily`)))(info.id)),
+    }))
+    return {
+        gefunden: true,
+        symbol,
+        quelle: 'coingecko',
+        quelleName: 'CoinGecko',
+        tage: CG_VERLAUF_TAGE,
+        kerzen: eigene.kerzen,
+        // Hoch/Tief je Tag sind unbekannt (Schlusskurse) — die Ansicht sagt das.
+        nurSchluss: true,
+        // Die Reihe endet nach einem Jahr, weil die Abfrage dort endet — kein Handelsbeginn.
+        ersterTag: null,
+        btc: await btcLinie(quellen, jetzt, zwischen),
+        stand: eigene.stand || jetzt,
+        veraltet: Boolean(eigene.veraltet),
+        _cache: eigene._cache,
+    }
+}
+
 /**
  * Tagesverlauf eines Symbols und von BTC.
  *
@@ -82,9 +141,9 @@ export async function holeTagesverlauf(symbol, quellen = {}) {
         (quellen.testbar || holeTestbar)(),
     ])
     const beiQuelle = testbar.has(symbol)
-    if (!beiQuelle && !handelbar.has(symbol)) return { gefunden: false, symbol }
-
     const zwischen = quellen.ausCache || ausCache
+    if (!beiQuelle && !handelbar.has(symbol)) return cgTagesverlauf(symbol, quellen, jetzt, zwischen)
+
     const ausMarktdaten = (s) => zwischen(`coinansicht_tage|md|${s}`, VERLAUF_TTL_MS, async () => ({
         kerzen: tageKompakt(await (quellen.marktdatenTage
             || ((sym, von, bis) => getHistoricalCandles(sym, '1d', von, bis)))(s, jetzt - VERLAUF_TAGE * TAG_MS, jetzt)),
@@ -100,14 +159,7 @@ export async function holeTagesverlauf(symbol, quellen = {}) {
     }
 
     // BTC als Vergleichslinie: ein Zusatz. Fällt er aus, steht der Verlauf ohne ihn da.
-    let btc = null
-    if (symbol !== BTC_REFERENZ) {
-        try {
-            btc = (await ausMarktdaten(BTC_REFERENZ)).kerzen.map((k) => [k[0], k[3]])
-        } catch (e) {
-            if (!istAus(e)) logWarn('coin-radar', `Coin-Ansicht: BTC-Vergleich nicht abrufbar: ${e.message}`)
-        }
-    }
+    const btc = symbol !== BTC_REFERENZ ? await btcLinie(quellen, jetzt, zwischen) : null
 
     return {
         gefunden: true,

@@ -172,6 +172,10 @@ export function stammdatenAus(j, treffer = {}, basis = '') {
             athAm: zeit(m.ath_date?.usd),
             atlUsd: positiv(usd(m.atl)),
             atlAm: zeit(m.atl_date?.usd),
+            // 24 h: für die Coin-Ansicht ohne Future (Kopf und Tagesspanne kommen dann von hier).
+            aenderung24hPct: zahl(m.price_change_percentage_24h),
+            hoch24hUsd: positiv(usd(m.high_24h)),
+            tief24hUsd: positiv(usd(m.low_24h)),
             aenderung7dPct: zahl(m.price_change_percentage_7d),
             aenderung30dPct: zahl(m.price_change_percentage_30d),
             aenderung1jPct: zahl(m.price_change_percentage_1y),
