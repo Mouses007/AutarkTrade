@@ -510,22 +510,30 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
     // Spot: kein Hebel, keine Liquidation
     const liq = probe && !e.spot ? liqRisiko(e.richtung, probe.liqSchaetzung, kurs) : null
     const liqAbstand = istZahl(liq) ? Math.abs(kurs - liq) / kurs : null
-    const imBand = (l) => istZahl(l) && (e.richtung === 'LONG' ? l > variante.unten : e.richtung === 'SHORT' ? l < variante.oben : (l > variante.unten && l < variante.oben))
+    // Liegt eine Liquidation im Band? Long: die untere, Short: die obere, Neutral: JEDE der beiden — bis
+    // 18.11.2026 zählte bei Neutral nur die nähere, in einem unsymmetrischen Band blieb die fernere unbemerkt.
+    const liqInnen = (ls) => {
+        if (!ls) return null
+        const u = istZahl(ls.unten) && ls.unten > variante.unten ? ls.unten : null
+        const o = istZahl(ls.oben) && ls.oben < variante.oben ? ls.oben : null
+        return e.richtung === 'LONG' ? u : e.richtung === 'SHORT' ? o : (u ?? o)
+    }
     // Liquidation im Band: der höchste Hebel, mit dem sie ausserhalb bleibt (17.11.2026: BTC Long «breit» mit
     // 10x zeigte die Liquidation 17 % unter dem Kurs bei einer Untergrenze 41 % darunter — das Band passt
     // nicht zum Hebel, und die Karte sagte nicht, welcher passen würde). Der Abstand zur Liquidation wächst
     // mit sinkendem Hebel, darum Halbieren. Die Zahl der Grids bleibt dabei die dieser Variante.
     let hebelPassend = null
-    if (imBand(liq)) {
+    const liqImBandPreis = e.spot ? null : liqInnen(probe?.liqSchaetzung)
+    if (liqImBandPreis != null) {
         warnungen.push('liqImBand')
-        const liqBei = (hebel) => {
+        const innenBei = (hebel) => {
             const b = planBot({ ...e, ...variante, hebel, startKurs: kurs, kurs })
             const p = simuliereBot(b, jetzt, { ...geb, mmr, startPreis: kurs })
-            return p ? liqRisiko(e.richtung, p.liqSchaetzung, kurs) : null
+            return liqInnen(p?.liqSchaetzung) != null
         }
         let lo = 1, hi = e.hebel - 1
-        if (hi >= 1 && !imBand(liqBei(1))) {
-            while (lo < hi) { const m = Math.ceil((lo + hi) / 2); if (imBand(liqBei(m))) hi = m - 1; else lo = m }
+        if (hi >= 1 && !innenBei(1)) {
+            while (lo < hi) { const m = Math.ceil((lo + hi) / 2); if (innenBei(m)) hi = m - 1; else lo = m }
             hebelPassend = lo
         }
     }
@@ -550,7 +558,7 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
     const verlustRand = e.richtung === 'LONG' ? runter : e.richtung === 'SHORT' ? rauf
         : [runter, rauf].filter(Boolean).sort((x, y) => x.betrag - y.betrag)[0] || null
     const start = {
-        menge: heute.grid.mengeJeGrid, position: probe?.position ?? null, liq, liqAbstand, hebelPassend,
+        menge: heute.grid.mengeJeGrid, position: probe?.position ?? null, liq, liqAbstand, hebelPassend, liqImBandPreis: liqImBandPreis ?? null,
         // Startposition in USD, Vorzeichen = Richtung der Coin (Coin-M: Instrument „USDT in Coin" invers)
         nominalUsd: istZahl(probe?.position) ? (e.coinM ? -probe.position : probe.position * kurs) : null,
         abstand: heute.grid.abstand, nettoJeZyklus: heute.grid.nettoJeZyklus,

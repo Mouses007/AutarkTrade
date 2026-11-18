@@ -139,6 +139,12 @@ export function liqSchaetzung({ L, zellen, menge: q, preis, kapital, mmr = 0, ge
                 else if (c.art === 'S' && !c.offen) { c.offen = true; c.einstieg = lv; kasse -= gebuehr * q * lv }
             }
             p0 = lv
+            // Die Füllung selbst kann liquidieren: Gebühr und die grössere Position heben die Erhaltungsmarge
+            // sprunghaft. Ohne diese Prüfung fand `loese` in keinem späteren Abschnitt mehr eine Lösung (sie
+            // läge VOR p0) und die Schätzung blieb leer — z. B. SOL Long 132–174 mit 14x und 15x, während 13x
+            // und 16x einen Preis lieferten (Review 18.11.2026).
+            const pos = positionVon(z, q)
+            if (pos && kasse + schwebendVon(z, q, lv) <= mmr * Math.abs(pos) * lv) { gefunden = lv; break }
         }
         if (gefunden == null) gefunden = loese(null)
         ergebnis[richtung] = gefunden

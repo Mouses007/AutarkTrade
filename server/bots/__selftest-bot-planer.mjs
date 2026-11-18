@@ -266,6 +266,26 @@ console.log('Regeln aus der Messung vom 17.11.2026: Dichte, Modus, Short-Band, S
     const hp = hoch.start.hebelPassend
     const mit = (h) => rechnePlanVariante({ ...eL, hebel: h }, { unten: 120, oben: 300, anzahl: 60, art: 'geometric' }, kerzen, { kurs: 200 })
     p('Liquidation im Band (10x): passender Hebel genannt, damit ausserhalb, einer mehr wieder im Band', hoch.warnungen.includes('liqImBand') && hp >= 1 && hp < 10 && !mit(hp).warnungen.includes('liqImBand') && mit(hp + 1).warnungen.includes('liqImBand') && mit(hp).start.hebelPassend === null, JSON.stringify({ hp, liq: hoch.start.liq }))
+    // Review 18.11.2026: die Liquidationsschätzung hatte Lücken (Liquidation genau an einer Füllung → null),
+    // die Halbierung las das als «ausserhalb» und nannte einen viel zu hohen Hebel.
+    const sol = { coin: 'SOL', coinM: false, richtung: 'LONG', einsatz: 500, tage: 30 }
+    const band = { unten: 132, oben: 174, anzahl: 46, art: 'geometric' }
+    const liqs = [13, 14, 15, 16].map((h) => rechnePlanVariante({ ...sol, hebel: h }, band, kerzen, { kurs: 150 }).start.liq)
+    p('Liquidationsschätzung ohne Lücke: SOL Long 132–174 hat bei 13x–16x je einen Preis, steigend mit dem Hebel', liqs.every((l) => l > 0) && liqs.every((l, i) => i === 0 || l >= liqs[i - 1]), JSON.stringify(liqs))
+    let falsch = 0, geprueft = 0
+    for (const [richtung, unten, oben, hebel] of [['LONG', 75, 240, 125], ['SHORT', 75, 300, 20], ['LONG', 132, 174, 20], ['SHORT', 120, 190, 15], ['NEUTRAL', 112.5, 211.5, 10]]) {
+        const ein = { ...sol, richtung }, v = { unten, oben, anzahl: 60, art: richtung === 'SHORT' ? 'arithmetic' : 'geometric' }
+        const r = rechnePlanVariante({ ...ein, hebel }, v, kerzen, { kurs: 150 })
+        if (!r.warnungen.includes('liqImBand')) continue
+        geprueft++
+        // der höchste Hebel unter dem eingegebenen, der die Warnung nicht mehr auslöst — durchgezählt
+        let wahr = null
+        for (let h = hebel - 1; h >= 1; h--) if (!rechnePlanVariante({ ...ein, hebel: h }, v, kerzen, { kurs: 150 }).warnungen.includes('liqImBand')) { wahr = h; break }
+        if (r.start.hebelPassend !== wahr) falsch++
+    }
+    p('Passender Hebel stimmt mit dem Durchzählen überein (Long 125x, Short 20x, Neutral)', geprueft >= 4 && falsch === 0, `${geprueft} geprüft, ${falsch} falsch`)
+    const neu = rechnePlanVariante({ ...sol, richtung: 'NEUTRAL', hebel: 10 }, { unten: 112.5, oben: 211.5, anzahl: 60, art: 'geometric' }, kerzen, { kurs: 150 })
+    p('Neutral, unsymmetrisches Band: auch die fernere Liquidation im Band wird gemeldet', neu.warnungen.includes('liqImBand') && neu.start.liqImBandPreis > 112.5 && neu.start.liqImBandPreis < 211.5, JSON.stringify(neu.start.liqImBandPreis))
     p('Warnung «abstandEng» unter 0,5 % Abstand, darüber nicht', eng.warnungen.includes('abstandEng') && !weit.warnungen.includes('abstandEng'), JSON.stringify([eng.warnungen, weit.warnungen]))
 }
 
