@@ -12,6 +12,7 @@ import { starteBotNettoAbgleich } from './server/bot-netto-abgleich.js'
 import { setupBotRoutes } from './server/bots/routen.js'
 import { setupBotSteuerungRoutes } from './server/bots/steuerung-routen.js'
 import { setupBotPlanerRoutes } from './server/bots/planer-routen.js'
+import { setupBotVorlagenRoutes } from './server/bots/vorlagen-routen.js'
 import { startBotVerlaufTakt } from './server/bots/verlauf.js'
 import { setupBinanceRoutes } from './server/binance-api.js'
 import { setupQuellenRoutes } from './server/quellen/routen.js'
@@ -246,6 +247,7 @@ async function starteServer() {
     // Bot-Trades im Journal einmalig exakt aus Pionex nachrechnen (nur lesend bei Pionex, nie im Testbetrieb)
     starteBotNettoAbgleich();
     setupBotPlanerRoutes(app);
+    setupBotVorlagenRoutes(app);
     setupBotSteuerungRoutes(app);
     setupBotRoutes(app);
     setupQuellenRoutes(app);

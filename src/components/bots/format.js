@@ -22,6 +22,17 @@ function coinStellen(v) {
 const stellenFuer = (v, muenze) => (muenze === 'USDT' ? 2 : coinStellen(v))
 
 /** Preis mit sinnvollen Stellen: grosse Preise 2, kleine bis 6 signifikante. */
+/** Eine Bot-Vorlage in einer Zeile (shared/botVorlage.js); `t` = i18n. */
+export function vorlageZeile(v, t) {
+    const pz = (x) => `${Number((x * 100).toFixed(x < 0.1 ? 1 : 0))} %`
+    const art = v.art === 'spot' ? 'Spot-Grid' : v.art === 'coinM' ? 'Coin-M' : 'USDT-M'
+    return [
+        v.coin || t('bots.vorlage.jedeCoin'), art, t(`bots.richtung.${v.richtung}`), v.art === 'spot' ? null : `${v.hebel}x`,
+        `${v.einsatz} ${v.art === 'coinM' ? v.coin : 'USDT'}`, t('bots.vorlage.band', { unter: pz(v.unter), ueber: pz(v.ueber) }), t('bots.vorlage.grids', { n: v.anzahl }),
+        v.stopLoss != null ? t('bots.vorlage.sl', { p: pz(v.stopLoss) }) : null, v.takeProfit != null ? t('bots.vorlage.tp', { p: pz(v.takeProfit) }) : null,
+    ].filter(Boolean).join(' · ')
+}
+
 export function preis(v) {
     if (!ok(v)) return LEER
     const a = Math.abs(v)

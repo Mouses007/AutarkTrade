@@ -65,6 +65,7 @@ import { letzterStil, merkeStil } from '../../stores/zeichenStil.js'
 import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
 import { tabellenZeilen } from '../../utils/chart/fensterTabelle.js'
 import { atr } from '../../../shared/indicators.js'
+import { coinAusSymbol } from '../../../shared/botVorlage.js'
 import { overlayAn as overlayAnFuer, istNurKrypto, fuerSymbol } from '../../utils/chart/overlays/liste.js'
 
 const props = defineProps({
@@ -88,7 +89,7 @@ const props = defineProps({
     // (Form: shared/strategieChart.js) — gezeichnet von der InstanzEbene.
     strategieDaten: { type: Object, default: null },
 })
-const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alarmVerschieben', 'alarmAendern', 'alarmBearbeiten', 'alleLoeschen', 'panel', 'vollbild', 'strategieKlick'])
+const emit = defineEmits(['botHier', 'fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alarmVerschieben', 'alarmAendern', 'alarmBearbeiten', 'alleLoeschen', 'panel', 'vollbild', 'strategieKlick'])
 const { t, te, locale } = useI18n()
 // Legende: Wert einer Wahl (VWAP-Anker, Preisquelle) übersetzt statt roh («usOpen»)
 const wahlText = (w) => (te('chart.indWahl.' + w) ? t('chart.indWahl.' + w) : null)
@@ -1188,7 +1189,7 @@ function rechtsklick(e) {
     // Am rechten oder unteren Rand nach innen klappen — das Panel schneidet
     // über seinen Rand hinausragende Teile ab.
     const x = Math.min(e.clientX - r.left, r.width - 190)
-    const yMenue = Math.min(y, r.height - 330)
+    const yMenue = Math.min(y, r.height - 362)
     // Liegt eine Zeichnung unter dem Zeiger? Dann kann man sie hier sperren/entsperren
     // und — für Linien und Zonen — einen Alarm auf sie legen.
     let zeichnung = null
@@ -1216,6 +1217,12 @@ function momentumFensterBei(y) {
         if (fenster && y >= f.oben && y < f.oben + fenster.getHeight()) return true
     }
     return false
+}
+
+/** Rechtsklick „Bot-Vorlage hier": eine gespeicherte Bot-Vorlage an diesen Preis setzen (Start-Dialog in Chart.vue). */
+function botHier() {
+    if (kontext.value) emit('botHier', Number(kontext.value.preis.toFixed(preisStellen.value)))
+    kontext.value = null
 }
 
 function alarmHier() {
@@ -2259,6 +2266,7 @@ defineExpose({
                 <Symbol name="glocke" /> {{ t('chart.alarm.lsobHier') }}</button>
             <button @click="positionHier('long')"><Symbol name="hoch" /> {{ t('chart.rechner.longHier') }}</button>
             <button @click="positionHier('short')"><Symbol name="runter" /> {{ t('chart.rechner.shortHier') }}</button>
+            <button v-if="coinAusSymbol(panel.symbol)" @click="botHier"><Symbol name="rakete" /> {{ t('chart.botHier') }}</button>
             <button @click="zeichnungHier('horizontale')"><Symbol name="minus" /> {{ t('chart.wz.horizontale') }}</button>
             <button @click="zeichnungHier('strahlH')"><Symbol name="pfeilRechts" /> {{ t('chart.wz.strahlH') }}</button>
             <button @click="kerzenWahl = { x: kontext.x, y: kontext.y }; kontext = null"><Symbol name="palette" /> {{ t('chart.kerzenFarbenMenue') }}</button>

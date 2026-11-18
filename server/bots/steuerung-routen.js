@@ -229,9 +229,13 @@ async function botFuer(id, aktion, eingabe) {
     if (e.fehler) return { fehler: e.fehler }
     const kurs = e.spot ? await fetchTickerPrice(`${e.coin}_USDT`) : (await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`))
     if (!(kurs > 0)) return { fehler: 'kurs' }
-    const v = pruefePlanVariante({ unten: eingabe?.unten, oben: eingabe?.oben, anzahl: eingabe?.anzahl, art: eingabe?.art }, kurs, e.richtung, { spot: e.spot })
-    if (v.fehler) return { fehler: v.fehler }
-    return planBot({ ...e, ...v, startKurs: kurs, kurs })
+    // Mit Trigger-Preis startet der Plan dort: das Band muss den Trigger umschliessen, nicht den heutigen Kurs
+    const trig = strengeZahl(eingabe?.trigger)
+    if (Number.isNaN(trig) || (trig != null && !(trig > 0))) return { fehler: 'trigger' }
+    const bezug = trig ?? kurs
+    const v = pruefePlanVariante({ unten: eingabe?.unten, oben: eingabe?.oben, anzahl: eingabe?.anzahl, art: eingabe?.art }, bezug, e.richtung, { spot: e.spot })
+    if (v.fehler) return { fehler: trig != null && v.fehler === 'kursAusserhalb' ? 'triggerAusserhalb' : v.fehler }
+    return planBot({ ...e, ...v, startKurs: bezug, kurs })
 }
 
 /** Nach einem Start: der neue Bot (ID aus der Antwort, sonst der jüngste laufende derselben Coin und Art). */

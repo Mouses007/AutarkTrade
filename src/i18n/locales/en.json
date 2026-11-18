@@ -7477,7 +7477,8 @@
       },
       "waendeFern": "Order book walls from the collected book (±15 %, for {seit})",
       "waendeFernKeine": "Order book: no wall within ±15 % (collected for {seit})"
-    }
+    },
+    "botHier": "Start bot template here …"
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade is free software (AGPL-3.0). The source code of this version is available here:",
@@ -8900,7 +8901,8 @@
         "liqNaeherBand": "The range reaches further in the losing direction: the position can grow there and liquidation moves closer.",
         "spotKauf": "At start Pionex buys the coin at market for every line above the price.",
         "spotBehaelt": "On stopping the coins stay in the account (not sold). You can sell them yourself at Pionex afterwards.",
-        "teilverkauf": "Part of the position is sold at market. Afterwards the bot holds less; if the price rises it earns correspondingly less."
+        "teilverkauf": "Part of the position is sold at market. Afterwards the bot holds less; if the price rises it earns correspondingly less.",
+        "triggerStart": "The bot waits at Pionex for the trigger price and then starts by itself, even when AutarkTrade is not running. Cancel it via “Close” or in the Pionex app."
       },
       "fehler": {
         "schluessel": "Enter API key and secret.",
@@ -8945,7 +8947,10 @@
         "unklarOffen": "The last request to this bot had an unclear outcome. First check at Pionex whether it was executed. Another request of this kind is possible again in {minuten} minutes.",
         "anteilZuKlein": "The share is too small: Pionex reduces in whole steps only, the smallest is {schritt} % of the position.",
         "stopLossNull": "Stop loss is too small for this contract: it would be rounded to 0. Nothing was sent.",
-        "takeProfitNull": "Take profit is too small for this contract: it would be rounded to 0. Nothing was sent."
+        "takeProfitNull": "Take profit is too small for this contract: it would be rounded to 0. Nothing was sent.",
+        "trigger": "Enter the trigger price as a number above 0 or leave it empty.",
+        "triggerNah": "The trigger price is practically at today's price. Leave the field empty for an immediate start.",
+        "triggerAusserhalb": "The trigger price must lie between lower and upper limit: that is where the bot starts."
       },
       "betragTatsaechlich": "Pionex reduces in whole steps of {schritt} % of the position each. Instead of {gewuenscht}, {tatsaechlich} will be released ({anteil} % of the position).",
       "anteilTatsaechlich": "Pionex reduces in whole steps of {schritt} % of the position each. Instead of {gewuenscht} %, {tatsaechlich} % will be sold.",
@@ -8992,7 +8997,10 @@
       "redGrid": "Of which grid profit (Pionex estimate)",
       "redEinsatz": "Investment released (Pionex estimate)",
       "redGebuehr": "Fee (Pionex estimate)",
-      "stufen": "Possible steps"
+      "stufen": "Possible steps",
+      "triggerFeld": "Start at price (trigger)",
+      "triggerSofort": "immediately",
+      "triggerHinweis": "With a trigger Pionex creates the bot and starts it only when the price reaches this level. Without a trigger it starts immediately."
     },
     "plan": {
       "knopf": "Plan a new bot",
@@ -9191,7 +9199,41 @@
       "TRADING": "normal (trading)"
     },
     "chartHinweisSpot": "{tf} candles from the configured market-data source, not from Pionex. Lines: range, grids, price, avg. entry, start price and stops; anything far away is noted at the edge. Zoom with Ctrl + mouse wheel or two fingers.",
-    "chartLeer": "There are no candles for this bot's runtime yet. The chart appears as soon as the market-data source delivers some."
+    "chartLeer": "There are no candles for this bot's runtime yet. The chart appears as soon as the market-data source delivers some.",
+    "vorlage": {
+      "titel": "Templates",
+      "text": "Prepared bots without fixed prices: range and stops are stored in percent. “Load” places them around today's price; in the chart a right-click sets them at a price where Pionex then starts the bot.",
+      "speichern": "Save as template",
+      "speichernTitel": "Save template",
+      "name": "Name",
+      "speichernText": "Stored are type, direction, leverage, investment, grids and the distances of range and stops from the price in percent, not the prices themselves.",
+      "gespeichert": "Template “{name}” saved.",
+      "laden": "Load",
+      "loeschen": "Delete",
+      "loeschenFrage": "Really delete?",
+      "jedeCoin": "any coin",
+      "band": "Range −{unter} / +{ueber}",
+      "grids": "{n} grids",
+      "sl": "SL {p}",
+      "tp": "TP {p}",
+      "chartTitel": "Start bot at {preis}",
+      "chartText": "Choose a template. Range and stops are placed around {preis}. Pionex checks the settings, and after you send it the bot waits there until the price reaches {preis}.",
+      "leer": "There is no matching template for {coin} yet. Set up a bot in the bot planner and press “Save as template”.",
+      "zumPlaner": "To the bot planner",
+      "keineCoin": "No bot can be started at Pionex for this symbol.",
+      "nichtHandelbar": "Not tradable in this type at Pionex",
+      "ohneSteuerung": "Starting needs bot control set up (Journal › Bots: key with “Bot Trading” and consent).",
+      "zurBotSeite": "To the bots page",
+      "laedt": "Loading templates …",
+      "fehler": {
+        "name": "Please enter a name.",
+        "band": "The price must lie between lower and upper limit.",
+        "zuViele": "50 templates are already stored. Delete one first.",
+        "stops": "Stops exist only for long and short (futures grid).",
+        "kurs": "Without a price the template cannot be saved — “Calculate” first.",
+        "sonst": "The template could not be saved ({code})."
+      }
+    }
   },
   "aktienTrennung": {
     "offenAndererMarkt": "In the {markt} market: {n} open position(s) – hidden here.",

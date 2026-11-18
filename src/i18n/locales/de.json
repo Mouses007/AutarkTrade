@@ -7477,7 +7477,8 @@
       },
       "waendeFern": "Orderbuch-Wände aus dem gesammelten Buch (±15 %, seit {seit})",
       "waendeFernKeine": "Orderbuch: keine Wand in ±15 % (gesammelt seit {seit})"
-    }
+    },
+    "botHier": "Bot-Vorlage hier starten …"
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade ist freie Software (AGPL-3.0). Den Quellcode dieser Fassung gibt es hier:",
@@ -8900,7 +8901,8 @@
         "liqNaeherBand": "Das Band reicht weiter in die Verlustrichtung: die Position kann dort weiter wachsen, die Liquidation rückt näher.",
         "spotKauf": "Beim Start kauft Pionex zum Marktpreis die Coin für alle Linien über dem Kurs.",
         "spotBehaelt": "Beim Beenden bleiben die Coins im Konto (nicht verkauft). Verkaufen kannst du sie danach selbst bei Pionex.",
-        "teilverkauf": "Ein Teil der Position wird zum Marktpreis verkauft. Danach hält der Bot weniger Position, steigt der Kurs, verdient er entsprechend weniger."
+        "teilverkauf": "Ein Teil der Position wird zum Marktpreis verkauft. Danach hält der Bot weniger Position, steigt der Kurs, verdient er entsprechend weniger.",
+        "triggerStart": "Der Bot wartet bei Pionex auf den Trigger-Preis und startet dann von selbst, auch wenn AutarkTrade nicht läuft. Abbrechen lässt er sich über «Beenden» oder in der Pionex-App."
       },
       "fehler": {
         "schluessel": "API-Key und Secret eingeben.",
@@ -8945,7 +8947,10 @@
         "unklarOffen": "Die letzte Sendung an diesen Bot hatte einen unklaren Ausgang. Prüfe zuerst bei Pionex, ob sie ausgeführt wurde. Eine weitere Sendung dieser Art ist in {minuten} Minuten wieder möglich.",
         "anteilZuKlein": "Der Anteil ist zu klein: Pionex reduziert nur in ganzen Schritten, der kleinste ist {schritt} % der Position.",
         "stopLossNull": "Stop-Loss ist für diesen Kontrakt zu klein: Er würde auf 0 gerundet. Es wurde nichts gesendet.",
-        "takeProfitNull": "Take-Profit ist für diesen Kontrakt zu klein: Er würde auf 0 gerundet. Es wurde nichts gesendet."
+        "takeProfitNull": "Take-Profit ist für diesen Kontrakt zu klein: Er würde auf 0 gerundet. Es wurde nichts gesendet.",
+        "trigger": "Trigger-Preis als Zahl grösser als 0 eingeben oder leer lassen.",
+        "triggerNah": "Der Trigger-Preis liegt praktisch am heutigen Kurs. Für einen sofortigen Start das Feld leer lassen.",
+        "triggerAusserhalb": "Der Trigger-Preis muss zwischen Unter- und Obergrenze liegen: dort startet der Bot."
       },
       "betragTatsaechlich": "Pionex reduziert nur in ganzen Schritten von je {schritt} % der Position. Statt {gewuenscht} werden {tatsaechlich} frei ({anteil} % der Position).",
       "anteilTatsaechlich": "Pionex reduziert nur in ganzen Schritten von je {schritt} % der Position. Statt {gewuenscht} % werden {tatsaechlich} % verkauft.",
@@ -8992,7 +8997,10 @@
       "redGrid": "Davon Grid-Gewinn (Schätzung Pionex)",
       "redEinsatz": "Frei werdende Investition (Schätzung Pionex)",
       "redGebuehr": "Gebühr (Schätzung Pionex)",
-      "stufen": "Mögliche Stufen"
+      "stufen": "Mögliche Stufen",
+      "triggerFeld": "Start bei Preis (Trigger)",
+      "triggerSofort": "sofort",
+      "triggerHinweis": "Mit Trigger legt Pionex den Bot an und startet ihn erst, wenn der Kurs diesen Preis erreicht. Ohne Trigger startet er sofort."
     },
     "plan": {
       "knopf": "Neuen Bot planen",
@@ -9191,7 +9199,41 @@
       "TRADING": "normal (handelt)"
     },
     "chartHinweisSpot": "Kerzen {tf} der eingestellten Marktdatenquelle, nicht von Pionex. Linien: Band, Grids, Kurs, Ø Einstieg, Startpreis und Stops; was weit weg liegt, steht als Hinweis am Rand. Zoomen mit Strg + Mausrad oder zwei Fingern.",
-    "chartLeer": "Für die Laufzeit dieses Bots liegen noch keine Kerzen vor. Der Chart erscheint, sobald die Marktdatenquelle welche liefert."
+    "chartLeer": "Für die Laufzeit dieses Bots liegen noch keine Kerzen vor. Der Chart erscheint, sobald die Marktdatenquelle welche liefert.",
+    "vorlage": {
+      "titel": "Vorlagen",
+      "text": "Vorbereitete Bots ohne feste Preise: Band und Stops sind in Prozent gespeichert. «Laden» legt sie um den heutigen Kurs; im Chart setzt ein Rechtsklick sie an einen Preis, an dem Pionex den Bot dann startet.",
+      "speichern": "Als Vorlage speichern",
+      "speichernTitel": "Vorlage speichern",
+      "name": "Name",
+      "speichernText": "Gespeichert werden Art, Richtung, Hebel, Einsatz, Grids und die Abstände von Band und Stops zum Kurs in Prozent, nicht die Preise selbst.",
+      "gespeichert": "Vorlage «{name}» gespeichert.",
+      "laden": "Laden",
+      "loeschen": "Löschen",
+      "loeschenFrage": "Wirklich löschen?",
+      "jedeCoin": "jede Coin",
+      "band": "Band −{unter} / +{ueber}",
+      "grids": "{n} Grids",
+      "sl": "SL {p}",
+      "tp": "TP {p}",
+      "chartTitel": "Bot bei {preis} starten",
+      "chartText": "Wähle eine Vorlage. Band und Stops werden um {preis} gelegt. Pionex prüft die Einstellung, und nach deinem Senden wartet der Bot dort, bis der Kurs {preis} erreicht.",
+      "leer": "Für {coin} gibt es noch keine passende Vorlage. Im Bot-Planer einen Bot einstellen und «Als Vorlage speichern» drücken.",
+      "zumPlaner": "Zum Bot-Planer",
+      "keineCoin": "Für dieses Symbol lässt sich bei Pionex kein Bot starten.",
+      "nichtHandelbar": "Bei Pionex nicht in dieser Art handelbar",
+      "ohneSteuerung": "Starten geht erst mit eingerichteter Bot-Steuerung (Journal › Bots: Schlüssel mit «Bot Trading» und Einwilligung).",
+      "zurBotSeite": "Zur Bot-Seite",
+      "laedt": "Vorlagen werden geladen …",
+      "fehler": {
+        "name": "Bitte einen Namen eingeben.",
+        "band": "Der Kurs muss zwischen Unter- und Obergrenze liegen.",
+        "zuViele": "Es sind schon 50 Vorlagen gespeichert. Zuerst eine löschen.",
+        "stops": "Stops gibt es nur für Long und Short (Futures-Grid).",
+        "kurs": "Ohne Kurs lässt sich die Vorlage nicht speichern — zuerst «Durchrechnen».",
+        "sonst": "Die Vorlage liess sich nicht speichern ({code})."
+      }
+    }
   },
   "aktienTrennung": {
     "offenAndererMarkt": "Im Markt {markt}: {n} offene Position(en) – hier ausgeblendet.",

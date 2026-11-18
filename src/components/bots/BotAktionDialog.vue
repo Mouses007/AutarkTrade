@@ -34,7 +34,7 @@ const FELDER = {
     stops: ['stopLoss', 'takeProfit'],
     reduzieren: ['anteil'],
     pausieren: [], fortsetzen: [], beenden: [],
-    starten: ['unten', 'oben', 'anzahl', 'hebel', 'einsatz', 'stopLoss', 'takeProfit'],
+    starten: ['unten', 'oben', 'anzahl', 'hebel', 'einsatz', 'stopLoss', 'takeProfit', 'trigger'],
 }
 const eingabe = ref({})
 const pruefung = ref(null)
@@ -88,6 +88,7 @@ const platzhalter = computed(() => ({
     // Neuer Bot: leer heisst «keiner» — die Stops des alten Bots werden nicht übernommen
     stopLoss: props.aktion === 'starten' ? t('bots.feld.keiner') : stopPlatzhalter(props.bot.stops?.stopLoss),
     takeProfit: props.aktion === 'starten' ? t('bots.feld.keiner') : stopPlatzhalter(props.bot.stops?.takeProfit),
+    trigger: t('bots.st.triggerSofort'),
 }))
 // Nur Preis-Stops als Preis zeigen: ein Stop nach Gewinnquote (`profit_ratio`, Wert −0.2) stand sonst
 // als «Preis −0.20» im Feld (Audit STG-11)
@@ -95,7 +96,7 @@ function stopPlatzhalter(s) {
     if (!s || s.wert == null) return t('bots.feld.keiner')
     return /price/.test(s.art || '') ? preis(s.wert) : `${s.wert} (${s.art || '?'})`
 }
-const feldName = (f) => ({ unten: t('bots.sim.unten'), oben: t('bots.sim.oben'), anzahl: t('bots.feld.grids'), hebel: t('bots.feld.hebel'), einsatz: `${t('bots.feld.einsatz')} (${mc.value})`, betrag: props.aktion === 'reduzieren' ? `${t('bots.st.redBetrag')} (${mc.value})` : `${t('bots.st.betrag')} (${mc.value})`, anteil: t('bots.st.anteil'), stopLoss: t('bots.feld.stopLoss'), takeProfit: t('bots.feld.takeProfit') }[f])
+const feldName = (f) => ({ unten: t('bots.sim.unten'), oben: t('bots.sim.oben'), anzahl: t('bots.feld.grids'), hebel: t('bots.feld.hebel'), einsatz: `${t('bots.feld.einsatz')} (${mc.value})`, betrag: props.aktion === 'reduzieren' ? `${t('bots.st.redBetrag')} (${mc.value})` : `${t('bots.st.betrag')} (${mc.value})`, anteil: t('bots.st.anteil'), stopLoss: t('bots.feld.stopLoss'), takeProfit: t('bots.feld.takeProfit'), trigger: t('bots.st.triggerFeld') }[f])
 
 /** Eingabe für den Server: Stops „leer" heisst entfernen nur, wenn das Feld angefasst wurde. */
 function eingabeFuerServer() {
@@ -211,6 +212,7 @@ const vergleich = computed(() => {
     zeile(t('bots.feld.extraMarge'), v.extraMarge, n.extraMarge, (x) => betrag(x, mc.value))
     zeile(t('bots.feld.stopLoss'), v.stopLoss, n.stopLoss, preis)
     zeile(t('bots.feld.takeProfit'), v.takeProfit, n.takeProfit, preis)
+    zeile(t('bots.feld.trigger'), v.trigger, n.trigger, preis)
     if (p.reduzieren) {
         const r = p.reduzieren
         const zeig = (titel, wert, f) => { if (wert != null) z.push({ titel, vorher: '', nachher: f(wert), pionex: true }) }
@@ -240,7 +242,7 @@ const istZeilen = computed(() => {
     const r = ergebnis.value
     if (!r?.ist || r.ist.fehler || r.ist.status === 'nichtMehrLaufend' || r.ist.status === 'nichtGefunden') return []
     const soll = r.soll || {}
-    const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['status', t('bots.feld.status'), (x) => (te(`bots.status.${x}`) ? t(`bots.status.${x}`) : x)]]
+    const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['trigger', t('bots.feld.trigger'), preis], ['status', t('bots.feld.status'), (x) => (te(`bots.status.${x}`) ? t(`bots.status.${x}`) : x)]]
     return felder.filter(([k]) => soll[k] !== undefined).map(([k, titel, f]) => {
         const s = soll[k], i = r.ist[k]
         const gleich = k === 'status' && ENDE.includes(String(s)) && ENDE.includes(String(i)) ? true : s == null ? i == null : (typeof s === 'number' && typeof i === 'number' ? Math.abs(s - i) <= Math.abs(s) * 0.001 : String(s) === String(i))
@@ -271,6 +273,7 @@ const istZeilen = computed(() => {
                     <button type="button" class="pille" :class="{ aktiv: istStufe(s.wert) }" :aria-pressed="istStufe(s.wert)" :disabled="laedt" @click="waehleStufe(s.wert)">{{ s.text }}</button>
                 </template>
             </div>
+            <p v-if="aktion === 'starten'" class="leise">{{ t('bots.st.triggerHinweis') }}</p>
             <div v-if="aktion === 'stops'" class="wegs">
                 <label v-if="bot.stops?.stopLoss"><input v-model="eingabe.stopLossWeg" type="checkbox" :disabled="laedt"> {{ t('bots.st.slEntfernen') }}</label>
                 <label v-if="bot.stops?.takeProfit"><input v-model="eingabe.takeProfitWeg" type="checkbox" :disabled="laedt"> {{ t('bots.st.tpEntfernen') }}</label>

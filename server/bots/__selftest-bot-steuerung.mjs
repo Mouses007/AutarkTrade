@@ -113,6 +113,25 @@ p('Richtung (trend) vom alten Bot', neu.senden.body.buOrderData.trend === 'short
     const cm = baueAktion(coinm, 'starten', coinm.richtung === 'SHORT' ? { stopLoss: String(coinm.kurs * 1.5) } : { stopLoss: String(coinm.kurs * 0.6) })
     p('Start Coin-M: Stop als inverser Instrument-Preis, Soll in USD wie eingegeben', !cm.fehler && Math.abs(1 / Number(cm.senden.body.buOrderData.lossStop) - cm.nachher.stopLoss) < 1e-6 * cm.nachher.stopLoss && Math.abs(cm.nachher.stopLoss / (coinm.kurs * (coinm.richtung === 'SHORT' ? 1.5 : 0.6)) - 1) < 0.001, JSON.stringify(cm.fehler || cm.nachher))
 }
+{
+    // Start per Trigger-Preis (18.11.2026): Pionex startet den Bot, sobald der Kurs den Preis erreicht
+    const k = linear.kurs
+    const band = { unten: String(k * 0.5), oben: String(k * 0.9), anzahl: '40' }
+    const t = baueAktion(linear, 'starten', { ...band, trigger: String(k * 0.7) })
+    const d = t.senden?.body.buOrderData || {}, c = t.pruefen?.body.buOrderData || {}
+    p('Trigger unter dem Kurs: condition im create- UND im checkParams-Körper, Richtung «-1», im Soll', !t.fehler && Math.abs(Number(d.condition) / (k * 0.7) - 1) < 0.001 && d.conditionDirection === '-1' && c.condition === d.condition && c.condition_direction === '-1' && Math.abs(t.nachher.trigger / (k * 0.7) - 1) < 0.001 && t.warnungen.includes('triggerStart'), JSON.stringify(t.fehler || d))
+    const hoch = baueAktion(linear, 'starten', { unten: String(k * 1.1), oben: String(k * 1.6), anzahl: '40', trigger: String(k * 1.3) })
+    p('Trigger über dem Kurs: Richtung «1»', hoch.senden?.body.buOrderData.conditionDirection === '1')
+    p('Trigger ausserhalb des Bands, am Kurs und «1e3» abgewiesen', baueAktion(linear, 'starten', { ...band, trigger: String(k * 0.95) }).fehler === 'triggerAusserhalb' && baueAktion(linear, 'starten', { unten: String(k * 0.8), oben: String(k * 1.2), anzahl: '40', trigger: String(k * 1.0005) }).fehler === 'triggerNah' && baueAktion(linear, 'starten', { ...band, trigger: '1e3' }).fehler === 'trigger')
+    p('ohne Trigger: keine condition-Felder', !('condition' in baueAktion(linear, 'starten', {}).senden.body.buOrderData) && !('condition' in baueAktion(linear, 'starten', {}).pruefen.body.buOrderData))
+    const ck = coinm.kurs
+    const cm = baueAktion(coinm, 'starten', { unten: String(ck * 0.5), oben: String(ck * 0.9), anzahl: '40', trigger: String(ck * 0.7) })
+    p('Coin-M: Trigger invers, Richtung gedreht (Coin fällt = Instrument steigt)', !cm.fehler && Math.abs(1 / Number(cm.senden.body.buOrderData.condition) / (ck * 0.7) - 1) < 0.001 && cm.senden.body.buOrderData.conditionDirection === '1', JSON.stringify(cm.fehler || cm.senden?.body.buOrderData))
+    // Stops beziehen sich auf den Trigger: ein Long-Stop zwischen Trigger und heutigem Kurs wäre am Start schon gerissen
+    const lang = { ...linear, richtung: 'LONG', roh: { ...linear.roh, trend: 'long' } }
+    p('Long mit Trigger: Stop-Loss über dem Trigger abgewiesen, darunter angenommen', baueAktion(lang, 'starten', { ...band, trigger: String(k * 0.7), stopLoss: String(k * 0.8) }).fehler === 'stopLoss' && !baueAktion(lang, 'starten', { ...band, trigger: String(k * 0.7), stopLoss: String(k * 0.45) }).fehler)
+    p('Soll/Ist kennt den Trigger', einstellungVon({ ...linear, trigger: { preis: 123 } }).trigger === 123 && einstellungVon(linear).trigger === null)
+}
 p('Hebel 1,5 → hebel (ganze Zahl)', baueAktion(coinm, 'starten', { hebel: 1.5 }).fehler === 'hebel')
 p('linear: base COIN.PERP, quote USDT', baueAktion(linear, 'starten', {}).senden?.body.base === 'SUI.PERP')
 

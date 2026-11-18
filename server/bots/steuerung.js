@@ -111,7 +111,31 @@ export function einstellungVon(bot) {
         // nur Preis-Stops sind ein Preis: ein Stop als Quote (`profit_ratio` −0.2) stand sonst als «−0.2 USD» da (Audit STG-11)
         stopLoss: stopPreis(bot.stops?.stopLoss), takeProfit: stopPreis(bot.stops?.takeProfit),
         status: bot.status, liquidation: liqRisiko(bot.richtung, bot.liquidation, bot.kurs),
+        trigger: bot.trigger?.preis ?? null,
     }
+}
+
+/**
+ * Trigger-Preis eines neuen Bots (18.11.2026): Pionex startet ihn erst, wenn der Kurs den Preis erreicht
+ * (`condition` + `conditionDirection` in `create`, `condition` + `condition_direction` in `checkParams`,
+ * Doku gelesen 17.11.2026). Die App wartet auf nichts und startet nichts von sich aus.
+ * Richtung: «-1» = der Kurs fällt auf den Preis, «1» = er steigt darauf. Coin-M ist invers (Preis in
+ * Coin je USDT): dort ist ein fallender Coin-Kurs ein steigender Instrument-Preis.
+ * @returns null (kein Trigger), {fehler} oder {usd, text, richtung}
+ */
+export const TRIGGER_MIN_ABSTAND = 0.001
+export function triggerAus(bot, eingabe, kurs, ip, unten, oben) {
+    const t = zahl(eingabe?.trigger)
+    if (t == null) return null
+    if (!istZahl(t) || t <= 0) return { fehler: 'trigger' }
+    // Praktisch am Kurs: das wäre ein sofortiger Start mit unklarer Richtung
+    if (Math.abs(t / kurs - 1) < TRIGGER_MIN_ABSTAND) return { fehler: 'triggerNah' }
+    // Der Bot startet AM Trigger: dort muss das Band liegen, nicht am heutigen Kurs
+    if (!(unten < t && t < oben)) return { fehler: 'triggerAusserhalb' }
+    const text = ip(t)
+    if (!(Number(text) > 0)) return { fehler: 'trigger' }
+    const faellt = t < kurs
+    return { usd: usdAusInstrument(bot, text), text, richtung: (bot.coinM ? !faellt : faellt) ? '-1' : '1' }
 }
 
 /**
@@ -233,6 +257,10 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     if (!istZahl(kurs) || kurs <= 0) return { fehler: 'kurs' }
     if (oben < kurs / 5 || unten > kurs * 5) return { fehler: 'weitWeg' }
     const top = ip(bot.coinM ? unten : oben), bottom = ip(bot.coinM ? oben : unten)
+    const trig = triggerAus(bot, eingabe, kurs, ip, unten, oben)
+    if (trig?.fehler) return { fehler: trig.fehler }
+    // Bezugspreis für die Seite der Stops: der Preis, an dem der Bot startet
+    const bezug = trig ? trig.usd : kurs
     const trend = String(roh.trend || 'long')
     const { base, quote } = basisQuote(bot)
     const daten = { top, bottom, row: anzahl, grid_type: art, trend, leverage: hebel, quoteInvestment: String(einsatz) }
@@ -246,7 +274,7 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     const stopNachher = {}
     const startWarn = []
     if (sl != null || tp != null) {
-        const seite = seitenPruefung(bot, sl, tp, kurs)
+        const seite = seitenPruefung(bot, sl, tp, bezug)
         if (seite) return { fehler: seite }
         const slText = sl != null ? ip(sl) : null, tpText = tp != null ? ip(tp) : null
         if (sl != null && !(Number(slText) > 0)) return { fehler: 'stopLossNull' }
@@ -259,6 +287,12 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     // Art des Bots übernehmen (Coin-M: cateType, Margin-Münze, UI-Kennung), soweit vorhanden
     for (const feld of ['investCoin', 'cateType', 'uiExtraData']) if (roh[feld]) daten[feld] = roh[feld]
     const pruefDaten = { top, bottom, row: anzahl, grid_type: art, trend, leverage: hebel, quote_investment: String(einsatz), extra_margin: false }
+    if (trig) {
+        daten.condition = trig.text; daten.conditionDirection = trig.richtung
+        pruefDaten.condition = trig.text; pruefDaten.condition_direction = trig.richtung
+        stopNachher.trigger = trig.usd
+        startWarn.push('triggerStart')
+    }
     return {
         aktion,
         pruefen: { pfad: `${PFAD}/checkParams`, body: { base, quote, buOrderData: pruefDaten } },
@@ -290,16 +324,20 @@ function baueSpotAktion(bot, aktion, eingabe, { kurs, stellen }) {
     if (oben < kurs / 5 || unten > kurs * 5) return { fehler: 'weitWeg' }
     const ip = (usd) => instrumentPreis({ ...bot, coinM: false }, usd, stellen)
     const top = ip(oben), bottom = ip(unten)
+    const trig = triggerAus({ ...bot, coinM: false }, eingabe, kurs, ip, unten, oben)
+    if (trig?.fehler) return { fehler: trig.fehler }
     const base = bot.coin, quote = 'USDT'
     const basis = bot.plan ? null : (bot.einsatz?.basis ?? bot.einsatz?.aktuell ?? null)
     const warnungen = ['neuerBot', 'spotKauf', ...(istZahl(basis) && einsatz > 2 * basis ? ['grosserBetrag'] : [])]
-    if (kurs < unten || kurs > oben) warnungen.push('kursAusserhalb')
+    if (!trig && (kurs < unten || kurs > oben)) warnungen.push('kursAusserhalb')
+    if (trig) warnungen.push('triggerStart')
     gerundetWarnung([[unten, Number(bottom)], [oben, Number(top)]], warnungen)
+    const bedingung = trig ? { condition: trig.text } : {}
     return {
         aktion,
-        pruefen: { pfad: `${SPOT_PFAD}/checkParams`, body: { base, quote, buOrderData: { top, bottom, row: anzahl, grid_type: art, quote_total_investment: String(einsatz) } } },
-        senden: { pfad: `${SPOT_PFAD}/create`, body: { base, quote, buOrderData: { top, bottom, row: anzahl, gridType: art, quoteTotalInvestment: String(einsatz) } } },
-        nachher: { unten: Number(bottom), oben: Number(top), anzahl, art, einsatz },
+        pruefen: { pfad: `${SPOT_PFAD}/checkParams`, body: { base, quote, buOrderData: { top, bottom, row: anzahl, grid_type: art, quote_total_investment: String(einsatz), ...bedingung, ...(trig ? { condition_direction: trig.richtung } : {}) } } },
+        senden: { pfad: `${SPOT_PFAD}/create`, body: { base, quote, buOrderData: { top, bottom, row: anzahl, gridType: art, quoteTotalInvestment: String(einsatz), ...bedingung, ...(trig ? { conditionDirection: trig.richtung } : {}) } } },
+        nachher: { unten: Number(bottom), oben: Number(top), anzahl, art, einsatz, ...(trig ? { trigger: trig.usd } : {}) },
         warnungen,
     }
 }

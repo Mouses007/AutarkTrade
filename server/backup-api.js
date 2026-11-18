@@ -81,6 +81,8 @@ const BACKUP_TABLES = [
     'chart_zeichnungen',
     'chart_alarme',
     'chart_vorlagen',
+    // Bot-Vorlagen: vorbereitete Bots (Band und Stops in Prozent), Handarbeit
+    'bot_vorlagen',
     // Merkliste Aktien: Handarbeit. Am Ticker geführt, nicht an der Nummer im Stamm —
     // der Stamm steht nicht in der Sicherung und wird nach dem Rückspielen neu aufgebaut.
     'aktien_favoriten',
@@ -236,6 +238,7 @@ const DELETE_ORDER = [
     'chart_watchlists',
     'chart_layouts',
     'chart_vorlagen',
+    'bot_vorlagen',
     'aktien_favoriten',
     'live_sessions',
     'calendar_events',

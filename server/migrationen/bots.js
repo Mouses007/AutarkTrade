@@ -61,6 +61,16 @@ export async function migriereBots(knex) {
             t.index(['botId', 'zeit'])
         })
     }
+    // Bot-Vorlagen (18.11.2026): vorbereitete Bots ohne feste Preise (shared/botVorlage.js). Handarbeit,
+    // darum im Backup. `daten` = JSON der geprüften Vorlage ohne den Namen.
+    if (!(await knex.schema.hasTable('bot_vorlagen'))) {
+        await knex.schema.createTable('bot_vorlagen', (t) => {
+            t.increments('id').primary()
+            t.string('name', 80).notNullable()
+            t.text('daten').notNullable()
+            t.bigInteger('erstelltAm').notNullable()
+        })
+    }
     // Audit 11.11.2026 (SEC-01/02/06): Einmal-Token prozessübergreifend (eindeutiger Hash,
     // die Zeile entsteht VOR dem Senden), Ausgang in drei Zuständen, Stand danach.
     const spalten = [

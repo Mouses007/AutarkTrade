@@ -29,6 +29,7 @@ import axios from 'axios'
 import AlarmReiter from '../components/chart/AlarmReiter.vue'
 import KiReiter from '../components/chart/KiReiter.vue'
 import AlarmDialog from '../components/chart/AlarmDialog.vue'
+import BotVorlageImChart from '../components/bots/BotVorlageImChart.vue'
 import MomentumBox from '../components/chart/MomentumBox.vue'
 import IndikatorSchalter from '../components/chart/IndikatorSchalter.vue'
 import { indBoxOffen } from '../stores/chartIndBox.js'
@@ -871,6 +872,13 @@ function alarmLinienFuer(p) {
     return alarme.value.filter((a) => a.aktiv && a.art === 'preis' && a.symbol === p.symbol && a.markt === p.markt)
 }
 
+// Rechtsklick „Bot-Vorlage hier": Vorlage wählen und mit diesem Preis als Trigger bei Pionex anlegen
+const botVorlage = ref(null)
+function botHier(preis) {
+    const p = aktivesPanel.value
+    if (p?.symbol && preis > 0) botVorlage.value = { symbol: p.symbol, preis }
+}
+
 function alarmBeiPreis(preis, notiz = '') {
     const p = aktivesPanel.value
     // `notiz`: Name der Indikator-Linie beim Rechtsklick „Alarm an Candle POC …" — steht dann in der Meldung
@@ -1485,7 +1493,7 @@ watch(sichtbareAnzahl, async () => {
                         @bereich="bereich(i)" @indikator="indikatorAktion(i, $event)"
                         :werkzeug="i === aktivIndex ? werkzeug : null" :magnet="!!daten.zeichnen?.magnet"
                         :zeichnungen-versteckt="!!daten.zeichnen?.versteckt" @werkzeug-fertig="werkzeug = null"
-                        :alarm-linien="alarmLinienFuer(p)" @alarm-bei-preis="(x, n) => { fokus(i); alarmBeiPreis(x, n) }"
+                        :alarm-linien="alarmLinienFuer(p)" @alarm-bei-preis="(x, n) => { fokus(i); alarmBeiPreis(x, n) }" @bot-hier="(x) => { fokus(i); botHier(x) }"
                         @alarm-verschieben="alarmVerschieben" @alarm-aendern="alarmAusChart" @alarm-bearbeiten="alarmBearbeiten"
                         @alarm-auf-zeichnung="(z) => { fokus(i); alarmAufZeichnung(z) }"
                         @alarm-momentum="() => { fokus(i); alarmMomentum() }" @alarm-lsob="(tr) => { fokus(i); alarmLsob(tr) }"
@@ -1588,6 +1596,7 @@ watch(sichtbareAnzahl, async () => {
             </div>
         </template>
         <TeilenDialog v-model="teilenOffen" :erzeuge="teilenBild" :dateiname="teilenName" :betreff="teilenBetreff" />
+        <BotVorlageImChart v-if="botVorlage" :key="botVorlage.symbol + botVorlage.preis" :symbol="botVorlage.symbol" :preis="botVorlage.preis" @zu="botVorlage = null" />
         <AlarmDialog v-if="alarmVorlage" :vorlage="alarmVorlage" :watchlists="watchlists" @schliesse="alarmVorlage = null" />
         <IndikatorDialog v-if="dialog" :key="dialog.instanz?.id || 'neu'" :instanz="dialog.instanz"
             :aktive="daten.panels[dialog.panel]?.indikatoren || []" :aktie="Boolean(aktieVon(daten.panels[dialog.panel]))" @hinzu="indikatorHinzu" @speichere="indikatorSpeichern"

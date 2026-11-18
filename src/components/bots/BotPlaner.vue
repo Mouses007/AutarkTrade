@@ -18,8 +18,10 @@ import Karte from '@/components/basis/Karte.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Pille from '@/components/basis/Pille.vue'
+import Dialog from '@/components/basis/Dialog.vue'
 import BotAktionDialog from './BotAktionDialog.vue'
-import { preis, betrag, prozent, zahl, datum, ton, tonProzent } from './format.js'
+import { preis, betrag, prozent, zahl, datum, ton, tonProzent, vorlageZeile } from './format.js'
+import { vorlageAnwenden } from '../../../shared/botVorlage.js'
 
 const props = defineProps({ steuerung: { type: Object, default: null } })
 const emit = defineEmits(['gestartet'])
@@ -66,6 +68,7 @@ const spot = computed(() => eingabe.value.spot === true)
 onMounted(async () => {
     try { coins.value = (await axios.get('/api/bots/plan/coins', { timeout: 60_000 })).data?.coins || [] } catch { coins.value = [] }
     try { ki.value = (await axios.get('/api/bots/plan/ki')).data?.ergebnis || null } catch { ki.value = null }
+    ladeVorlagen()
 })
 // Gibt es die gewählte Art für die Coin nicht, auf die andere wechseln
 watch(coinInfo, (c) => {
@@ -89,13 +92,36 @@ const anfrage = (extra = {}) => ({ ...eingabe.value, stufe: undefined, coin: Str
 const erg = ref(null)
 const laedt = ref(false)
 const fehler = ref('')
-async function rechnen() {
+/**
+ * `halte`: nach dem Rechnen wieder die Variante zeigen, die gerade in der Karte steht (gleiche Richtung und
+ * gleiches Band) — «Hebel auf Nx setzen» und «Einsatz auf das Minimum» gelten für SIE, nicht für die
+ * Standard-Variante der Stufe (Review 18.11.2026).
+ */
+async function rechnen({ halte = false } = {}) {
+    const merke = halte && planErg.value ? { richtung: planRichtung.value, titel: String(planErg.value.titel || '').replace(/ \(Stop-Loss [^)]*\)$/, ''), stufe: planErg.value.stufe, stop: planErg.value.variante?.stopLoss != null } : null
     laedt.value = true; fehler.value = ''
     try {
         erg.value = (await axios.post('/api/bots/plan/rechnen', anfrage(), { timeout: 180_000 })).data
         richtungFilter.value = ''
-        waehleStandard()
         pruefeMindest()
+        // Eine geladene Vorlage legt ihr Band um den eben gemessenen Kurs; sonst die Variante der Band-Stufe
+        const v = ausstehendeVorlage
+        ausstehendeVorlage = null
+        const gesetzt = v ? vorlageAnwenden(v, erg.value.kurs) : null
+        if (gesetzt) {
+            plan.value = { unten: textZahl(gesetzt.unten), oben: textZahl(gesetzt.oben), anzahl: String(gesetzt.anzahl), art: gesetzt.art, stopLoss: textZahl(gesetzt.stopLoss), takeProfit: textZahl(gesetzt.takeProfit), richtung: v.richtung }
+            planQuelle.value = null
+            stufeFehlt.value = false
+            await eigenRechnen()
+        } else if (veraltet.value) {
+            // Während der Abfrage wurden die Eingaben geändert: nichts übernehmen, die Karte sagt «veraltet»
+            planQuelle.value = null
+        } else {
+            const ohneStop = (x) => String(x || '').replace(/ \(Stop-Loss [^)]*\)$/, '').replace(/, Stop-Loss [^,]*$/, '')
+            const gleich = merke && gueltig.value.find((c) => c.richtung === merke.richtung && c.stufe === merke.stufe && (c.variante.stopLoss != null) === merke.stop && ohneStop(c.titel) === ohneStop(merke.titel))
+            if (gleich) uebernehmen(gleich, { rollen: false })
+            else waehleStandard(merke?.richtung)
+        }
     } catch (e) { fehler.value = meldung(e) } finally { laedt.value = false }
 }
 const gueltig = computed(() => (erg.value?.kandidaten || []).filter((c) => !c.fehler))
@@ -212,7 +238,7 @@ function waehleStandard(richtung) {
     const l = gueltig.value.filter((c) => (c.richtung || erg.value.eingabe.richtung) === r)
     const ohne = l.filter((c) => c.variante.stopLoss == null)
     const c = ohne.find((x) => x.stufe === eingabe.value.stufe) || ohne[0] || l[0]
-    if (!c) { planQuelle.value = null; return }
+    if (!c) { planQuelle.value = null; if (richtung) plan.value.richtung = richtung; return }
     uebernehmen(c, { rollen: false })
     stufeFehlt.value = c.stufe !== eingabe.value.stufe
 }
@@ -225,14 +251,22 @@ function waehleRichtung(r) {
 watch(() => [eingabe.value.coin, eingabe.value.coinM, eingabe.value.spot, eingabe.value.einsatz, eingabe.value.hebel], () => { planQuelle.value = null })
 async function eigenRechnen() {
     eigenLaedt.value = true; eigenFehler.value = ''
+    // Was gefragt wurde: die Antwort gilt nur dafür (wer währenddessen ein Feld ändert, muss neu rechnen)
+    const gefragt = JSON.stringify([plan.value, planRichtung.value])
     try {
-        const d = (await axios.post('/api/bots/plan/rechnen', anfrage({ eigene: [{ ...plan.value, richtung: planRichtung.value }] }), { timeout: 180_000 })).data
+        // Stops gibt es nur gerichtet und nicht bei Spot: versteckte Felder gehen nicht mit
+        const eigene = { ...plan.value, ...(mitStops.value ? {} : { stopLoss: '', takeProfit: '' }), richtung: planRichtung.value }
+        const d = (await axios.post('/api/bots/plan/rechnen', anfrage({ eigene: [eigene] }), { timeout: 180_000 })).data
         erg.value = d
         // Die Kandidaten sind neu gerechnet (andere IDs möglich): die Pionex-Prüfung der alten gilt nicht mehr (Audit PLN-02)
         pruefeMindest()
         const e = d.eigene?.[0]
         if (e?.fehler) eigenFehler.value = te(`bots.plan.fehler.${e.fehler}`) ? t(`bots.plan.fehler.${e.fehler}`) : t(`bots.st.fehler.${e.fehler}`)
-        else if (e) planQuelle.value = { sig: planSig(), c: e }
+        else if (e && JSON.stringify([plan.value, planRichtung.value]) === gefragt) {
+            // Der Server kürzt die Grids, wenn der Einsatz die Mindestmenge nicht erreicht: die Karte zeigt, was gerechnet ist
+            if (e.variante?.anzahl != null && String(e.variante.anzahl) !== String(plan.value.anzahl)) plan.value.anzahl = String(e.variante.anzahl)
+            planQuelle.value = { sig: planSig(), c: e }
+        }
     } catch (e) { eigenFehler.value = meldung(e) } finally { eigenLaedt.value = false }
 }
 const planVollstaendig = computed(() => plan.value.unten !== '' && plan.value.oben !== '' && plan.value.anzahl !== '')
@@ -246,7 +280,65 @@ const planLage = computed(() => {
 })
 // Die Liquidation der gezeigten Variante liegt im Band: der Hebel passt nicht zum Band
 const liqImBand = computed(() => !!planErg.value && !veraltet.value && !spot.value && (planErg.value.warnungen || []).includes('liqImBand'))
-function hebelSetzen(n) { eingabe.value.hebel = String(n); rechnen() }
+function hebelSetzen(n) { eingabe.value.hebel = String(n); rechnen({ halte: true }) }
+// KI-Vorschlag: die Variante von heute mit derselben ID nur, wenn sie noch dasselbe Band ist (IDs sind Plätze)
+const gleicheVariante = (a, b) => !!a && !!b && ['unten', 'oben', 'anzahl', 'art', 'stopLoss'].every((f) => (a[f] ?? null) === (b[f] ?? null))
+const kiKandidat = (v) => { const c = kandidat(v.id); return c && gleicheVariante(c.variante, v.variante) ? c : v }
+// ── Vorlagen ─────────────────────────────────────────────────────────────
+// Ein eingestellter Bot ohne feste Preise (shared/botVorlage.js): hier speichern und laden, im Chart per
+// Rechtsklick an einen Preis setzen.
+const vorlagen = ref([])
+const vorlageName = ref('')
+const vorlageOffen = ref(false)
+const vorlageFehler = ref('')
+const vorlageMeldung = ref('')
+const vorlageLaedt = ref(false)
+const loeschFrage = ref(null)
+let ausstehendeVorlage = null
+async function ladeVorlagen() { try { vorlagen.value = (await axios.get('/api/bots/vorlagen')).data?.vorlagen || [] } catch { vorlagen.value = [] } }
+const vorlageMoeglich = computed(() => !!erg.value && !veraltet.value && planVollstaendig.value)
+function vorlageDialog() {
+    const e = erg.value?.eingabe
+    vorlageName.value = [e?.coin, spot.value ? 'Spot' : t(`bots.richtung.${planRichtung.value}`), planErg.value?.stufe && STUFEN.includes(planErg.value.stufe) ? t(`bots.plan.stufe.${planErg.value.stufe}`) : null].filter(Boolean).join(' ')
+    vorlageFehler.value = ''
+    vorlageOffen.value = true
+}
+async function vorlageSpeichern() {
+    vorlageLaedt.value = true; vorlageFehler.value = ''
+    const art = artWahl.value
+    try {
+        const { data } = await axios.post('/api/bots/vorlagen', {
+            name: vorlageName.value, kurs: erg.value.kurs,
+            // USDT-M und Spot: der Einsatz ist in USDT und passt zu jeder Coin; Coin-M gilt nur für die Coin
+            plan: {
+                coin: art === 'coinM' ? String(eingabe.value.coin || '').toUpperCase() : '', art, richtung: planRichtung.value,
+                hebel: spot.value ? '1' : eingabe.value.hebel, einsatz: eingabe.value.einsatz,
+                unten: plan.value.unten, oben: plan.value.oben, anzahl: plan.value.anzahl, gridArt: plan.value.art,
+                ...(mitStops.value ? { stopLoss: plan.value.stopLoss, takeProfit: plan.value.takeProfit } : {}),
+            },
+        })
+        vorlageOffen.value = false
+        vorlageMeldung.value = t('bots.vorlage.gespeichert', { name: data.vorlage?.name || vorlageName.value })
+        await ladeVorlagen()
+    } catch (e) {
+        const code = e?.response?.data?.code
+        vorlageFehler.value = code ? (te(`bots.vorlage.fehler.${code}`) ? t(`bots.vorlage.fehler.${code}`) : te(`bots.plan.fehler.${code}`) ? t(`bots.plan.fehler.${code}`) : t('bots.vorlage.fehler.sonst', { code })) : (e?.response?.data?.error || e.message)
+    } finally { vorlageLaedt.value = false }
+}
+function vorlageLaden(v) {
+    vorlageMeldung.value = ''
+    eingabe.value = { ...eingabe.value, ...(v.coin ? { coin: v.coin } : {}), spot: v.art === 'spot', coinM: v.art === 'coinM', richtung: v.art === 'spot' ? eingabe.value.richtung : v.richtung, hebel: String(v.hebel), einsatz: String(v.einsatz) }
+    ausstehendeVorlage = v
+    rechnen()
+    planKarte.value?.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+}
+async function vorlageLoeschen(v) {
+    if (loeschFrage.value !== v.id) { loeschFrage.value = v.id; return }
+    loeschFrage.value = null
+    try { await axios.delete(`/api/bots/vorlagen/${v.id}`) } catch { /* die Liste zeigt den Stand */ }
+    await ladeVorlagen()
+}
+
 async function kopiere(text) { try { await navigator.clipboard.writeText(String(text)) } catch { /* ohne Zwischenablage */ } }
 
 // ── Starten ──────────────────────────────────────────────────────────────
@@ -363,7 +455,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 <Hinweis v-else-if="veraltet" art="warn">{{ t('bots.plan.veraltet') }}</Hinweis>
                 <Hinweis v-else-if="!planErg && planVollstaendig" art="info">{{ t('bots.plan.geaendert') }}</Hinweis>
                 <Hinweis v-if="liqImBand" art="fehler" :titel="t('bots.plan.liqImBandTitel')">
-                    <p class="grund">{{ t('bots.plan.liqImBandText', { hebel: erg.eingabe.hebel, liq: preis(planErg.start.liq), unten: preis(planErg.variante.unten), oben: preis(planErg.variante.oben) }) }}
+                    <p class="grund">{{ t('bots.plan.liqImBandText', { hebel: erg.eingabe.hebel, liq: preis(planErg.start.liqImBandPreis ?? planErg.start.liq), unten: preis(planErg.variante.unten), oben: preis(planErg.variante.oben) }) }}
                         {{ planErg.start.hebelPassend ? t('bots.plan.liqImBandHebel', { n: planErg.start.hebelPassend }) : t('bots.plan.liqImBandKein') }}</p>
                     <Knopf v-if="planErg.start.hebelPassend" art="haupt" klein @click="hebelSetzen(planErg.start.hebelPassend)">{{ t('bots.plan.hebelSetzen', { n: planErg.start.hebelPassend }) }}</Knopf>
                 </Hinweis>
@@ -419,7 +511,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                             <span v-else-if="mindest[planErg.id].reichtAus === true" class="gut">✓ {{ t('bots.plan.minReicht', { betrag: betrag(Number(erg.eingabe.einsatz), erg.einheit) }) }}</span>
                             <template v-else-if="mindest[planErg.id].reichtAus === false">
                                 <span class="schlecht">{{ mindest[planErg.id].min ? t('bots.plan.minAb', { betrag: betrag(mindest[planErg.id].min, erg.einheit) }) : t('bots.plan.minZuKlein') }}</span>
-                                <Knopf v-if="mindest[planErg.id].min" art="leise" klein @click="eingabe.einsatz = String(mindest[planErg.id].min); rechnen()">{{ t('bots.plan.minSetzen', { betrag: betrag(mindest[planErg.id].min, erg.einheit) }) }}</Knopf>
+                                <Knopf v-if="mindest[planErg.id].min" art="leise" klein @click="eingabe.einsatz = String(mindest[planErg.id].min); rechnen({ halte: true })">{{ t('bots.plan.minSetzen', { betrag: betrag(mindest[planErg.id].min, erg.einheit) }) }}</Knopf>
                             </template>
                             <span v-else class="leise">—</span>
                         </p>
@@ -451,12 +543,25 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 </ul>
                 <Hinweis v-if="eigenFehler" art="fehler">{{ eigenFehler }}</Hinweis>
                 <div class="knoepfe">
+                    <Knopf art="leise" symbol="speichern" :disabled="!vorlageMoeglich" @click="vorlageDialog">{{ t('bots.vorlage.speichern') }}</Knopf>
                     <Knopf v-if="!planErg || veraltet" art="normal" symbol="rechner" :laedt="eigenLaedt" :disabled="!planVollstaendig || !eingabeOk" @click="eigenRechnen">{{ t('bots.plan.eigenRechnen') }}</Knopf>
-                    <Knopf v-if="steuerungAktiv" :art="liqImBand ? 'normal' : 'haupt'" symbol="hochladen" :disabled="!planVollstaendig || !eingabeOk" @click="dialogOffen = true">{{ t('bots.plan.starten') }}</Knopf>
+                    <Knopf v-if="steuerungAktiv" :art="liqImBand ? 'normal' : 'haupt'" symbol="hochladen" :disabled="!planVollstaendig || !eingabeOk || veraltet" @click="dialogOffen = true">{{ t('bots.plan.starten') }}</Knopf>
                 </div>
+                <p v-if="vorlageMeldung" class="leise gut">{{ vorlageMeldung }}</p>
                 <p v-if="!steuerungAktiv" class="leise">{{ t('bots.plan.ohneSteuerung') }}</p>
             </Karte>
         </div>
+
+        <Karte v-if="vorlagen.length" :titel="t('bots.vorlage.titel')">
+            <p class="leise">{{ t('bots.vorlage.text') }}</p>
+            <ul class="vorlagen">
+                <li v-for="v in vorlagen" :key="v.id">
+                    <div class="vText"><strong>{{ v.name }}</strong><span class="leise">{{ vorlageZeile(v, t) }}</span></div>
+                    <Knopf klein symbol="rechner" :disabled="laedt" @click="vorlageLaden(v)">{{ t('bots.vorlage.laden') }}</Knopf>
+                    <Knopf klein :art="loeschFrage === v.id ? 'gefahr' : 'leise'" symbol="muell" @click="vorlageLoeschen(v)">{{ loeschFrage === v.id ? t('bots.vorlage.loeschenFrage') : t('bots.vorlage.loeschen') }}</Knopf>
+                </li>
+            </ul>
+        </Karte>
 
         <Karte v-if="erg && gueltig.length" :titel="t('bots.plan.vergleichTitel')">
             <Hinweis v-if="zuWenigGrids" art="warn" :titel="t('bots.plan.wenigTitel')">
@@ -608,7 +713,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                         <p v-if="v.unbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: v.unbelegt.join(', ') }) }}</p>
                         <div class="knoepfe">
                             <Knopf v-if="mindest[v.id]?.min && mindest[v.id]?.reichtAus === false" art="leise" klein @click="eingabe.einsatz = String(mindest[v.id].min); rechnen()">{{ t('bots.plan.minSetzen', { betrag: betrag(mindest[v.id].min, erg.einheit) }) }}</Knopf>
-                            <Knopf art="leise" symbol="rechner" klein @click="uebernehmen(kandidat(v.id) || v)">{{ t('bots.plan.waehlen') }}</Knopf>
+                            <Knopf art="leise" symbol="rechner" klein @click="uebernehmen(kiKandidat(v))">{{ t('bots.plan.waehlen') }}</Knopf>
                         </div>
                     </article>
                     <p v-if="ki.hinweis" class="leise">{{ ki.hinweis }}</p>
@@ -677,6 +782,17 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
             </details>
         </Karte>
 
+        <Dialog v-model="vorlageOffen" :titel="t('bots.vorlage.speichernTitel')" breite="30rem" :aussen-schliesst="false">
+            <div class="vDialog">
+                <p class="leise">{{ t('bots.vorlage.speichernText') }}</p>
+                <label class="feld"><span>{{ t('bots.vorlage.name') }}</span><input v-model="vorlageName" class="at-feld" maxlength="60" @keydown.enter="vorlageSpeichern"></label>
+                <Hinweis v-if="vorlageFehler" art="fehler">{{ vorlageFehler }}</Hinweis>
+            </div>
+            <template #fuss>
+                <Knopf art="leise" @click="vorlageOffen = false">{{ t('bots.st.abbrechen') }}</Knopf>
+                <Knopf art="haupt" :laedt="vorlageLaedt" :disabled="!vorlageName.trim()" @click="vorlageSpeichern">{{ t('bots.vorlage.speichern') }}</Knopf>
+            </template>
+        </Dialog>
         <BotAktionDialog v-if="steuerungAktiv" v-model="dialogOffen" :bot="planBot" aktion="starten" :vorgabe="vorgabe" :feste="feste" :steuerung="steuerung" @gesendet="emit('gestartet')" />
     </div>
 </template>
@@ -714,6 +830,11 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
 .wert select.at-feld { width: auto; font-weight: 400; font-size: 0.9rem; }
 .satz { margin: 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .satz.warn { color: var(--warn); }
+.vorlagen { list-style: none; margin: var(--abstand-2) 0 0; padding: 0; display: flex; flex-direction: column; }
+.vorlagen li { display: flex; gap: var(--abstand-2); align-items: center; flex-wrap: wrap; padding: var(--abstand-2) 0; border-bottom: 1px solid var(--line); }
+.vorlagen li:last-child { border-bottom: 0; }
+.vText { flex: 1 1 16rem; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vDialog { display: flex; flex-direction: column; gap: var(--abstand-3); }
 .mehr > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; padding: var(--abstand-2) 0; }
 .mehr[open] > summary { margin-bottom: var(--abstand-2); }
 .tabelle tr.imPlan th:first-child { box-shadow: inset 3px 0 0 var(--accent); }
