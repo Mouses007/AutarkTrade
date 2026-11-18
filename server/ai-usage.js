@@ -48,6 +48,7 @@ export const FUNKTIONEN = {
     FLASH_NEWS: 'flash-news',              // Chart-Reiter Flash-News: Zusammenfassung
     FLASH_NEWS_X: 'flash-news-x',          // … deren X-Suche (Grok)
     FLASH_NEWS_WEB: 'flash-news-web',      // … deren Web-Suche (Perplexity)
+    COIN_LAGE: 'coin-lage',                // Coin-Ansicht, Projekt-Lage: KI-Recherche (Perplexity)
     BOT_OPTIMIERUNG: 'bot-optimierung',    // Bot-Seite: KI wählt aus nachgerechneten Varianten
     LAGE: 'lage',                          // Marktradar-Gesamtlage
     MECHANIK: 'mechanik',                  // Marktmechanik-Einordnung

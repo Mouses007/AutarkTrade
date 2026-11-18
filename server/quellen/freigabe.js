@@ -54,6 +54,8 @@ export const QUELLEN_OHNE_FREIGABE = {
     coinmetrics: { name: 'Coin Metrics (Community)', zeilen: ['93'], was: 'Bitcoin-Bewertung: Tageskurs und MVRV seit 2010 (Realized Price, 200-Wochen-Durchschnitt)' },
     bgeometrics: { name: 'BGeometrics (ohne Abo)', zeilen: ['94'], was: 'Bitcoin-Bewertung: Einstand der kurzfristigen Halter' },
     deepseekSuche: { name: 'DeepSeek-Suche', zeilen: ['89d'], was: 'Recherche-Weg „DeepSeek-Suche" im Lagebericht' },
+    // Feed-Bedingungen: „personal, non-commercial use" — wie die Verlags-RSS (Zeile 46).
+    googleNews: { name: 'Google News (RSS-Suche)', zeilen: ['46'], was: 'Coin-Ansicht, Karte „Projekt-Lage": Schlagzeilen eines Jahres zum Projektnamen über die RSS-Suche von news.google.com' },
 }
 
 export const IDS = Object.keys(QUELLEN_OHNE_FREIGABE)

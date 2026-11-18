@@ -9,6 +9,8 @@
  *               Allzeithoch; rechts der Verlauf (auf Wunsch gegen BTC)
  *   Streifen    Marktkapitalisierung, FDV, Umlauf, Umsatz, Alter
  *   Zweierreihe Derivate · Radar-Messung
+ *   Projekt-Lage Meldungen eines Jahres mit Warnsignalen (`CoinLage.vue`);
+ *               KI-Recherche dazu nur auf Knopfdruck
  *   Dreierreihe Projekt · Token-Angebot · Im Haus
  *   Tiefensuche Vertrag, Halter, Projektprüfung — nur auf Knopfdruck
  *
@@ -47,6 +49,7 @@ import CoinMessung from './CoinMessung.vue'
 import CoinProjekt from './CoinProjekt.vue'
 import CoinAngebot from './CoinAngebot.vue'
 import CoinKontext from './CoinKontext.vue'
+import CoinLage from './CoinLage.vue'
 import { useCoinFormat } from '../../composables/useCoinFormat.js'
 import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { BOERSE_NAME, boerseUrl, aktivierteBoersen } from '../../utils/boersenLinks.js'
@@ -402,6 +405,10 @@ const quellen = computed(() => [
             <CoinDerivate :bericht="bericht" />
             <CoinMessung :bericht="bericht" :konstanten="konstanten" />
         </div>
+
+        <!-- Projekt-Lage: was sich am Projekt geändert hat — direkt über der Projekt-Karte, damit
+             eine gute Projektbeschreibung nicht ohne die Meldungen dasteht. -->
+        <CoinLage :symbol="symbol" />
 
         <!-- Projekt · Token-Angebot · Im Haus -->
         <div class="reihe drei">

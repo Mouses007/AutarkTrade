@@ -60,7 +60,9 @@ export const KI_FUNKTIONEN = [
         // `quellenOhneFreigabe` (S15, ID `deepseekSuche`); ohne ihn fällt der
         // Bericht auf Perplexity zurück, und so zeigt es auch die Übersicht.
         umschalter: { wert: 'deepseek-suche', weg: 'radarNewsRechercheDeepseek', provider: 'deepseek', schalter: 'quellenOhneFreigabe' },
-        funktionen: ['recherche'],
+        // `coin-lage`: Recherche-Knopf der Projekt-Lage in der Coin-Ansicht —
+        // dasselbe Modellfeld, immer Perplexity (wie die Flash-News-Websuche).
+        funktionen: ['recherche', 'coin-lage'],
     },
     {
         id: 'xSuche', titelKey: 'kiUebersicht.fn.xSuche', bereich: 'nachrichten', abschnitt: 'news-modelle',

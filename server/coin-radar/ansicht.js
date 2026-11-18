@@ -4,6 +4,9 @@
  *
  *   GET /api/coin-radar/ansicht/verlauf?symbol=   Tageskerzen (bis 800 Tage) des Coins und von BTC
  *   GET /api/coin-radar/ansicht/kontext?symbol=   wo der Coin im Haus sonst steht — nur Datenbank
+ *   GET /api/coin-radar/ansicht/lage?symbol=      Projekt-Lage: Meldungen eines Jahres (Google News,
+ *                                                 eigene Nachrichten), Warnsignale — kostenlos (`lage.js`)
+ *   POST /api/coin-radar/ansicht/lage/recherche   KI-Recherche dazu, kostet, nur per Knopf
  *
  * Alles andere holt die Ansicht über bestehende Routen: die Messung
  * (`/api/coin-radar/einzel`), die Stammdaten (`/api/coin-radar/coin-info`),
@@ -35,6 +38,7 @@ import { tradesAusZeilen } from '../chart-journal.js'
 import { logWarn } from '../logger.js'
 import { kerzenAusBitunix } from './einzel.js'
 import { BTC_REFERENZ } from './btc-vergleich.js'
+import { holeLage, starteRecherche } from './lage.js'
 import {
     tageKompakt, ersterHandelstag, rangVerlauf, eigeneTrades, VERLAUF_TAGE, RANG_LAEUFE,
 } from './ansicht-kern.js'
@@ -203,6 +207,30 @@ export function setupCoinAnsichtRoutes(app) {
             if (sendeWennAus(res, e)) return
             logWarn('coin-radar', `Coin-Ansicht Verlauf ${symbol}: ${e.message}`)
             res.status(502).json({ error: 'Der Kursverlauf konnte nicht geladen werden' })
+        }
+    })
+
+    app.get('/api/coin-radar/ansicht/lage', async (req, res) => {
+        const symbol = symbolAus(req, res)
+        if (!symbol) return
+        try {
+            // Liest nur: Google News (6 h Vorrat), eigene Meldungen, gespeicherte Recherche. Nie ein bezahlter Abruf.
+            res.json(await holeLage(symbol))
+        } catch (e) {
+            logWarn('coin-radar', `Coin-Ansicht Projekt-Lage ${symbol}: ${e.message}`)
+            res.status(502).json({ error: 'Die Projekt-Lage konnte nicht geladen werden' })
+        }
+    })
+
+    app.post('/api/coin-radar/ansicht/lage/recherche', async (req, res) => {
+        const symbol = String(req.body?.symbol || '').trim().toUpperCase()
+        if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Symbol fehlt oder ist ungültig' })
+        try {
+            res.json(await starteRecherche(symbol))
+        } catch (e) {
+            const status = e.status && e.status < 500 ? e.status : 502
+            if (status === 502) logWarn('coin-radar', `Coin-Ansicht Recherche ${symbol}: ${e.message}`)
+            res.status(status).json({ error: status === 502 ? `Die Recherche ist fehlgeschlagen: ${String(e.message).slice(0, 200)}` : e.message })
         }
     })
 
