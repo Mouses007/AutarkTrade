@@ -451,7 +451,7 @@ const quellen = computed(() => [
         </div>
 
         <!-- Tiefensuche: der Token HINTER dem Perpetual. Kostet Abrufe bei Dritten — nur auf Knopfdruck. -->
-        <Karte :titel="t('coinAnsicht.tiefe')" :unter="t('coinradar.tsHinweis')">
+        <Karte :titel="t('coinAnsicht.tiefe')" :unter="t(ohneFuture ? 'coinradar.tsHinweisOhneFuture' : 'coinradar.tsHinweis')">
             <template #aktionen>
                 <Knopf klein symbol="lupePlus" :laedt="tiefeLaeuft" @click="tiefensuche">{{ t(tiefe ? 'coinAnsicht.tiefeNeu' : 'coinradar.tsKnopf') }}</Knopf>
             </template>

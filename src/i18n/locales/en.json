@@ -5439,6 +5439,7 @@
     "ladeFehler": "Ranking could not be loaded — showing the last state.",
     "tsKnopf": "Deep check",
     "tsHinweis": "Checks the token behind the perpetual like the early phase: contract, holders, on-chain pools, project.",
+    "tsHinweisOhneFuture": "Checks the token like the early phase: contract, holders, on-chain pools, project.",
     "tsNichtGefunden": "CoinGecko does not know this coin — without a contract address there is no deep check.",
     "tsVertrag": "Contracts",
     "tsNichtPruefbar": "No chain whose contract can be checked.",

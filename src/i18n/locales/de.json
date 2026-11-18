@@ -5439,6 +5439,7 @@
     "ladeFehler": "Rangliste konnte nicht geladen werden — angezeigt wird der letzte Stand.",
     "tsKnopf": "Tiefensuche",
     "tsHinweis": "Prüft den Token hinter dem Perpetual wie die Frühphase: Vertrag, Halter, On-Chain-Pools, Projekt.",
+    "tsHinweisOhneFuture": "Prüft den Token wie die Frühphase: Vertrag, Halter, On-Chain-Pools, Projekt.",
     "tsNichtGefunden": "CoinGecko kennt diesen Coin nicht — ohne Vertragsadresse keine Tiefensuche.",
     "tsVertrag": "Verträge",
     "tsNichtPruefbar": "Keine Kette, deren Vertrag sich prüfen lässt.",
