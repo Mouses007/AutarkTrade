@@ -42,6 +42,10 @@ const schritte = computed(() => {
     const v = props.vorschlag
     if (!v) return []
     const s = []
+    // Eingriffe ohne neue Einstellung (KI-Vorschläge mit Ziel «Aussteigen», «Abwarten», «Verlust begrenzen»)
+    if (v.aktion === 'reduzieren') s.push({ aktion: 'reduzieren', vorgabe: { anteil: v.anteil }, text: t('bots.st.schrittReduzieren', { anteil: v.anteil }) })
+    if (v.aktion === 'pausieren') s.push({ aktion: 'pausieren', vorgabe: {}, text: t('bots.st.schrittPausieren') })
+    if (v.aktion === 'beenden') s.push({ aktion: 'beenden', vorgabe: {}, text: t('bots.st.schrittBeenden') })
     const einsatzHeute = props.bot.einsatz?.basis ?? props.bot.einsatz?.aktuell ?? 0
     if (v.hebel != null && v.hebel !== props.bot.hebel) {
         const noetig = v.einsatz == null && props.bot.hebel ? einsatzHeute * props.bot.hebel / v.hebel - einsatzHeute : null

@@ -8780,7 +8780,7 @@
       "warn3": "KI-Verwendung kann zu Verlusten führen.",
       "warn4": "KI kann keinen Kaffee holen.",
       "warnFuss": "Vorschläge sind keine Anlageberatung. Du prüfst jeden selbst und entscheidest selbst.",
-      "erklaerung": "Die App rechnet aus der Lage deines Bots rund ein Dutzend Varianten durch (Extra-Marge, Hebel, Band um den Kurs, Stop-Loss, Kombinationen) — Rückblick über die Laufzeit und was ein Umstellen jetzt bewirkt. Die KI wählt daraus höchstens drei und begründet sie; jede Zahl stammt aus der Simulation. Ein Aufruf kostet beim eingestellten KI-Anbieter (KI › Aufgaben: «Bots: Vorschläge»).",
+      "erklaerung": "Zuerst wählst du, was du erreichen willst; die App rechnet dann die Varianten für dieses Ziel durch (je nach Ziel Extra-Marge, Hebel, Band, Grid-Dichte, Stop-Loss, Reduzieren, Pausieren, Beenden oder «nichts ändern») — Rückblick über die Laufzeit und was ein Umstellen jetzt bewirkt. Die KI wählt daraus höchstens drei und begründet sie im Hinblick auf dein Ziel und deine Idee; jede Zahl stammt aus der Simulation. Ein Aufruf kostet beim eingestellten KI-Anbieter (KI › Aufgaben: «Bots: Vorschläge»).",
       "erzeugen": "KI-Vorschläge erstellen",
       "neu": "Neu erstellen",
       "laedt": "Varianten werden gerechnet und der KI vorgelegt – das kann eine Minute dauern.",
@@ -8805,7 +8805,30 @@
       "warten": "Bitte {s} Sekunden warten — jeder Aufruf kostet.",
       "unbelegt": "Diese Zahlen stehen nicht in den gerechneten Daten — nachprüfen: {zahlen}",
       "titelPlan": "KI-Auswahl",
-      "veraltet": "Diese Vorschläge wurden für eine frühere Einstellung des Bots gerechnet. Seither hat sich der Bot geändert – bitte neu erzeugen, bevor du etwas umsetzt."
+      "veraltet": "Diese Vorschläge wurden für eine frühere Einstellung des Bots gerechnet. Seither hat sich der Bot geändert – bitte neu erzeugen, bevor du etwas umsetzt.",
+      "zielTitel": "Was willst du erreichen?",
+      "ziel": {
+        "offen": "Überblick",
+        "absichern": "Absichern",
+        "verlust": "Verlust begrenzen",
+        "ertrag": "Mehr Ertrag",
+        "abwarten": "Abwarten",
+        "aussteigen": "Aussteigen"
+      },
+      "zielText": {
+        "offen": "Kein bestimmtes Ziel: alle üblichen Varianten (Extra-Marge, Hebel, Band, Stop-Loss).",
+        "absichern": "Die Liquidation weiter weg bringen — auch mit frischem Geld: Extra-Marge, tieferer Hebel und Kombinationen.",
+        "verlust": "Den möglichen Verlust begrenzen: Stop-Loss an gemessenen Niveaus, Position reduzieren.",
+        "ertrag": "Mehr aus den Schwankungen holen: Band neu um den Kurs legen, Grid-Dichte anpassen.",
+        "abwarten": "Weiterlaufen lassen, ohne Geld nachzuschiessen: nichts ändern, Stop-Loss, Band verschieben oder pausieren.",
+        "aussteigen": "Risiko abbauen oder geordnet beenden: reduzieren, pausieren, beenden."
+      },
+      "ideeTitel": "Deine Idee (freiwillig)",
+      "ideePlatz": "z. B. «Ich rechne mit einer Erholung und will nicht nachschiessen» oder «Der Bot soll nur noch den Verlust klein halten».",
+      "ideeText": "Geht in deinen Worten an die KI und lenkt Auswahl und Begründung. Preise darin gelten als deine Annahme; gerechnet wird weiter nur vom Code.",
+      "zielStand": "Erstellt für das Ziel «{ziel}».",
+      "ideeStand": "Deine Idee: «{idee}»",
+      "eingriff": "Eingriff ohne neue Einstellung"
     },
     "st": {
       "titel": "Bot-Steuerung (Pionex)",
@@ -9001,7 +9024,10 @@
       "stufen": "Mögliche Stufen",
       "triggerFeld": "Start bei Preis (Trigger)",
       "triggerSofort": "sofort",
-      "triggerHinweis": "Mit Trigger legt Pionex den Bot an und startet ihn erst, wenn der Kurs diesen Preis erreicht. Ohne Trigger startet er sofort."
+      "triggerHinweis": "Mit Trigger legt Pionex den Bot an und startet ihn erst, wenn der Kurs diesen Preis erreicht. Ohne Trigger startet er sofort.",
+      "schrittReduzieren": "Position um {anteil} % reduzieren",
+      "schrittPausieren": "Bot pausieren",
+      "schrittBeenden": "Bot beenden"
     },
     "plan": {
       "knopf": "Neuen Bot planen",

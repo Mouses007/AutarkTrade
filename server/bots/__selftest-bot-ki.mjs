@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
 import { kennzahlen } from './kennzahlen.js'
-import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE, hoheZeitrahmen, niveausAusZeitrahmen, unbelegteZahlen } from './bot-ki.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE, hoheZeitrahmen, niveausAusZeitrahmen, unbelegteZahlen, ZIELE, aktionJetzt, pruefeIdee, zielVon } from './bot-ki.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -121,6 +121,36 @@ console.log('Planer «alle Richtungen»: einer je Richtung vor dem Deckel (Audit
     const g = pruefeKiAntwort(antwort, { kandidaten: kand, gruppe: (c) => c.richtung })
     p('L1,L2,L3,S1,N1 → L1, S1, N1', g.vorschlaege.map((v) => v.id).join() === 'L1,S1,N1', g.vorschlaege.map((v) => v.id).join())
     p('ohne Gruppe bleibt der alte Deckel: die ersten drei', pruefeKiAntwort(antwort, { kandidaten: kand }).vorschlaege.map((v) => v.id).join() === 'L1,L2,L3')
+}
+
+console.log('Ziel und Idee des Nutzers (21.11.2026)')
+{
+    const je = Object.fromEntries(ZIELE.map((z) => [z, kandidaten(bot, bot.kurs, 4.3, null, z)]))
+    p('«offen» ist der bisherige Satz, ohne Eingriffe', JSON.stringify(je.offen.map((k) => k.variante)) === JSON.stringify(liste.map((k) => k.variante)) && je.offen.every((k) => !k.variante.aktion))
+    p('jedes Ziel: fortlaufende IDs K1…', ZIELE.every((z) => je[z].length > 0 && je[z].every((k, i) => k.id === `K${i + 1}`)))
+    const hat = (z, f) => je[z].some(f), keins = (z, f) => !je[z].some(f)
+    p('absichern: Extra-Marge und Hebel, kein blosser Stop, kein Ausstieg', hat('absichern', (k) => k.gruppe === 'marge') && hat('absichern', (k) => k.gruppe === 'hebel') && keins('absichern', (k) => k.gruppe === 'stop' || ['beenden', 'reduzieren'].includes(k.variante.aktion)))
+    p('abwarten: nichts, was Geld nachschiesst', je.abwarten.every((k) => !k.variante.extraMarge && !k.variante.hebel) && hat('abwarten', (k) => k.variante.aktion === 'nichts') && je.abwarten[0].variante.aktion === 'nichts')
+    p('aussteigen: reduzieren 25/50 %, pausieren, beenden', ['reduzieren', 'pausieren', 'beenden'].every((a) => hat('aussteigen', (k) => k.variante.aktion === a)) && je.aussteigen.filter((k) => k.variante.aktion === 'reduzieren').map((k) => k.variante.anteil).join() === '25,50')
+    p('verlust: Stops und Reduzieren, keine Band-Änderung', hat('verlust', (k) => k.variante.stopLoss) && keins('verlust', (k) => k.variante.unten != null))
+    p('ertrag: Band-Varianten, kein Hebel senken', hat('ertrag', (k) => k.gruppe === 'band') && keins('ertrag', (k) => k.gruppe === 'hebel' || k.gruppe === 'marge'))
+    p('unbekanntes Ziel → offen', zielVon('quatsch') === 'offen' && kandidaten(bot, bot.kurs, 4.3, null, 'quatsch').length === je.offen.length)
+    const spot = kandidaten({ ...bot, typ: 'spot_grid' }, bot.kurs, 4.3, null, 'aussteigen')
+    p('Spot: nur Beenden als Eingriff', spot.filter((k) => k.variante.aktion && k.variante.aktion !== 'nichts').map((k) => k.variante.aktion).join() === 'beenden')
+    const sw = bot.kennzahlen.gewinn.schwebend
+    const b = aktionJetzt(bot, { aktion: 'beenden' }), r = aktionJetzt(bot, { aktion: 'reduzieren', anteil: 25 }), n = aktionJetzt(bot, { aktion: 'nichts' })
+    p('Eingriffe: Beenden schliesst alles und macht den schwebenden Betrag fest, Reduzieren anteilig, Nichts lässt die Liquidation', b.geschlossenAnteil === 1 && nahe(b.realisiertCa, sw) && b.liqNeu === null && r.geschlossenAnteil === 0.25 && nahe(r.realisiertCa, sw * 0.25, 1e-5) && n.geschlossenAnteil === 0 && n.liqNeu > 0, JSON.stringify([b, r, n]))
+    const ga = rechneKandidaten(bot, kerzen, je.aussteigen, {})
+    p('Rechnen mit Eingriffen: jeder hat Rückblick (= heute) und «jetzt», Reihenfolge bleibt', !ga.fehler && ga.kandidaten.map((c) => c.id).join() === je.aussteigen.map((c) => c.id).join() && ga.kandidaten.every((c) => c.rueckblick && c.abJetzt) && ga.kandidaten.find((c) => c.variante.aktion === 'beenden').rueckblick.gesamt === ga.basis.gesamt)
+    const nur = rechneKandidaten(bot, kerzen, je.aussteigen.filter((k) => k.variante.aktion), {})
+    p('nur Eingriffe (nichts zu simulieren): Basis kommt trotzdem', !nur.fehler && nur.basis && nur.kandidaten.length > 0)
+    const idee = pruefeIdee('  Ich erwarte eine Erholung\nbis 1.20 «und» will nicht nachschiessen  ')
+    const pr = bauePrompt({ ...bot, kennzahlen: bot.kennzahlen }, { ...lage, atr: 4.3 }, ga, false, null, { ziel: 'aussteigen', idee })
+    p('Idee: eine Zeile, ohne Anführungszeichen-Bruch, begrenzt', idee === 'Ich erwarte eine Erholung bis 1.20 und will nicht nachschiessen' && pruefeIdee('x'.repeat(900)).length === 400)
+    p('Prompt nennt Ziel und Idee vor allem anderen, ohne Idee keine Idee-Zeile', pr.startsWith('ZIEL DES NUTZERS: geordnet aussteigen') && pr.includes(`«${idee}»`) && !bauePrompt({ ...bot, kennzahlen: bot.kennzahlen }, { ...lage, atr: 4.3 }, ga).includes('IDEE DES NUTZERS'))
+    p('Systemtext: Ziel, Idee als Annahme, Eingriffe erlaubt', /ZIEL DES NUTZERS/.test(systemText()) && /deine Annahme/.test(systemText()) && /Nichts ändern/.test(systemText()))
+    const antw = pruefeKiAntwort({ lage: 'x', vorschlaege: [{ id: ga.kandidaten.find((c) => c.variante.aktion === 'beenden').id, titel: 'Beenden', begruendung: 'b', risiko: 'r', passtNichtWenn: 'p' }] }, ga, pr)
+    p('KI darf einen Eingriff wählen', antw.vorschlaege.length === 1 && antw.vorschlaege[0].variante.aktion === 'beenden')
 }
 
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)

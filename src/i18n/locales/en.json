@@ -8780,7 +8780,7 @@
       "warn3": "Using AI can lead to losses.",
       "warn4": "AI cannot fetch coffee.",
       "warnFuss": "Suggestions are not investment advice. You check each one yourself and decide yourself.",
-      "erklaerung": "The app computes about a dozen variants from your bot's situation (extra margin, leverage, range around the price, stop loss, combinations) — hindsight over the runtime and what changing now would do. The AI picks at most three and explains them; every number comes from the simulation. A run costs at the configured AI provider (AI › Tasks: \"Bots: suggestions\").",
+      "erklaerung": "First you choose what you want to achieve; the app then calculates the variants for that goal (depending on the goal extra margin, leverage, range, grid density, stop-loss, reduce, pause, close or “change nothing”) — hindsight over the runtime and what switching now does. The AI picks at most three and explains them with regard to your goal and your idea; every figure comes from the simulation. A call costs at the configured AI provider (AI › Tasks: “Bots: suggestions”).",
       "erzeugen": "Create AI suggestions",
       "neu": "Create again",
       "laedt": "Variants are being computed and given to the AI – this can take a minute.",
@@ -8805,7 +8805,30 @@
       "warten": "Please wait {s} seconds — every run costs.",
       "unbelegt": "These numbers are not in the computed data — check them: {zahlen}",
       "titelPlan": "AI selection",
-      "veraltet": "These suggestions were computed for an earlier setting of the bot. The bot has changed since – please generate them again before applying anything."
+      "veraltet": "These suggestions were computed for an earlier setting of the bot. The bot has changed since – please generate them again before applying anything.",
+      "zielTitel": "What do you want to achieve?",
+      "ziel": {
+        "offen": "Overview",
+        "absichern": "Protect",
+        "verlust": "Limit loss",
+        "ertrag": "More yield",
+        "abwarten": "Wait",
+        "aussteigen": "Exit"
+      },
+      "zielText": {
+        "offen": "No particular goal: all usual variants (extra margin, leverage, range, stop-loss).",
+        "absichern": "Move the liquidation further away — also with fresh money: extra margin, lower leverage and combinations.",
+        "verlust": "Limit the possible loss: stop-loss at measured levels, reduce the position.",
+        "ertrag": "Get more out of the swings: place the range around the price again, adjust grid density.",
+        "abwarten": "Keep it running without adding money: change nothing, stop-loss, move the range or pause.",
+        "aussteigen": "Reduce risk or close in an orderly way: reduce, pause, close."
+      },
+      "ideeTitel": "Your idea (optional)",
+      "ideePlatz": "e.g. “I expect a recovery and do not want to add money” or “The bot should only keep the loss small”.",
+      "ideeText": "Goes to the AI in your words and steers selection and reasoning. Prices in it count as your assumption; only the code calculates.",
+      "zielStand": "Created for the goal “{ziel}”.",
+      "ideeStand": "Your idea: “{idee}”",
+      "eingriff": "Intervention without new settings"
     },
     "st": {
       "titel": "Bot control (Pionex)",
@@ -9001,7 +9024,10 @@
       "stufen": "Possible steps",
       "triggerFeld": "Start at price (trigger)",
       "triggerSofort": "immediately",
-      "triggerHinweis": "With a trigger Pionex creates the bot and starts it only when the price reaches this level. Without a trigger it starts immediately."
+      "triggerHinweis": "With a trigger Pionex creates the bot and starts it only when the price reaches this level. Without a trigger it starts immediately.",
+      "schrittReduzieren": "Reduce position by {anteil}%",
+      "schrittPausieren": "Pause bot",
+      "schrittBeenden": "Close bot"
     },
     "plan": {
       "knopf": "Plan a new bot",

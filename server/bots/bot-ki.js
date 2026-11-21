@@ -27,6 +27,36 @@ const runde = (v, stellen = 6) => (istZahl(v) ? Number(v.toPrecision(stellen)) :
 
 export const MAX_VORSCHLAEGE = 3
 
+/**
+ * Ziel der Vorschläge (21.11.2026). Bis dahin baute der Code immer dasselbe Dutzend Varianten und die KI
+ * wählte «die sinnvollen», ohne zu wissen wofür — faktisch immer Absicherung (Extra-Marge, Hebel senken).
+ * Jetzt wählt der Nutzer ein Ziel; der Code baut die Kandidaten dafür (Gruppen unten), und die KI begründet
+ * im Hinblick darauf. «offen» ist der bisherige Satz. Dazu eine freie Idee in eigenen Worten (`pruefeIdee`).
+ */
+export const ZIELE = ['offen', 'absichern', 'verlust', 'ertrag', 'abwarten', 'aussteigen']
+const ZIEL_GRUPPEN = {
+    offen: ['marge', 'hebel', 'band', 'stop', 'bandHebel', 'bandMarge', 'margeStop'],
+    absichern: ['marge', 'hebel', 'bandHebel', 'bandMarge', 'margeStop', 'nichts'],
+    verlust: ['stop', 'margeStop', 'reduzieren', 'nichts'],
+    ertrag: ['band', 'grids', 'bandMarge', 'nichts'],
+    abwarten: ['nichts', 'stop', 'band', 'pausieren'],
+    aussteigen: ['reduzieren', 'pausieren', 'beenden', 'stop', 'nichts'],
+}
+const ZIEL_TEXT = {
+    offen: 'kein bestimmtes Ziel — Überblick über die Möglichkeiten',
+    absichern: 'die Liquidation weiter weg bringen (absichern), auch mit frischem Geld',
+    verlust: 'den möglichen Verlust begrenzen',
+    ertrag: 'mehr Grid-Ertrag aus den Schwankungen holen',
+    abwarten: 'weiterlaufen lassen und abwarten, OHNE Geld nachzuschiessen',
+    aussteigen: 'geordnet aussteigen oder das Risiko abbauen',
+}
+export const zielVon = (z) => (ZIELE.includes(z) ? z : 'offen')
+export const MAX_IDEE = 400
+/** Die Idee des Nutzers für den Prompt: eine Zeile, ohne Steuerzeichen, begrenzt. Rein. */
+export function pruefeIdee(text) {
+    return String(text ?? '').replace(/[\u0000-\u001f\u007f«»]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_IDEE)
+}
+
 /** Marktlage aus Tageskerzen (aufsteigend). */
 export function marktLage(tagesKerzen, kurs) {
     const k = (tagesKerzen || []).filter((x) => istZahl(x.c))
@@ -91,9 +121,10 @@ export function niveausAusZeitrahmen(zr, kurs) {
  * Kandidaten aus der Lage. Preise in USDT je Coin, Beträge in der Margin-Münze.
  * Nur, was die Simulation rechnen kann; jeder Kandidat mit Code-Beschreibung.
  */
-export function kandidaten(bot, kurs, atr, zr = null) {
+export function kandidaten(bot, kurs, atr, zr = null, ziel = 'offen') {
     const liste = []
-    const neu = (titel, v) => { if (Object.keys(v).length) liste.push({ id: `K${liste.length + 1}`, titel, variante: v }) }
+    // `gruppe` sagt, wozu die Variante dient; am Ende bleibt, was zum Ziel gehört (ZIEL_GRUPPEN)
+    const neu = (titel, v, gruppe) => { if (Object.keys(v).length) liste.push({ id: '', gruppe, titel, variante: v }) }
     const einsatz = bot.einsatz?.basis ?? (bot.coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell))
     const long = bot.richtung !== 'SHORT'
     const u = bot.grid?.unten, o = bot.grid?.oben
@@ -101,29 +132,29 @@ export function kandidaten(bot, kurs, atr, zr = null) {
     const liq = liqRisiko(bot.richtung, bot.liquidation, kurs)
 
     if (istZahl(einsatz) && einsatz > 0) {
-        for (const f of [0.25, 0.5, 1]) neu(`Extra-Marge +${Math.round(f * 100)} % des Einsatzes`, { extraMarge: runde(einsatz * f, 4) })
+        for (const f of [0.25, 0.5, 1]) neu(`Extra-Marge +${Math.round(f * 100)} % des Einsatzes`, { extraMarge: runde(einsatz * f, 4) }, 'marge')
     }
     if (bot.hebel > 1) {
         const h = new Set([Math.max(1, Math.round(bot.hebel / 2)), Math.max(1, bot.hebel - 1)])
-        for (const x of h) if (x < bot.hebel) neu(`Hebel ${x} statt ${bot.hebel}`, { hebel: x })
+        for (const x of h) if (x < bot.hebel) neu(`Hebel ${x} statt ${bot.hebel}`, { hebel: x }, 'hebel')
     }
     if (hatAtr && istZahl(u) && istZahl(o) && bot.richtung !== 'NEUTRAL') {
         // Band so legen, dass der Kurs wieder im Band liegt: eng (±4 ATR) und breit (−8/+10 ATR)
         const eng = long ? [kurs - 4 * atr, kurs + 6 * atr] : [kurs - 6 * atr, kurs + 4 * atr]
         const breit = long ? [kurs - 8 * atr, kurs + 10 * atr] : [kurs - 10 * atr, kurs + 8 * atr]
         for (const [titel, [a, b]] of [['Band eng um den Kurs', eng], ['Band breit um den Kurs', breit]]) {
-            if (a > 0 && b > a) neu(`${titel} (${runde(a, 4)}–${runde(b, 4)})`, { unten: runde(a, 5), oben: runde(b, 5) })
+            if (a > 0 && b > a) neu(`${titel} (${runde(a, 4)}–${runde(b, 4)})`, { unten: runde(a, 5), oben: runde(b, 5) }, 'band')
         }
         // Untergrenze nur nach unten verlängern, Obergrenze bleibt
-        if (long && kurs < u) { const a = kurs - 6 * atr; if (a > 0) neu(`Untergrenze auf ${runde(a, 4)} senken`, { unten: runde(a, 5), oben: o }) }
-        if (!long && kurs > o) { const b = kurs + 6 * atr; neu(`Obergrenze auf ${runde(b, 4)} heben`, { unten: u, oben: runde(b, 5) }) }
+        if (long && kurs < u) { const a = kurs - 6 * atr; if (a > 0) neu(`Untergrenze auf ${runde(a, 4)} senken`, { unten: runde(a, 5), oben: o }, 'band') }
+        if (!long && kurs > o) { const b = kurs + 6 * atr; neu(`Obergrenze auf ${runde(b, 4)} heben`, { unten: u, oben: runde(b, 5) }, 'band') }
     }
     if (hatAtr && istZahl(liq) && bot.richtung !== 'NEUTRAL') {
         const sl1 = long ? liq + atr : liq - atr
         const sl2 = long ? kurs - 2 * atr : kurs + 2 * atr
         for (const sl of [sl1, sl2]) {
             const ok = long ? sl > liq && sl < kurs : sl < liq && sl > kurs
-            if (ok && sl > 0) neu(`Stop-Loss bei ${runde(sl, 4)}`, { stopLoss: runde(sl, 5) })
+            if (ok && sl > 0) neu(`Stop-Loss bei ${runde(sl, 4)}`, { stopLoss: runde(sl, 5) }, 'stop')
         }
     }
     // An gemessenen Niveaus der hohen Zeitrahmen: Untergrenze bzw. Stop-Loss knapp jenseits
@@ -134,40 +165,72 @@ export function kandidaten(bot, kurs, atr, zr = null) {
         for (const n of stuetze) {
             const jenseits = long ? n.preis - 0.5 * atr : n.preis + 0.5 * atr
             if (!(jenseits > 0)) continue
-            if (long && istZahl(o) && jenseits < kurs) neu(`Untergrenze unter Niveau ${n.name} auf ${runde(jenseits, 4)}`, { unten: runde(jenseits, 5), oben: o })
-            if (!long && istZahl(u) && jenseits > kurs) neu(`Obergrenze über Niveau ${n.name} auf ${runde(jenseits, 4)}`, { unten: u, oben: runde(jenseits, 5) })
+            if (long && istZahl(o) && jenseits < kurs) neu(`Untergrenze unter Niveau ${n.name} auf ${runde(jenseits, 4)}`, { unten: runde(jenseits, 5), oben: o }, 'band')
+            if (!long && istZahl(u) && jenseits > kurs) neu(`Obergrenze über Niveau ${n.name} auf ${runde(jenseits, 4)}`, { unten: u, oben: runde(jenseits, 5) }, 'band')
             const ok = istZahl(liq) ? (long ? jenseits > liq && jenseits < kurs : jenseits < liq && jenseits > kurs) : (long ? jenseits < kurs : jenseits > kurs)
-            if (ok) neu(`Stop-Loss jenseits Niveau ${n.name} bei ${runde(jenseits, 4)}`, { stopLoss: runde(jenseits, 5) })
+            if (ok) neu(`Stop-Loss jenseits Niveau ${n.name} bei ${runde(jenseits, 4)}`, { stopLoss: runde(jenseits, 5) }, 'stop')
         }
     }
     // Kombinationen: halber Hebel + breites Band; Extra-Marge 50 % + Stop-Loss
     const breitK = liste.find((k) => k.titel.startsWith('Band breit'))
     const halbH = liste.find((k) => k.variante.hebel && k.variante.hebel === Math.max(1, Math.round(bot.hebel / 2)))
-    if (breitK && halbH) neu(`${breitK.titel.split(' (')[0]} und ${halbH.titel}`, { ...breitK.variante, hebel: halbH.variante.hebel })
+    if (breitK && halbH) neu(`${breitK.titel.split(' (')[0]} und ${halbH.titel}`, { ...breitK.variante, hebel: halbH.variante.hebel }, 'bandHebel')
     // Band neu legen ohne frisches Geld erhöht bei Pionex das Risiko (Position bleibt, Grid wächst nach
     // unten) — darum auch jede Band-Variante zusammen mit Extra-Marge 100 % des Einsatzes.
     const em100 = liste.find((k) => k.titel.startsWith('Extra-Marge +100'))
     if (em100) for (const b of liste.filter((k) => k.variante.unten != null && !k.variante.hebel && !k.variante.extraMarge)) {
-        neu(`${b.titel.split(' (')[0]} und ${em100.titel}`, { ...b.variante, extraMarge: em100.variante.extraMarge })
+        neu(`${b.titel.split(' (')[0]} und ${em100.titel}`, { ...b.variante, extraMarge: em100.variante.extraMarge }, 'bandMarge')
     }
     const em = liste.find((k) => k.titel.startsWith('Extra-Marge +50'))
     const sl = liste.find((k) => k.variante.stopLoss)
-    if (em && sl) neu(`${em.titel} und ${sl.titel}`, { ...em.variante, stopLoss: sl.variante.stopLoss })
-    return liste
+    if (em && sl) neu(`${em.titel} und ${sl.titel}`, { ...em.variante, stopLoss: sl.variante.stopLoss }, 'margeStop')
+
+    // Grid-Dichte (Ziel «Ertrag»): gemessen (17.11.2026) bringen Abstände unter etwa 0,5–1 % weniger, weil
+    // Gebühren den Zyklus fressen; sehr weite Abstände lassen Schwankungen ungenutzt.
+    const n = bot.grid?.anzahl, abst = bot.grid?.abstand?.mitte
+    if (Number.isInteger(n) && istZahl(abst)) {
+        if (abst < 0.01 && Math.round(n / 2) >= 2) neu(`Halb so viele Grids (${Math.round(n / 2)} statt ${n}), doppelter Abstand`, { anzahl: Math.round(n / 2) }, 'grids')
+        if (abst > 0.02 && n * 2 <= 500) neu(`Doppelt so viele Grids (${n * 2} statt ${n}), halber Abstand`, { anzahl: n * 2 }, 'grids')
+    }
+    // Eingriffe ohne neue Einstellung: sie rechnet nicht die Simulation, sondern `aktionJetzt` aus dem Stand
+    // des Bots. Spot kann über die App nur beenden.
+    const spot = bot.typ === 'spot_grid'
+    if (!spot) for (const anteil of [25, 50]) neu(`Position um ${anteil} % reduzieren`, { aktion: 'reduzieren', anteil }, 'reduzieren')
+    if (!spot && bot.status !== 'paused') neu('Bot pausieren (keine neuen Grid-Orders, Position bleibt)', { aktion: 'pausieren' }, 'pausieren')
+    neu(spot ? 'Bot beenden (Coins bleiben im Konto)' : 'Bot beenden (Position zum Marktpreis schliessen)', { aktion: 'beenden' }, 'beenden')
+    neu('Nichts ändern', { aktion: 'nichts' }, 'nichts')
+
+    const gruppen = ZIEL_GRUPPEN[zielVon(ziel)]
+    return liste.filter((k) => gruppen.includes(k.gruppe))
+        .sort((a, b) => (zielVon(ziel) === 'offen' ? 0 : gruppen.indexOf(a.gruppe) - gruppen.indexOf(b.gruppe)))
+        .map((k, i) => ({ ...k, id: `K${i + 1}` }))
+}
+
+/** Folgen eines Eingriffs ohne neue Einstellung, aus dem heutigen Stand des Bots (rein). */
+export function aktionJetzt(bot, v) {
+    const sw = bot.kennzahlen?.gewinn?.schwebend
+    const liq = liqRisiko(bot.richtung, bot.liquidation, bot.kurs)
+    if (v.aktion === 'beenden') return { zusatz: 0, geschlossenAnteil: 1, realisiertCa: istZahl(sw) ? sw : null, liqNeu: null }
+    if (v.aktion === 'reduzieren') return { zusatz: 0, geschlossenAnteil: v.anteil / 100, realisiertCa: istZahl(sw) ? runde(sw * v.anteil / 100, 6) : null, liqNeu: null }
+    return { zusatz: 0, geschlossenAnteil: 0, realisiertCa: 0, liqNeu: istZahl(liq) ? liq : null }
 }
 
 /** Alle Kandidaten rechnen (vergleiche nimmt je Aufruf höchstens MAX_VARIANTEN). */
 export function rechneKandidaten(bot, kerzen, liste, opt) {
-    const aus = []
+    const gerechnet = new Map()
     let basis = null, eichung = null
-    for (let i = 0; i < liste.length; i += MAX_VARIANTEN) {
-        const teil = liste.slice(i, i + MAX_VARIANTEN)
+    // Eingriffe (pausieren, reduzieren, beenden, nichts) haben keine Einstellung zum Simulieren
+    const sim = liste.filter((k) => !k.variante.aktion)
+    for (let i = 0; i < Math.max(1, sim.length); i += MAX_VARIANTEN) {
+        const teil = sim.slice(i, i + MAX_VARIANTEN)
         const r = vergleiche(bot, kerzen, teil.map((k) => k.variante), { ...opt, basis })
         if (r.fehler) return { fehler: r.fehler }
         basis = basis || r.basis
         eichung = eichung || r.eichung
-        teil.forEach((k, j) => aus.push({ ...k, rueckblick: r.varianten[j], abJetzt: r.abJetzt?.[j] || null }))
+        teil.forEach((k, j) => gerechnet.set(k.id, { ...k, rueckblick: r.varianten[j], abJetzt: r.abJetzt?.[j] || null }))
     }
+    // Rückblick eines Eingriffs = der heutige: er ändert die Vergangenheit nicht
+    const aus = liste.map((k) => gerechnet.get(k.id) || { ...k, rueckblick: basis, abJetzt: aktionJetzt(bot, k.variante) })
     return { basis, eichung, kandidaten: aus }
 }
 
@@ -175,7 +238,13 @@ const pz = (v, s = 1) => (istZahl(v) ? `${(v * 100).toFixed(s)} %` : '—')
 const zl = (v, s = 4) => (istZahl(v) ? Number(v).toFixed(s) : '—')
 
 /** Prompt-Zeilen: Bot, Markt, heutige Simulation, Kandidaten. */
-export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null) {
+export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null, { ziel = 'offen', idee = '' } = {}) {
+    const wunsch = pruefeIdee(idee)
+    const zielZeilen = [
+        `ZIEL DES NUTZERS: ${ZIEL_TEXT[zielVon(ziel)]}`,
+        ...(wunsch ? [`IDEE DES NUTZERS (seine eigenen Worte; Zahlen darin sind seine Annahmen, keine Messung): «${wunsch}»`] : []),
+        '',
+    ]
     const mc = bot.marginCoin
     const k = bot.kennzahlen || {}
     const e = gerechnet.eichung
@@ -198,7 +267,7 @@ export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null) {
         return [c.id, c.titel, zl(r?.gesamt), zl(r?.maxVerlust), ende, nach > 0 ? `${zl(nach)} ${mc}` : '—', pz(a?.geschlossenAnteil, 0), zl(a?.realisiertCa), zl(a?.liqNeu, 2), pz(abstand)].join(' | ')
     })
     return [
-        ...kopf, ...markt, ...hoch,
+        ...zielZeilen, ...kopf, ...markt, ...hoch,
         `SIMULATION heute (Rückblick seit Start): ${zl(gerechnet.basis?.gesamt)} ${mc}; Pionex echt ${zl(e?.echt)} ${mc}; Abweichung ${pz(e?.abweichungAnteil)} des Einsatzes${e?.unsicher ? ' — UNSICHER' : ''}`,
         '',
         'KANDIDATEN (vom Code gerechnet; Rückblick = über die ganze Laufzeit seit Start; jetzt = Folgen eines Umstellens zum heutigen Kurs):',
@@ -214,6 +283,8 @@ export function systemText() {
         'Du bist der Bot-Assistent von AutarkTrade. Der Nutzer hat für seine eigenen Pionex-Bots ausdrücklich konkrete Vorschläge freigegeben.',
         'Du bekommst Zahlen, die der Code gerechnet hat. Du rechnest NICHT selbst und nennst KEINE Zahl, die nicht in der Eingabe steht.',
         'Wähle aus den KANDIDATEN höchstens drei, die du vorschlägst, und begründe sie mit den Zahlen. Wenn keiner sinnvoll ist, wähle keinen und sag warum.',
+        'Oben steht das ZIEL DES NUTZERS; die KANDIDATEN hat der Code für dieses Ziel gebaut. Wähle danach und sag bei jedem Vorschlag in der Begründung, wie er diesem Ziel dient. Steht dort eine IDEE DES NUTZERS, richte Auswahl und Begründung nach ihr; Zahlen aus der Idee sind seine Annahmen — nenne sie als «deine Annahme», nicht als Messung. Spricht die gemessene Lage gegen das Ziel oder die Idee (z. B. die Struktur auf allen Zeitrahmen gegen die Richtung des Bots), sag das klar im Feld "lage", ohne Kursprognose.',
+        '«Nichts ändern», «pausieren», «reduzieren» und «beenden» sind gültige Vorschläge, wenn sie unter den KANDIDATEN stehen. Bei «reduzieren» und «beenden» steht in „jetzt: realisiert" der schwebende Gewinn oder Verlust, der damit fest wird; die neue Liquidation nach einem Reduzieren nennt erst Pionex bei der Prüfung (hier «—»).',
         'Beachte: Der Rückblick ist mit dem Wissen um den vergangenen Kursverlauf gerechnet — gewichte die Spalten „jetzt" (Liquidationsabstand, realisierter Verlust) mindestens so stark.',
         'So setzt Pionex Änderungen um: Band/Grids ändern behält die heutige Position (nichts wird realisiert), ein Band weiter nach unten (Long) bringt die Liquidation NÄHER. Hebel senken behält die Position und verlangt mehr Einsatz (Spalte „nachschiessen"). Extra-Marge lässt die Position gleich und schiebt die Liquidation weg. Nachschiessen braucht freies Guthaben auf dem Konto.',
         'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, und ob Bandgrenzen, Stop-Loss und Liquidation an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…) liegen. Nenne Niveaus nur mit ihrer ID und dem Preis aus der Eingabe.',

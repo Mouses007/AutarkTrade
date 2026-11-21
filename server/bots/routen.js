@@ -25,7 +25,7 @@ import { kerzen as holeKerzen, fundingVerlauf } from '../marktdaten/index.js'
 import { wartungsmargeMitQuelle } from '../margin-rates.js'
 import { sendeWennAus } from '../quellen/aus.js'
 import { vergleiche, pruefeVariante, SIMULIERBAR, MAX_VARIANTEN } from './simulation.js'
-import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, hoheZeitrahmen, BOT_ZEITRAHMEN } from './bot-ki.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, hoheZeitrahmen, BOT_ZEITRAHMEN, zielVon, pruefeIdee } from './bot-ki.js'
 import { zeitrahmenTabelle } from '../chart-zeitrahmen.js'
 import { getClosedCandles } from '../market-data.js'
 import { ladeLlmConfigFuerAufgabe, callLLMJson } from '../llm.js'
@@ -202,7 +202,7 @@ export const KI_PAUSE_MS = 60_000
 export const KI_FEHLER_PAUSE_MS = 45_000
 const ohneKurve = (r) => (r ? { ...r, kurve: undefined } : r)
 
-async function kiFuer(bot, englisch) {
+async function kiFuer(bot, englisch, ziel = 'offen', idee = '') {
     const { kerzen, funding } = await simKerzen(bot)
     const tag = await holeKerzen(bot.symbol, '1d', { markt: 'futures', limit: 45 })
     const atr = atrTag(tag)
@@ -213,12 +213,12 @@ async function kiFuer(bot, englisch) {
     // Hohe Zeitrahmen wie die Chart-KI: nur geschlossene Kerzen, fehlt einer, bleibt er „unbekannt"
     const reihen = await Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(bot.symbol, tf, 300, { market: 'futures' }).catch(() => null)))
     const zr = hoheZeitrahmen(Object.fromEntries(BOT_ZEITRAHMEN.map((tf, i) => [tf, reihen[i]])), bot.kurs)
-    const liste = kandidaten(bot, bot.kurs, atr, zr)
+    const liste = kandidaten(bot, bot.kurs, atr, zr, ziel)
     const gerechnet = rechneKandidaten(bot, kerzen, liste, { funding, mmr })
     if (gerechnet.fehler) throw new Error(`Simulation: ${gerechnet.fehler}`)
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
     cfg.maxTokens = 2500
-    const user = bauePrompt(bot, lage, gerechnet, englisch, zr)
+    const user = bauePrompt(bot, lage, gerechnet, englisch, zr, { ziel, idee })
     const antwort = await callLLMJson(cfg, {
         system: systemText(), user, timeoutMs: 90000,
         zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: bot.symbol },
@@ -227,7 +227,7 @@ async function kiFuer(bot, englisch) {
     if (!geprueft) throw new Error('Die KI hat keine verwertbare Antwort geliefert')
     for (const v of geprueft.verworfen) logWarn('bots', `KI-Vorschlag verworfen (${v.grund}): ${v.id}`)
     return {
-        ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model,
+        ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model, ziel, idee,
         kostenUsd: antwort.costUsd ?? null, kurs: bot.kurs, markt: lage, eichung: gerechnet.eichung,
         zeitrahmen: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,
         lage: geprueft.lage, lageUnbelegt: geprueft.lageUnbelegt, hinweis: geprueft.hinweis, verworfen: geprueft.verworfen.length,
@@ -249,13 +249,15 @@ export function setupBotRoutes(app) {
             if (!bot) return res.status(404).json({ ok: false, error: 'Bot nicht gefunden' })
             if (!kiMoeglich(bot)) return res.status(400).json({ ok: false, code: 'typ' })
             const sprache = req.body?.sprache === 'en' ? 'en' : 'de'
-            const schluessel = `${id}|${sprache}`
+            // Ziel und Idee des Nutzers (21.11.2026): der Code baut die Kandidaten für das Ziel, die Idee geht als seine Vorgabe in den Prompt
+            const ziel = zielVon(req.body?.ziel), idee = pruefeIdee(req.body?.idee)
+            const schluessel = `${id}|${sprache}|${ziel}|${idee}`
             if (!kiLaeuft.has(schluessel)) {
                 // Jeder Lauf kostet: nach Erfolg 60 s, nach Fehler 45 s Pause je Bot
                 const z = kiZuletzt.get(id)
                 const pause = z ? (z.fehler ? KI_FEHLER_PAUSE_MS : KI_PAUSE_MS) - (Date.now() - z.zeit) : 0
                 if (pause > 0) return res.status(429).json({ ok: false, code: 'kiWarten', sekunden: Math.ceil(pause / 1000) })
-                kiLaeuft.set(schluessel, kiFuer(bot, sprache === 'en')
+                kiLaeuft.set(schluessel, kiFuer(bot, sprache === 'en', ziel, idee)
                     .then((e) => { kiZuletzt.set(id, { zeit: Date.now(), fehler: false }); return e },
                         (e) => { kiZuletzt.set(id, { zeit: Date.now(), fehler: true }); throw e })
                     .finally(() => kiLaeuft.delete(schluessel)))

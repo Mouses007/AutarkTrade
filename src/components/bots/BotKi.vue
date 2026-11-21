@@ -32,6 +32,16 @@ const heute = computed(() => erg.value?.eichung?.simuliert ?? null)
 // seinen Cache, die Karte zeigte sie weiter — mit «Umsetzen»): kennzeichnen und nicht mehr umsetzen lassen
 const veraltet = ref(false)
 
+// Ziel und Idee (21.11.2026): der Code baut die Kandidaten für das gewählte Ziel, die Idee geht in den Auftrag
+// an die KI. Das Ziel gilt für alle Bots (gemerkt), die Idee je Bot.
+const ZIELE = ['offen', 'absichern', 'verlust', 'ertrag', 'abwarten', 'aussteigen']
+const merk = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v) } catch { /* ohne Speicher */ } return null }
+const ziel = ref(ZIELE.includes(merk('at.bots.kiZiel')) ? merk('at.bots.kiZiel') : 'offen')
+const ideeSchluessel = () => `at.bots.kiIdee.${props.bot.id}`
+const idee = ref(merk(ideeSchluessel()) || '')
+watch(ziel, (z) => merk('at.bots.kiZiel', z))
+watch(idee, (i) => merk(ideeSchluessel(), i.slice(0, 400)))
+
 async function ladeCache() {
     try { erg.value = (await axios.get(`/api/bots/${encodeURIComponent(props.bot.id)}/ki`)).data?.ergebnis || null } catch { erg.value = null }
 }
@@ -39,7 +49,7 @@ async function erzeuge() {
     laedt.value = true
     fehler.value = ''
     try {
-        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/ki`, { sprache: locale.value }, { timeout: 180_000 })
+        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/ki`, { sprache: locale.value, ziel: ziel.value, idee: idee.value }, { timeout: 180_000 })
         if (data?.aus) { fehler.value = t('bots.marktAus'); return }
         erg.value = data.ergebnis
         veraltet.value = false
@@ -53,7 +63,7 @@ async function erzeuge() {
     }
 }
 onMounted(ladeCache)
-watch(() => props.bot.id, () => { erg.value = null; veraltet.value = false; ladeCache() })
+watch(() => props.bot.id, () => { erg.value = null; veraltet.value = false; idee.value = merk(ideeSchluessel()) || ''; ladeCache() })
 watch(() => props.stand, (neu, alt) => { if (erg.value && alt && neu !== alt) veraltet.value = true })
 
 const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot.kurs - a.liqNeu) / props.bot.kurs : null)
@@ -73,6 +83,18 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 
         <p class="leise">{{ t('bots.ki.erklaerung') }}</p>
         <p class="leise">{{ t('bots.ki.zrErklaerung') }}</p>
+        <div class="zielWahl">
+            <h5 id="kiZielTitel">{{ t('bots.ki.zielTitel') }}</h5>
+            <div class="wahl" role="group" aria-labelledby="kiZielTitel">
+                <button v-for="z in ZIELE" :key="z" type="button" :class="{ an: ziel === z }" :aria-pressed="ziel === z" :disabled="laedt" @click="ziel = z">{{ t(`bots.ki.ziel.${z}`) }}</button>
+            </div>
+            <p class="leise">{{ t(`bots.ki.zielText.${ziel}`) }}</p>
+            <label class="idee"><span>{{ t('bots.ki.ideeTitel') }}</span>
+                <textarea v-model="idee" class="at-feld" rows="2" maxlength="400" :placeholder="t('bots.ki.ideePlatz')" :disabled="laedt"></textarea>
+                <small class="leise">{{ t('bots.ki.ideeText') }}</small>
+            </label>
+        </div>
+
         <div class="knoepfe">
             <span v-if="erg" class="leise">{{ t('bots.ki.stand', { zeit: datum(erg.zeit), modell: erg.modell || erg.anbieter }) }}</span>
             <Knopf art="haupt" symbol="ki" :laedt="laedt" @click="erzeuge">{{ erg ? t('bots.ki.neu') : t('bots.ki.erzeugen') }}</Knopf>
@@ -86,6 +108,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <Pille ton="akzent" symbol="ki">{{ t('bots.ki.kennzeichnung') }}</Pille>
                 <span v-if="erg.kurs" class="leise">{{ t('bots.ki.kursStand', { kurs: preis(erg.kurs) }) }}</span>
             </div>
+            <p v-if="erg.ziel" class="leise">{{ t('bots.ki.zielStand', { ziel: t(`bots.ki.ziel.${erg.ziel}`) }) }}<template v-if="erg.idee"> {{ t('bots.ki.ideeStand', { idee: erg.idee }) }}</template></p>
             <p v-if="erg.lage" class="lage">{{ erg.lage }}</p>
             <p v-if="erg.lageUnbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: erg.lageUnbelegt.join(', ') }) }}</p>
 
@@ -128,7 +151,8 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <dl class="zahlen">
                     <div v-if="v.abJetzt?.zusatz > 0"><dt>{{ t('bots.ki.nachschiessen') }}</dt><dd>{{ betrag(v.abJetzt.zusatz, mc) }}</dd></div>
                     <div v-if="v.variante.extraMarge"><dt>{{ t('bots.sim.extraMargePlus') }}</dt><dd>{{ betrag(v.variante.extraMarge, mc) }}</dd></div>
-                    <div><dt>{{ t('bots.sim.liqNeu') }}</dt><dd>{{ preis(v.abJetzt?.liqNeu) }} <span class="leise">({{ prozent(abstand(v.abJetzt)) }})</span></dd></div>
+                    <div v-if="v.variante.aktion"><dt>{{ t('bots.ki.eingriff') }}</dt><dd>{{ v.codeTitel }}</dd></div>
+                    <div><dt>{{ t('bots.sim.liqNeu') }}</dt><dd>{{ preis(v.abJetzt?.liqNeu) }} <span v-if="v.abJetzt?.liqNeu != null" class="leise">({{ prozent(abstand(v.abJetzt)) }})</span></dd></div>
                     <div><dt>{{ t('bots.sim.geschlossen') }}</dt><dd>{{ prozent(v.abJetzt?.geschlossenAnteil, { stellen: 0 }) }}</dd></div>
                     <div><dt>{{ t('bots.sim.realisiertCa') }}</dt><dd :class="ton(v.abJetzt?.realisiertCa, mc)">{{ betrag(v.abJetzt?.realisiertCa, mc, { vorzeichen: true }) }}</dd></div>
                     <div><dt>{{ t('bots.ki.rueckblick') }}</dt><dd :class="ton(v.rueckblick?.gesamt, mc)">{{ betrag(v.rueckblick?.gesamt, mc, { vorzeichen: true }) }} <span class="leise">{{ t('bots.ki.stattHeute', { wert: betrag(heute, mc, { vorzeichen: true }) }) }}</span></dd></div>
@@ -138,8 +162,8 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <p class="risiko"><strong>{{ t('bots.ki.passtNicht') }}:</strong> {{ v.passtNichtWenn }}</p>
                 <p v-if="v.unbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: v.unbelegt.join(', ') }) }}</p>
                 <div class="knoepfe">
-                    <Knopf art="leise" symbol="rechner" klein @click="emit('inSimulation', v.variante)">{{ t('bots.ki.inSimulation') }}</Knopf>
-                    <Knopf v-if="steuerungAktiv && !veraltet" symbol="hochladen" klein @click="emit('umsetzen', v.variante)">{{ t('bots.ki.umsetzen') }}</Knopf>
+                    <Knopf v-if="!v.variante.aktion" art="leise" symbol="rechner" klein @click="emit('inSimulation', v.variante)">{{ t('bots.ki.inSimulation') }}</Knopf>
+                    <Knopf v-if="steuerungAktiv && !veraltet && v.variante.aktion !== 'nichts'" symbol="hochladen" klein @click="emit('umsetzen', v.variante)">{{ t('bots.ki.umsetzen') }}</Knopf>
                 </div>
             </article>
             <p v-if="erg.hinweis" class="leise">{{ erg.hinweis }}</p>
@@ -158,8 +182,8 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                                 <td>{{ preis(c.abJetzt?.liqNeu) }}</td>
                                 <td class="zeilenKnoepfe">
                                     <template v-if="c.variante">
-                                        <Knopf art="leise" symbol="rechner" klein nurSymbol :titel="t('bots.ki.inSimulation')" @click="emit('inSimulation', c.variante)" />
-                                        <Knopf v-if="steuerungAktiv && !veraltet" art="leise" symbol="hochladen" klein nurSymbol :titel="t('bots.ki.umsetzen')" @click="emit('umsetzen', c.variante)" />
+                                        <Knopf v-if="!c.variante.aktion" art="leise" symbol="rechner" klein nurSymbol :titel="t('bots.ki.inSimulation')" @click="emit('inSimulation', c.variante)" />
+                                        <Knopf v-if="steuerungAktiv && !veraltet && c.variante.aktion !== 'nichts'" art="leise" symbol="hochladen" klein nurSymbol :titel="t('bots.ki.umsetzen')" @click="emit('umsetzen', c.variante)" />
                                     </template>
                                 </td>
                             </tr>
@@ -173,6 +197,15 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 
 <style scoped>
 .ki { display: flex; flex-direction: column; gap: var(--abstand-3); min-width: 0; }
+.zielWahl { display: flex; flex-direction: column; gap: var(--abstand-2); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--abstand-3); }
+.zielWahl h5 { margin: 0; font-size: 0.9rem; }
+.wahl { display: flex; gap: 4px; flex-wrap: wrap; }
+.wahl button { flex: 1 1 auto; border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: var(--radius-klein); padding: 7px 10px; font: inherit; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.wahl button:hover:not(:disabled):not(.an) { border-color: var(--muted); }
+.wahl button:disabled { opacity: 0.5; cursor: default; }
+.wahl button.an { border-color: var(--accent); background: var(--accent-flaeche); color: var(--accent); font-weight: 600; }
+.idee { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--muted); }
+.idee textarea { resize: vertical; font-size: 0.9rem; min-height: 3.2rem; }
 .ki > * { min-width: 0; max-width: 100%; }
 .warnliste { margin: 0; padding-left: 1.1em; }
 .warnfuss { margin: var(--abstand-1) 0 0; }
