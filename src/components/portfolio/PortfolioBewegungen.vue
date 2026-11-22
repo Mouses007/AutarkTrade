@@ -17,7 +17,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { uebersicht, chf, menge, farbeVon } from '../../stores/portfolio.js'
+import { uebersicht, geld, menge, farbeVon } from '../../stores/portfolio.js'
 import { Knopf, Kreisel, Leerzustand, Symbol, Pille } from '../basis/index.js'
 
 const { t } = useI18n()
@@ -178,7 +178,7 @@ const zeitText = (ms) => new Date(Number(ms)).toLocaleTimeString('de-CH', { hour
                 <div class="pb-betraege">
                     <span :class="Number(z.menge) >= 0 ? 'at-gut' : 'at-schlecht'">{{ vz(z.menge) }}{{ menge(z.menge) }} {{ z.asset }}</span>
                     <span v-if="z.gegenAsset" class="at-gedaempft">{{ vz(z.gegenMenge) }}{{ menge(z.gegenMenge) }} {{ z.gegenAsset }}</span>
-                    <span v-if="z.chfWert != null" class="pb-chf" :title="z.chfQuelle">{{ chf(z.chfWert) }}</span>
+                    <span v-if="z.chfWert != null" class="pb-chf" :title="z.chfQuelle">{{ geld(z.chfWert) }}</span>
                 </div>
             </div>
         </div>

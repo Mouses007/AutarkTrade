@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 import { appEinstellungen } from './settings.js'
 import i18n from '../i18n'
+import { normWaehrung, faktorAusChf, wirksameWaehrung, waehrungsAuswahl } from '../utils/portfolioWaehrung.js'
 
 const t = (k, p) => i18n.global.t(k, p)
 
@@ -96,7 +97,48 @@ export function schalteVerborgen() {
     try { localStorage.setItem('at.portfolio.verborgen', verborgen.value ? '1' : '0') } catch { /* privat */ }
 }
 
+/*
+ * Anzeigewährung des Portfolios. Der Server rechnet alles in CHF; angezeigt
+ * wird in der Standardwährung der Einstellungen (`waehrungCode`, Allgemein ›
+ * Profil & Sprache) oder in der Währung, die oben im Portfolio gewählt ist
+ * (pro Gerät gemerkt). Umgerechnet wird mit dem Kurs von HEUTE aus der
+ * Übersicht (`fx`) — auch bei alten Beträgen (Einstand, Wert bei Erhalt):
+ * so bleiben Gewinn und Prozent in jeder Währung gleich. Der Steuerbericht
+ * bleibt in CHF (`chf`).
+ */
+export const standardWaehrung = computed(() => normWaehrung(appEinstellungen.value?.waehrungCode) || 'CHF')
+const waehrungWahl = ref((() => { try { return normWaehrung(localStorage.getItem('at.portfolio.waehrung')) } catch { return null } })())
+/** Gewählte Währung; ohne Kurs dafür gilt CHF (die Zahlen des Servers). */
+export const waehrung = computed(() => wirksameWaehrung(waehrungWahl.value, standardWaehrung.value, uebersicht.value?.fx))
+/** Was der Umschalter anbietet: die Standardwährung, dazu CHF und USD. */
+export const waehrungAuswahl = computed(() => waehrungsAuswahl(standardWaehrung.value, uebersicht.value?.fx))
+export function setzeWaehrung(code) {
+    const w = normWaehrung(code)
+    waehrungWahl.value = w && w !== standardWaehrung.value ? w : null
+    try { waehrungWahl.value ? localStorage.setItem('at.portfolio.waehrung', waehrungWahl.value) : localStorage.removeItem('at.portfolio.waehrung') } catch { /* privat */ }
+}
+/** CHF-Betrag des Servers als Zahl in der Anzeigewährung. */
+export function inWaehrung(v) {
+    if (v == null || !Number.isFinite(Number(v))) return null
+    return Number(v) * (faktorAusChf(waehrung.value, uebersicht.value?.fx) ?? 1)
+}
+/** CHF-Betrag des Servers, angezeigt in der Anzeigewährung („USD 1'234.50“). */
+export function geld(v, { vorzeichen = false } = {}) {
+    if (v == null || !Number.isFinite(Number(v))) return '—'
+    if (verborgen.value) return `${waehrung.value} ••••`
+    const w = inWaehrung(v)
+    const z = vorzeichen ? (w > 0 ? '+' : w < 0 ? '−' : '') : (w < 0 ? '−' : '')
+    return `${z}${waehrung.value} ${chfFormat.format(Math.abs(w))}`
+}
+/** Kurs je Einheit in der Anzeigewährung; `stellen(betrag)` liefert die Intl-Optionen. */
+export function geldKurs(v, stellen) {
+    if (v == null || !Number.isFinite(Number(v))) return '—'
+    const w = inWaehrung(v)
+    return `${waehrung.value} ${w.toLocaleString('de-CH', stellen(Math.abs(w)))}`
+}
+
 const chfFormat = new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+/** Fest in CHF — nur für den Steuerbericht. Alles andere nimmt `geld`. */
 export function chf(v, { vorzeichen = false } = {}) {
     if (v == null || !Number.isFinite(Number(v))) return '—'
     if (verborgen.value) return 'CHF ••••'

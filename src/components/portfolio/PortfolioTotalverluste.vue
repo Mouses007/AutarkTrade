@@ -8,7 +8,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { chf, menge, prozent, farbeVon, ladeUebersicht } from '../../stores/portfolio.js'
+import { geld, geldKurs, menge, prozent, farbeVon, ladeUebersicht } from '../../stores/portfolio.js'
 import { Karte, Knopf, Hinweis, Kreisel, Leerzustand } from '../basis/index.js'
 
 const { t } = useI18n()
@@ -32,7 +32,7 @@ const st = computed(() => daten.value?.statistik)
 const jeJahr = computed(() => Object.entries(st.value?.jeJahr || {}).sort((a, b) => b[0] - a[0]))
 const maxJahr = computed(() => Math.max(1, ...jeJahr.value.map(([, v]) => v)))
 const datum = (ms) => (ms ? new Date(ms).toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' }) : '—')
-const kurs = (v) => (v == null ? '—' : `CHF ${Number(v).toLocaleString('de-CH', { maximumSignificantDigits: 6 })}`)
+const kurs = (v) => geldKurs(v, () => ({ maximumSignificantDigits: 6 }))
 </script>
 
 <template>
@@ -47,7 +47,7 @@ const kurs = (v) => (v == null ? '—' : `CHF ${Number(v).toLocaleString('de-CH'
             <div class="tv-kacheln">
                 <Karte class="tv-kachel">
                     <span class="tv-etikett">{{ t('portfolio.tvVerloren') }}</span>
-                    <b class="tv-zahl at-schlecht">{{ chf(st.verlorenChf) }}</b>
+                    <b class="tv-zahl at-schlecht">{{ geld(st.verlorenChf) }}</b>
                     <small class="at-gedaempft">{{ t('portfolio.tvCoins', { n: st.anzahl }) }}<template v-if="st.ohneEinstand"> · {{ t('portfolio.tvOhneEinstand', { n: st.ohneEinstand }) }}</template></small>
                 </Karte>
                 <Karte class="tv-kachel">
@@ -58,7 +58,7 @@ const kurs = (v) => (v == null ? '—' : `CHF ${Number(v).toLocaleString('de-CH'
                 <Karte class="tv-kachel">
                     <span class="tv-etikett">{{ t('portfolio.tvGroesster') }}</span>
                     <b class="tv-zahl">{{ st.groesster ? st.groesster.asset : '—' }}</b>
-                    <small class="at-gedaempft">{{ st.groesster ? chf(st.groesster.chf) : '' }}</small>
+                    <small class="at-gedaempft">{{ st.groesster ? geld(st.groesster.chf) : '' }}</small>
                 </Karte>
             </div>
 
@@ -67,7 +67,7 @@ const kurs = (v) => (v == null ? '—' : `CHF ${Number(v).toLocaleString('de-CH'
                 <div v-for="[j, v] in jeJahr" :key="j" class="tv-balken">
                     <span>{{ t('portfolio.tvAbJahrKurz', { j }) }}</span>
                     <span class="tv-balken-spur"><span :style="{ width: (v / maxJahr) * 100 + '%' }" /></span>
-                    <b>{{ chf(v) }}</b>
+                    <b>{{ geld(v) }}</b>
                 </div>
             </section>
 
@@ -85,7 +85,7 @@ const kurs = (v) => (v == null ? '—' : `CHF ${Number(v).toLocaleString('de-CH'
                         </span>
                         <span>{{ menge(z.menge) }}</span>
                         <span>{{ kurs(z.kaufkurs) }}<small v-if="z.letzterKurs" class="at-gedaempft tv-klein">{{ t('portfolio.tvLetzterKurs', { k: kurs(z.letzterKurs.kursChf), d: datum(z.letzterKurs.zeit) }) }}</small></span>
-                        <span><b v-if="z.einstandChf != null" class="at-schlecht">{{ chf(z.einstandChf) }}</b><span v-else class="at-gedaempft" :title="t('portfolio.tvOhneEinstandInfo')">{{ t('portfolio.kaufkursUnbekannt') }}</span><small v-if="z.einstandTeilweise" class="at-warn"> *</small></span>
+                        <span><b v-if="z.einstandChf != null" class="at-schlecht">{{ geld(z.einstandChf) }}</b><span v-else class="at-gedaempft" :title="t('portfolio.tvOhneEinstandInfo')">{{ t('portfolio.kaufkursUnbekannt') }}</span><small v-if="z.einstandTeilweise" class="at-warn"> *</small></span>
                         <span>
                             <select class="tv-jahr" :value="z.abJahr" :aria-label="t('portfolio.tvAbSteuerjahr')" @change="setze(z.asset, true, Number($event.target.value))">
                                 <option v-for="j in jahre" :key="j" :value="j">{{ j }}</option>

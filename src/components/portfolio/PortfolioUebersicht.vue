@@ -21,9 +21,10 @@ import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { uebersicht, abrufLaeuft, abrufQuelle, starteAbruf, staubZeigen, setzeStaub, verborgen, schalteVerborgen, setzeTotalverlust, setzeSpam,
-    chf, menge, prozent, vorZeit, farbeVon } from '../../stores/portfolio.js'
+    geld, geldKurs, menge, prozent, vorZeit, farbeVon } from '../../stores/portfolio.js'
 import { Karte, Knopf, Reiter, Hinweis, Leerzustand, Symbol, Pille } from '../basis/index.js'
 import BilanzKarte from './BilanzKarte.vue'
+import WaehrungSchalter from './WaehrungSchalter.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -86,7 +87,7 @@ const versteckt = computed(() => ohneSpam.value.length - sichtbar.value.length)
 const spamOffen = ref(false)
 const vorjahr = new Date().getFullYear() - 1
 // Kurs je Einheit: kleine Coins brauchen mehr Stellen als zwei Rappen.
-const chfKurs = (v) => `CHF ${Number(v).toLocaleString('de-CH', { maximumSignificantDigits: Math.abs(v) >= 1 ? 6 : 4, minimumFractionDigits: Math.abs(v) >= 1 ? 2 : 0 })}`
+const chfKurs = (v) => geldKurs(v, (a) => ({ maximumSignificantDigits: a >= 1 ? 6 : 4, minimumFractionDigits: a >= 1 ? 2 : 0 }))
 const band = computed(() => {
     const mitWert = alle.value.filter((p) => p.chf > 0)
     const top = mitWert.slice(0, 7)
@@ -150,6 +151,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
             <div class="pf-held-oben">
                 <span class="pf-etikett">{{ futuresChf ? t('portfolio.gesamtvermoegen') : t('portfolio.gesamtwert') }}</span>
                 <div class="pf-held-knoepfe">
+                    <WaehrungSchalter />
                     <Knopf art="leise" klein nur-symbol :symbol="verborgen ? 'augeAus' : 'auge'" :titel="t('portfolio.verbergen')" @click="schalteVerborgen" />
                     <Knopf klein symbol="aktualisieren" :laedt="abrufLaeuft" @click="starteAbruf()">
                         <template v-if="abrufLaeuft">{{ abrufQuelle ? t('portfolio.holtQuelle', { q: ortName(abrufQuelle) }) : t('portfolio.holt') }}</template>
@@ -157,14 +159,14 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                     </Knopf>
                 </div>
             </div>
-            <div class="pf-wert">{{ chf(gesamtChf) }}</div>
+            <div class="pf-wert">{{ geld(gesamtChf) }}</div>
             <div v-if="futuresChf" class="pf-aufteilung">
-                <span>{{ t('portfolio.anteilSpot') }} <b>{{ chf(u.gesamt.chf) }}</b></span>
-                <span>{{ t('portfolio.anteilFutures') }} <b>{{ chf(futuresChf) }}</b></span>
+                <span>{{ t('portfolio.anteilSpot') }} <b>{{ geld(u.gesamt.chf) }}</b></span>
+                <span>{{ t('portfolio.anteilFutures') }} <b>{{ geld(futuresChf) }}</b></span>
             </div>
             <div class="pf-unterzeile">
                 <span v-if="delta != null" :class="delta >= 0 ? 'at-gut' : 'at-schlecht'">
-                    {{ chf(delta, { vorzeichen: true }) }}
+                    {{ geld(delta, { vorzeichen: true }) }}
                     <template v-if="gestern?.chf">({{ ((delta / gestern.chf) * 100).toFixed(1) }} %)</template>
                     <span class="at-gedaempft"> {{ t('portfolio.seitGestern') }}</span>
                 </span>
@@ -194,9 +196,9 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
             <span class="pf-futures-titel"><Symbol name="linie" :groesse="15" />{{ t('portfolio.futuresKonten') }}</span>
             <span v-for="k in futuresKonten" :key="k.boerse" class="pf-futures-konto">
                 {{ k.name.replace(/ Futures.*$/, '') }}
-                <b v-if="k.chf != null">{{ chf(k.chf) }}</b><span v-else class="at-warn">—</span>
+                <b v-if="k.chf != null">{{ geld(k.chf) }}</b><span v-else class="at-warn">—</span>
             </span>
-            <span class="pf-futures-summe">{{ chf(futuresChf) }}<Symbol name="pfeilRechts" :groesse="14" /></span>
+            <span class="pf-futures-summe">{{ geld(futuresChf) }}<Symbol name="pfeilRechts" :groesse="14" /></span>
         </router-link>
 
         <BilanzKarte v-if="u.quellen.length" />
@@ -221,7 +223,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                 <Reiter :model-value="sicht" :reiter="[{ id: 'coin', titel: t('portfolio.nachCoin'), symbol: 'muenzen' }, { id: 'ort', titel: t('portfolio.nachOrt'), symbol: 'gebaeude' }]" @update:model-value="setzeSicht" />
                 <button v-if="versteckt || staubZeigen" type="button" class="pf-staub" @click="setzeStaub(!staubZeigen)">
                     <Symbol :name="staubZeigen ? 'augeAus' : 'auge'" :groesse="14" />
-                    {{ staubZeigen ? t('portfolio.staubVerbergen') : t('portfolio.staubZeigen', { n: versteckt, grenze: chf(u.staubChf) }) }}
+                    {{ staubZeigen ? t('portfolio.staubVerbergen') : t('portfolio.staubZeigen', { n: versteckt, grenze: geld(u.staubChf) }) }}
                 </button>
             </div>
 
@@ -236,9 +238,9 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                         </span>
                         <span class="pf-anteil" :title="prozent(p.anteil)"><span :style="{ width: Math.max(2, p.anteil * 100) + '%', background: farbeVon(p.asset) }" /></span>
                         <span class="pf-betrag">
-                            <b v-if="!p.ohneKurs">{{ chf(p.chf) }}</b>
+                            <b v-if="!p.ohneKurs">{{ geld(p.chf) }}</b>
                             <span v-else class="at-gedaempft" :title="p.kursQuelle">{{ t('portfolio.keinKurs') }}</span>
-                            <small v-if="p.unrealisiertChf != null" :class="p.unrealisiertChf >= 0 ? 'at-gut' : 'at-schlecht'" :title="t('portfolio.unrealisiertInfo')">{{ chf(p.unrealisiertChf, { vorzeichen: true }) }}<template v-if="p.einstandTeilweise">*</template></small>
+                            <small v-if="p.unrealisiertChf != null" :class="p.unrealisiertChf >= 0 ? 'at-gut' : 'at-schlecht'" :title="t('portfolio.unrealisiertInfo')">{{ geld(p.unrealisiertChf, { vorzeichen: true }) }}<template v-if="p.einstandTeilweise">*</template></small>
                             <small v-else class="at-gedaempft">{{ p.ohneKurs ? '' : prozent(p.anteil) }}</small>
                         </span>
                         <Symbol name="runter" :groesse="16" class="pf-pfeil" />
@@ -247,12 +249,12 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                         <div v-for="o in p.orte" :key="o.quelle + o.ort" class="pf-ort">
                             <span>{{ ortName(o.quelle) }}<span v-if="o.ortName && !['spot', 'konto', 'btc', 'sol'].includes(o.ort)" class="at-gedaempft"> · {{ o.ortName }}</span></span>
                             <span class="at-gedaempft">{{ menge(o.menge) }}</span>
-                            <span>{{ chf(o.chf) }}</span>
+                            <span>{{ geld(o.chf) }}</span>
                         </div>
                         <div v-if="p.kaufkurs != null" class="pf-einstand">
                             <span>{{ t('portfolio.kaufkursSchnitt') }} <b>{{ chfKurs(p.kaufkurs) }}</b></span>
-                            <span>{{ t('portfolio.einstand') }} <b>{{ chf(p.einstandChf) }}</b></span>
-                            <span v-if="p.unrealisiertChf != null">{{ t('portfolio.unrealisiert') }} <b :class="p.unrealisiertChf >= 0 ? 'at-gut' : 'at-schlecht'">{{ chf(p.unrealisiertChf, { vorzeichen: true }) }}</b></span>
+                            <span>{{ t('portfolio.einstand') }} <b>{{ geld(p.einstandChf) }}</b></span>
+                            <span v-if="p.unrealisiertChf != null">{{ t('portfolio.unrealisiert') }} <b :class="p.unrealisiertChf >= 0 ? 'at-gut' : 'at-schlecht'">{{ geld(p.unrealisiertChf, { vorzeichen: true }) }}</b></span>
                             <span v-if="p.einstandTeilweise" class="at-warn" :title="t('portfolio.einstandTeilweiseInfo')">{{ t('portfolio.einstandTeilweise') }}</span>
                         </div>
                         <details v-if="p.lose?.length" class="pf-lose">
@@ -288,12 +290,12 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span class="pf-ort-titel">{{ q.name }}</span>
                             <Pille :ton="statusTon(q.status)" :title="q.meldung || ''">{{ q.status === 'ok' ? vorZeit(q.letzterAbruf) : (abrufLaeuft && q.status === 'neu' ? t('portfolio.wirdGelesen') : t('portfolio.status_' + q.status)) }}</Pille>
                             <Pille v-if="abgleichText(q.abgleich)" :ton="abgleichText(q.abgleich).ton" :title="abgleichText(q.abgleich).titel">{{ abgleichText(q.abgleich).text }}</Pille>
-                            <b class="at-ml-auto">{{ chf(q.chf) }}</b>
+                            <b class="at-ml-auto">{{ geld(q.chf) }}</b>
                         </div>
                         <div v-for="p in postenSichtbar(sortiert(q.posten))" :key="p.schluessel + p.ort" class="pf-ort">
                             <span><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}<span v-if="p.klasse" class="pf-klasse">{{ t('aktien.art_' + p.klasse) }}</span><span v-if="p.ort === 'bots'" class="at-gedaempft"> · Bots</span></span>
                             <span class="at-gedaempft">{{ menge(p.menge) }}</span>
-                            <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
+                            <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : geld(p.chf) }}</span>
                         </div>
                         <p v-if="q.meldung && q.status !== 'fehler'" class="pf-meldung">{{ q.meldung }}</p>
                     </Karte>
@@ -305,12 +307,12 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span class="pf-ort-titel">{{ q.name }}</span>
                             <Pille ton="neutral" :title="q.meldung || ''">{{ t('portfolio.ausDatei') }}</Pille>
                             <Pille v-if="q.uebergeben" ton="akzent" :title="t('portfolio.ueInfo')">{{ t('portfolio.ueAn', { an: q.uebergeben.an }) }}</Pille>
-                            <b class="at-ml-auto">{{ chf(q.chf) }}</b>
+                            <b class="at-ml-auto">{{ geld(q.chf) }}</b>
                         </div>
                         <div v-for="p in postenSichtbar(sortiert(q.posten))" :key="p.schluessel + p.ort" class="pf-ort">
                             <span><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}</span>
                             <span class="at-gedaempft">{{ menge(p.menge) }}</span>
-                            <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
+                            <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : geld(p.chf) }}</span>
                         </div>
                     </Karte>
                     <!-- Nur Historie: Datei-Quellen ohne heutigen Bestand, gesammelt und eingeklappt -->
@@ -335,19 +337,19 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                         <div class="pf-ort-kopf">
                             <span class="pf-wallet-typ" :class="w.typ">{{ w.typName }}</span>
                             <span class="pf-ort-titel">{{ w.name }}</span>
-                            <b class="at-ml-auto">{{ chf(w.chf) }}</b>
+                            <b class="at-ml-auto">{{ geld(w.chf) }}</b>
                         </div>
                         <div v-for="a in w.adressen" :key="a.quelle" class="pf-kette">
                             <div class="pf-kette-kopf">
                                 <span>{{ a.name }} <code class="at-gedaempft">{{ a.anzeige }}</code></span>
                                 <Pille :ton="statusTon(a.status)" :title="a.meldung || ''">{{ a.status === 'ok' ? vorZeit(a.letzterAbruf) : (abrufLaeuft && a.status === 'neu' ? t('portfolio.wirdGelesen') : t('portfolio.status_' + a.status)) }}</Pille>
                                 <Pille v-if="a.abgeschnitten?.length" ton="warn" :title="t('portfolio.historieAbgeschnittenInfo', { netze: a.abgeschnitten.join(', ') })">{{ t('portfolio.historieAbgeschnitten') }}</Pille>
-                                <span class="at-ml-auto">{{ chf(a.chf) }}</span>
+                                <span class="at-ml-auto">{{ geld(a.chf) }}</span>
                             </div>
                             <div v-for="p in postenSichtbar(sortiert(a.posten))" :key="p.schluessel + p.ort" class="pf-ort">
                                 <span><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}<span v-if="p.ortName && a.kette === 'evm'" class="at-gedaempft"> · {{ p.ortName }}</span></span>
                                 <span class="at-gedaempft">{{ menge(p.menge) }}</span>
-                                <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
+                                <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : geld(p.chf) }}</span>
                             </div>
                             <p v-if="a.meldung && a.status !== 'fehler'" class="pf-meldung">{{ a.meldung }}</p>
                         </div>

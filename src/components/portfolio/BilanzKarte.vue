@@ -7,7 +7,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { chf, prozent } from '../../stores/portfolio.js'
+import { geld, prozent } from '../../stores/portfolio.js'
 import { Karte, Symbol, Kreisel } from '../basis/index.js'
 
 const { t } = useI18n()
@@ -28,10 +28,10 @@ const maxJahr = computed(() => Math.max(1, ...jahre.value.map(([, v]) => v.ein))
             <span class="bk-etikett">{{ t('portfolio.biTitel') }}</span>
             <template v-if="b">
                 <span class="bk-zeile">
-                    <span><small>{{ t('portfolio.biRein') }}</small><b>{{ chf(b.nettoChf) }}</b></span>
+                    <span><small>{{ t('portfolio.biRein') }}</small><b>{{ geld(b.nettoChf) }}</b></span>
                     <Symbol name="pfeilRechts" :groesse="14" class="bk-pfeil" />
-                    <span><small>{{ t('portfolio.biHeute') }}</small><b>{{ chf(b.wertChf) }}</b></span>
-                    <span :class="b.differenzChf >= 0 ? 'at-gut' : 'at-schlecht'"><small>{{ t('portfolio.biDifferenz') }}</small><b>{{ chf(b.differenzChf, { vorzeichen: true }) }}<template v-if="anteil != null"> ({{ (anteil * 100).toFixed(0) }} %)</template></b></span>
+                    <span><small>{{ t('portfolio.biHeute') }}</small><b>{{ geld(b.wertChf) }}</b></span>
+                    <span :class="b.differenzChf >= 0 ? 'at-gut' : 'at-schlecht'"><small>{{ t('portfolio.biDifferenz') }}</small><b>{{ geld(b.differenzChf, { vorzeichen: true }) }}<template v-if="anteil != null"> ({{ (anteil * 100).toFixed(0) }} %)</template></b></span>
                 </span>
             </template>
             <Kreisel v-else-if="!fehler" still />
@@ -42,25 +42,25 @@ const maxJahr = computed(() => Math.max(1, ...jahre.value.map(([, v]) => v.ein))
             <div class="bk-spalten">
                 <div>
                     <h4>{{ t('portfolio.biBargeld') }}</h4>
-                    <div class="bk-reihe"><span>{{ t('portfolio.biEingezahlt') }}</span><span>{{ chf(b.eingezahltChf) }}</span></div>
-                    <div v-if="b.karteChf" class="bk-reihe"><span>{{ t('portfolio.biKarte') }}</span><span>{{ chf(b.karteChf) }}</span></div>
-                    <div class="bk-reihe"><span>{{ t('portfolio.biAusgezahlt') }}</span><span>− {{ chf(b.ausgezahltChf) }}</span></div>
-                    <div class="bk-reihe summe"><span>{{ t('portfolio.biNetto') }}</span><span>{{ chf(b.nettoChf) }}</span></div>
-                    <p v-if="b.abgeleitetChf" class="bk-notiz">{{ t('portfolio.biAbgeleitet', { v: chf(b.abgeleitetChf) }) }}</p>
+                    <div class="bk-reihe"><span>{{ t('portfolio.biEingezahlt') }}</span><span>{{ geld(b.eingezahltChf) }}</span></div>
+                    <div v-if="b.karteChf" class="bk-reihe"><span>{{ t('portfolio.biKarte') }}</span><span>{{ geld(b.karteChf) }}</span></div>
+                    <div class="bk-reihe"><span>{{ t('portfolio.biAusgezahlt') }}</span><span>− {{ geld(b.ausgezahltChf) }}</span></div>
+                    <div class="bk-reihe summe"><span>{{ t('portfolio.biNetto') }}</span><span>{{ geld(b.nettoChf) }}</span></div>
+                    <p v-if="b.abgeleitetChf" class="bk-notiz">{{ t('portfolio.biAbgeleitet', { v: geld(b.abgeleitetChf) }) }}</p>
                 </div>
                 <div>
                     <h4>{{ t('portfolio.biWert') }}</h4>
-                    <div class="bk-reihe"><span>{{ t('portfolio.biSpot') }}</span><span>{{ chf(b.spotChf) }}</span></div>
+                    <div class="bk-reihe"><span>{{ t('portfolio.biSpot') }}</span><span>{{ geld(b.spotChf) }}</span></div>
                     <div v-for="f in b.futures" :key="f.name" class="bk-reihe">
                         <span>{{ f.name }}<small v-if="f.hinweis" class="at-gedaempft"> · {{ f.hinweis }}</small></span>
-                        <span>{{ f.chf != null ? chf(f.chf) : '—' }}</span>
+                        <span>{{ f.chf != null ? geld(f.chf) : '—' }}</span>
                     </div>
-                    <div class="bk-reihe summe"><span>{{ t('portfolio.biHeute') }}</span><span>{{ chf(b.wertChf) }}</span></div>
+                    <div class="bk-reihe summe"><span>{{ t('portfolio.biHeute') }}</span><span>{{ geld(b.wertChf) }}</span></div>
                 </div>
             </div>
             <h4>{{ t('portfolio.biJeJahr') }}</h4>
             <div class="bk-jahre">
-                <div v-for="[j, v] in jahre" :key="j" class="bk-jahr" :title="`${j}: +${chf(v.ein)}${v.aus ? ' / −' + chf(v.aus) : ''}`">
+                <div v-for="[j, v] in jahre" :key="j" class="bk-jahr" :title="`${j}: +${geld(v.ein)}${v.aus ? ' / −' + geld(v.aus) : ''}`">
                     <span class="bk-balken"><span :style="{ height: (v.ein / maxJahr) * 100 + '%' }" /><span v-if="v.aus" class="aus" :style="{ height: (v.aus / maxJahr) * 100 + '%' }" /></span>
                     <small>{{ j }}</small>
                 </div>

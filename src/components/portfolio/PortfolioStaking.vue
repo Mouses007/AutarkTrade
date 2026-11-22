@@ -11,7 +11,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { chf, menge, prozent, farbeVon } from '../../stores/portfolio.js'
+import { geld, menge, prozent, farbeVon } from '../../stores/portfolio.js'
 import { Karte, Hinweis, Kreisel, Leerzustand, Symbol } from '../basis/index.js'
 
 const { t } = useI18n()
@@ -54,18 +54,18 @@ const zuBewegungen = (p) => ({ path: '/portfolio/bewegungen', query: { quelle: p
             <div class="stk-kacheln">
                 <Karte class="stk-kachel">
                     <span class="stk-etikett">{{ t('portfolio.stkImStaking') }}</span>
-                    <b class="stk-zahl">{{ chf(summe.bestandChf) }}</b>
+                    <b class="stk-zahl">{{ geld(summe.bestandChf) }}</b>
                     <small class="at-gedaempft">{{ t('portfolio.stkLaufendeAnzahl', { n: summe.aktiv }) }}</small>
                 </Karte>
                 <Karte class="stk-kachel">
                     <span class="stk-etikett">{{ t('portfolio.stkErtragErhalt') }}</span>
-                    <b class="stk-zahl at-gut">{{ chf(summe.ertragChf) }}</b>
+                    <b class="stk-zahl at-gut">{{ geld(summe.ertragChf) }}</b>
                     <small class="at-gedaempft">{{ t('portfolio.stkErtragErhaltInfo') }}<template v-if="summe.ertragOhneChf"> · {{ t('portfolio.stkOhneKurs', { n: summe.ertragOhneChf }) }}</template></small>
                 </Karte>
                 <Karte class="stk-kachel">
                     <span class="stk-etikett">{{ t('portfolio.stkErtragHeute') }}</span>
-                    <b class="stk-zahl">{{ chf(summe.laufendErtragHeuteChf) }}</b>
-                    <small class="at-gedaempft">{{ t('portfolio.stkErtragHeuteInfo', { w: chf(summe.laufendErtragChf) }) }}</small>
+                    <b class="stk-zahl">{{ geld(summe.laufendErtragHeuteChf) }}</b>
+                    <small class="at-gedaempft">{{ t('portfolio.stkErtragHeuteInfo', { w: geld(summe.laufendErtragChf) }) }}</small>
                 </Karte>
             </div>
 
@@ -83,14 +83,14 @@ const zuBewegungen = (p) => ({ path: '/portfolio/bewegungen', query: { quelle: p
                             <small class="at-gedaempft">{{ p.ortName }} · {{ t('portfolio.stkSeit', { d: datum(p.seit) }) }}</small>
                         </span>
                         <span :data-titel="t('portfolio.stkEinsatz')" :title="t('portfolio.stkEinsatzInfo')">{{ p.eingesetzt != null ? menge(p.eingesetzt) : '—' }}</span>
-                        <span :data-titel="t('portfolio.stkBestand')">{{ menge(p.bestandMenge) }}<small class="at-gedaempft">{{ chf(p.bestandChf) }}</small></span>
+                        <span :data-titel="t('portfolio.stkBestand')">{{ menge(p.bestandMenge) }}<small class="at-gedaempft">{{ geld(p.bestandChf) }}</small></span>
                         <span :data-titel="t('portfolio.stkErtraege')">
                             <router-link :to="zuBewegungen(p)" class="stk-link at-gut">+{{ menge(p.ertragMenge) }}</router-link>
                             <small class="at-gedaempft">{{ auszahlungen(p) }}</small>
                         </span>
                         <span :data-titel="t('portfolio.stkWert')">
-                            {{ chf(p.ertragChf) }}
-                            <small class="at-gedaempft">{{ t('portfolio.stkHeute', { w: chf(p.ertragHeuteChf) }) }}<template v-if="p.ertragOhneChf"> · {{ t('portfolio.stkOhneKurs', { n: p.ertragOhneChf }) }}</template></small>
+                            {{ geld(p.ertragChf) }}
+                            <small class="at-gedaempft">{{ t('portfolio.stkHeute', { w: geld(p.ertragHeuteChf) }) }}<template v-if="p.ertragOhneChf"> · {{ t('portfolio.stkOhneKurs', { n: p.ertragOhneChf }) }}</template></small>
                         </span>
                         <span :data-titel="t('portfolio.stkRendite')" :title="p.renditeTage ? t('portfolio.stkRenditeInfo', { n: p.renditeTage }) : t('portfolio.stkRenditeFehlt')">
                             <b>{{ prozent(p.renditePa) }}</b>
@@ -113,7 +113,7 @@ const zuBewegungen = (p) => ({ path: '/portfolio/bewegungen', query: { quelle: p
                             <small class="at-gedaempft">{{ auszahlungen(p) }}</small>
                         </span>
                         <span>
-                            {{ chf(p.ertragChf) }}
+                            {{ geld(p.ertragChf) }}
                             <small class="at-gedaempft">{{ t('portfolio.stkBeiErhalt') }}<template v-if="p.ertragOhneChf"> · {{ t('portfolio.stkOhneKurs', { n: p.ertragOhneChf }) }}</template></small>
                         </span>
                     </div>

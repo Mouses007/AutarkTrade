@@ -12,7 +12,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { chf, menge, prozent, farbeVon } from '../../stores/portfolio.js'
+import { geld, geldKurs, menge, prozent, farbeVon } from '../../stores/portfolio.js'
 import { Karte, Hinweis, Kreisel, Leerzustand, Symbol } from '../basis/index.js'
 
 const { t } = useI18n()
@@ -54,7 +54,7 @@ function klappe(a) { const s = new Set(offen.value); s.has(a) ? s.delete(a) : s.
 const datum = (ms) => (ms ? new Date(ms).toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' }) : '—')
 const monatText = (m) => { const [j, mo] = m.split('-'); return `${mo}.${j}` }
 // Ab 1 CHF zwei Rappen, darunter vier signifikante Stellen (ALGO, FET kosten Rappen).
-const chfKurs = (v) => (v == null ? '—' : `CHF ${Number(v).toLocaleString('de-CH', Math.abs(v) >= 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumSignificantDigits: 4 })}`)
+const chfKurs = (v) => geldKurs(v, (a) => (a >= 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumSignificantDigits: 4 }))
 const ton = (v) => (v == null ? '' : v >= 0 ? 'at-gut' : 'at-schlecht')
 function rhythmus(tage) {
     if (tage == null) return ''
@@ -98,27 +98,27 @@ const kurve = computed(() => {
         <template v-else-if="daten">
             <div class="dca-leiste">
                 <label><input type="checkbox" :checked="nurLaufende" @change="schalteLaufende($event.target.checked)" /> {{ t('portfolio.dcaNurLaufende') }}</label>
-                <span v-if="ausgeblendet.coins.length" class="at-gedaempft">{{ t('portfolio.dcaAusgeblendet', { c: ausgeblendet.coins.join(', '), b: chf(ausgeblendet.investiertChf) }) }}</span>
+                <span v-if="ausgeblendet.coins.length" class="at-gedaempft">{{ t('portfolio.dcaAusgeblendet', { c: ausgeblendet.coins.join(', '), b: geld(ausgeblendet.investiertChf) }) }}</span>
             </div>
             <div class="dca-kacheln">
                 <Karte class="dca-kachel">
                     <span class="dca-etikett">{{ t('portfolio.dcaEingesetzt') }}</span>
-                    <b class="dca-zahl">{{ chf(summe.investiertChf) }}</b>
+                    <b class="dca-zahl">{{ geld(summe.investiertChf) }}</b>
                     <small class="at-gedaempft">{{ t('portfolio.dcaKaeufeSeit', { n: summe.kaeufe, d: datum(summe.von) }) }}<template v-if="summe.ohneChf"> · {{ t('portfolio.dcaOhneChf', { n: summe.ohneChf }) }}</template></small>
                 </Karte>
                 <Karte class="dca-kachel">
                     <span class="dca-etikett">{{ t('portfolio.dcaWertOhne') }}</span>
-                    <b class="dca-zahl">{{ chf(summe.wertHeuteChf) }}</b>
+                    <b class="dca-zahl">{{ geld(summe.wertHeuteChf) }}</b>
                     <small class="at-gedaempft">{{ t('portfolio.dcaWertOhneInfo') }}<template v-if="summe.ohneKurs.length"> · {{ t('portfolio.dcaOhneKurs', { c: summe.ohneKurs.join(', ') }) }}</template></small>
                 </Karte>
                 <Karte class="dca-kachel">
                     <span class="dca-etikett">{{ t('portfolio.dcaNochDa') }}</span>
-                    <b class="dca-zahl">{{ chf(summe.nochDaChf) }}</b>
+                    <b class="dca-zahl">{{ geld(summe.nochDaChf) }}</b>
                     <small class="at-gedaempft">{{ t('portfolio.dcaNochDaInfo', { p: prozent(summe.nochDaAnteil) }) }}</small>
                 </Karte>
                 <Karte class="dca-kachel">
                     <span class="dca-etikett">{{ t('portfolio.dcaGewinn') }}</span>
-                    <b class="dca-zahl" :class="ton(summe.gewinnChf)">{{ chf(summe.gewinnChf, { vorzeichen: true }) }}</b>
+                    <b class="dca-zahl" :class="ton(summe.gewinnChf)">{{ geld(summe.gewinnChf, { vorzeichen: true }) }}</b>
                     <small :class="ton(summe.gewinnPct)">{{ summe.gewinnPct != null ? (summe.gewinnPct >= 0 ? '+' : '') + prozent(summe.gewinnPct) : '—' }}</small>
                 </Karte>
                 <Karte class="dca-kachel">
@@ -137,7 +137,7 @@ const kurve = computed(() => {
                         <path :d="kurve.wert" class="wert" :class="{ minus: !kurve.im_plus }" vector-effect="non-scaling-stroke" />
                         <path :d="kurve.eingesetzt" class="eingesetzt" vector-effect="non-scaling-stroke" />
                     </svg>
-                    <div class="dca-achse at-gedaempft"><span>{{ kurve.von }}</span><span>max. {{ chf(kurve.max) }}</span><span>{{ kurve.bis }}</span></div>
+                    <div class="dca-achse at-gedaempft"><span>{{ kurve.von }}</span><span>max. {{ geld(kurve.max) }}</span><span>{{ kurve.bis }}</span></div>
                     <div class="dca-legende">
                         <span><i class="strich wert" :class="{ minus: !kurve.im_plus }" />{{ t('portfolio.dcaWertOhne') }}</span>
                         <span><i class="strich eingesetzt" />{{ t('portfolio.dcaEingesetzt') }}</span>
@@ -163,13 +163,13 @@ const kurve = computed(() => {
                                 <span v-if="c.aktiv" class="dca-marke">{{ t('portfolio.dcaLaeuft') }}</span>
                                 <small class="at-gedaempft">{{ t('portfolio.dcaKaeufeZeitraum', { n: c.anzahl, von: datum(c.von), bis: datum(c.bis) }) }}</small>
                             </span>
-                            <span :data-titel="t('portfolio.dcaEingesetzt')">{{ chf(c.investiertChf) }}<small v-if="c.ohneChf" class="at-warn">{{ t('portfolio.dcaOhneChf', { n: c.ohneChf }) }}</small></span>
+                            <span :data-titel="t('portfolio.dcaEingesetzt')">{{ geld(c.investiertChf) }}<small v-if="c.ohneChf" class="at-warn">{{ t('portfolio.dcaOhneChf', { n: c.ohneChf }) }}</small></span>
                             <span :data-titel="t('portfolio.stMenge')">{{ menge(c.menge) }}<small v-if="c.umgestellt" class="at-gedaempft">= {{ menge(c.menge * c.faktor) }} {{ c.heuteAsset }}</small></span>
                             <span :data-titel="t('portfolio.dcaSchnitt')">{{ chfKurs(c.schnittChf) }}<small class="at-gedaempft">{{ t('portfolio.dcaKursHeute', { k: chfKurs(c.kursChf != null ? c.kursChf * c.faktor : null) }) }}</small></span>
-                            <span :data-titel="t('portfolio.dcaWertOhne')">{{ chf(c.wertHeuteChf) }}</span>
-                            <span :data-titel="t('portfolio.dcaNochDa')">{{ chf(c.nochDa.wertChf) }}<small class="at-gedaempft">{{ menge(c.nochDa.menge) }} {{ c.heuteAsset }}</small></span>
+                            <span :data-titel="t('portfolio.dcaWertOhne')">{{ geld(c.wertHeuteChf) }}</span>
+                            <span :data-titel="t('portfolio.dcaNochDa')">{{ geld(c.nochDa.wertChf) }}<small class="at-gedaempft">{{ menge(c.nochDa.menge) }} {{ c.heuteAsset }}</small></span>
                             <span :data-titel="t('portfolio.dcaGewinn')" :class="ton(c.gewinnChf)">
-                                {{ chf(c.gewinnChf, { vorzeichen: true }) }}<small>{{ c.gewinnPct != null ? (c.gewinnPct >= 0 ? '+' : '') + prozent(c.gewinnPct) : '' }}</small>
+                                {{ geld(c.gewinnChf, { vorzeichen: true }) }}<small>{{ c.gewinnPct != null ? (c.gewinnPct >= 0 ? '+' : '') + prozent(c.gewinnPct) : '' }}</small>
                             </span>
                         </button>
                         <div v-if="offen.has(c.schluessel)" class="dca-detail">
@@ -179,11 +179,11 @@ const kurve = computed(() => {
                                 <span><b>{{ p.quelleName }}</b> · {{ artText(p) }}<span v-if="p.aktiv" class="dca-marke">{{ t('portfolio.dcaLaeuft') }}</span></span>
                                 <span>{{ betragText(p) }}<template v-if="rhythmus(p.intervallTage)"> · {{ rhythmus(p.intervallTage) }}</template></span>
                                 <span class="at-gedaempft">{{ datum(p.von) }} – {{ p.aktiv ? t('portfolio.dcaHeute') : datum(p.bis) }} · {{ p.anzahl === 1 ? t('portfolio.dcaEinKauf') : t('portfolio.dcaKaeufe', { n: p.anzahl }) }}</span>
-                                <span>{{ chf(p.investiertChf) }} → {{ menge(p.menge) }} {{ c.asset }}</span>
+                                <span>{{ geld(p.investiertChf) }} → {{ menge(p.menge) }} {{ c.asset }}</span>
                             </div>
                             <h4>{{ t('portfolio.dcaHeuteImPortfolio', { c: c.heuteAsset }) }}</h4>
                             <p v-if="c.heuteImPortfolio" class="dca-orte">
-                                <b>{{ menge(c.heuteImPortfolio.menge) }} {{ c.heuteAsset }}</b> <span class="at-gedaempft">({{ chf(c.heuteImPortfolio.chf) }})</span>:
+                                <b>{{ menge(c.heuteImPortfolio.menge) }} {{ c.heuteAsset }}</b> <span class="at-gedaempft">({{ geld(c.heuteImPortfolio.chf) }})</span>:
                                 <template v-for="(o, i) in c.heuteImPortfolio.orte" :key="i"><span v-if="i"> · </span>{{ o.name }} {{ menge(o.menge) }}</template>
                             </p>
                             <p v-else class="at-gedaempft dca-orte">{{ t('portfolio.dcaNichtMehrGehalten', { c: c.heuteAsset }) }}</p>

@@ -17,11 +17,14 @@ import PortfolioQuellen from '../components/portfolio/PortfolioQuellen.vue'
 import PortfolioSteuer from '../components/portfolio/PortfolioSteuer.vue'
 import PortfolioFruehphase from '../components/portfolio/PortfolioFruehphase.vue'
 import PortfolioTotalverluste from '../components/portfolio/PortfolioTotalverluste.vue'
+import WaehrungSchalter from '../components/portfolio/WaehrungSchalter.vue'
 import { Hinweis, Kreisel } from '../components/basis/index.js'
 
 const { t } = useI18n()
 const route = useRoute()
 const reiter = computed(() => (['dca', 'bewegungen', 'staking', 'fruehphase', 'quellen', 'steuer', 'totalverluste'].includes(route.params.reiter) ? route.params.reiter : 'uebersicht'))
+// Die Übersicht trägt den Währungs-Umschalter in ihrem Kopf, der Steuerbericht bleibt in CHF.
+const mitWaehrung = computed(() => ['dca', 'bewegungen', 'staking', 'fruehphase', 'totalverluste'].includes(reiter.value))
 useKiSeitenStand(() => ({ reiter: reiter.value }))
 
 onMounted(ladeUebersicht)
@@ -32,6 +35,7 @@ onMounted(ladeUebersicht)
         <Hinweis v-if="ladeFehler" art="fehler">{{ ladeFehler }}</Hinweis>
         <div v-if="laedt && !uebersicht" class="at-mittig at-py-5"><Kreisel /></div>
         <template v-else>
+            <div v-if="mitWaehrung" class="pf-waehrung"><WaehrungSchalter /></div>
             <PortfolioUebersicht v-if="reiter === 'uebersicht'" />
             <PortfolioDca v-else-if="reiter === 'dca'" />
             <PortfolioBewegungen v-else-if="reiter === 'bewegungen'" />
@@ -46,5 +50,6 @@ onMounted(ladeUebersicht)
 
 <style scoped>
 .pf { padding: 0 1rem 3rem; max-width: 1180px; }
+.pf-waehrung { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
 @media (min-width: 768px) { .pf { padding: 0 1.5rem 3rem; } }
 </style>

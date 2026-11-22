@@ -310,7 +310,7 @@ async function rechneUebersicht({ ohneVerlauf }) {
     }
     return {
         gesamt: { chf: gesamtChf, usd: gesamtUsd, ohneKurs },
-        fx: { chf: fx.chf, quelle: fx.quelle, datum: fx.datum },
+        fx: { chf: fx.chf, eur: fx.eurAusChf ? null : (fx.eur ?? null), quelle: fx.quelle, datum: fx.datum },
         marktFehler: marktFehler || null,
         aktienMehrdeutig,
         staubChf,

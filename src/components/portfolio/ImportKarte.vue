@@ -9,7 +9,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { uebersicht, ladeUebersicht, menge, chf, vorZeit } from '../../stores/portfolio.js'
+import { uebersicht, ladeUebersicht, menge, geld, vorZeit } from '../../stores/portfolio.js'
 import { Karte, Knopf, Hinweis, Symbol, Pille } from '../basis/index.js'
 
 const { t } = useI18n()
@@ -119,7 +119,7 @@ const datum = (ms) => new Date(ms).toLocaleDateString('de-CH')
                     <span>{{ t('portfolio.genutztBis') }}</span>
                     <input type="date" :value="isoTag(q.genutztBis)" @change="setzeGenutztBis(q, $event.target.value)" />
                 </label>
-                <span class="ik-wert">{{ q.beendet ? '—' : chf(q.chf) }}</span>
+                <span class="ik-wert">{{ q.beendet ? '—' : geld(q.chf) }}</span>
                 <Knopf art="leise" klein nur-symbol :symbol="loeschFrage === q.quelle ? 'warnung' : 'muell'"
                     :titel="loeschFrage === q.quelle ? t('portfolio.nochmalLoeschen') : t('portfolio.imEntfernen')" @click="entferne(q)" />
             </div>

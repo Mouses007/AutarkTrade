@@ -11,7 +11,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { uebersicht, ladeUebersicht, starteAbruf, abrufLaeuft, BOERSEN, boersenMaerkte, setzeBoersenMarkt, chf, vorZeit } from '../../stores/portfolio.js'
+import { uebersicht, ladeUebersicht, starteAbruf, abrufLaeuft, BOERSEN, boersenMaerkte, setzeBoersenMarkt, geld, vorZeit } from '../../stores/portfolio.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { dbUpdateSettings } from '../../utils/db.js'
 import { Karte, Knopf, Pille, Symbol, Hinweis } from '../basis/index.js'
@@ -195,7 +195,7 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
                             <Pille :ton="statusTon(stand(b.id).status)" :title="stand(b.id).meldung || ''">
                                 {{ stand(b.id).status === 'ok' ? vorZeit(stand(b.id).letzterAbruf) : (abrufLaeuft && stand(b.id).status === 'neu' ? t('portfolio.wirdGelesen') : t('portfolio.status_' + stand(b.id).status)) }}
                             </Pille>
-                            <span v-if="stand(b.id).letzterAbruf" class="at-gedaempft pq-wert">{{ chf(stand(b.id).chf) }}</span>
+                            <span v-if="stand(b.id).letzterAbruf" class="at-gedaempft pq-wert">{{ geld(stand(b.id).chf) }}</span>
                         </template>
                     </div>
                     <div class="pq-boerse-rechts">
@@ -302,7 +302,7 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
                         </div>
                     </div>
                     <div class="pq-adr-rechts">
-                        <span v-if="stand('a' + a.id)?.letzterAbruf">{{ chf(stand('a' + a.id).chf) }}</span>
+                        <span v-if="stand('a' + a.id)?.letzterAbruf">{{ geld(stand('a' + a.id).chf) }}</span>
                         <Pille v-if="stand('a' + a.id)" :ton="statusTon(stand('a' + a.id).status)">{{ stand('a' + a.id).status === 'ok' ? vorZeit(stand('a' + a.id).letzterAbruf) : (abrufLaeuft && stand('a' + a.id).status === 'neu' ? t('portfolio.wirdGelesen') : t('portfolio.status_' + stand('a' + a.id).status)) }}</Pille>
                         <Pille v-else-if="abrufLaeuft" ton="neutral">{{ t('portfolio.wirdGelesen') }}</Pille>
                         <button type="button" class="pq-glocke" :class="{ an: wacht['a' + a.id] }"

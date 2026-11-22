@@ -9,7 +9,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { chf, menge, verborgen, vorZeit } from '../../stores/portfolio.js'
+import { geld, menge, verborgen, vorZeit, waehrung } from '../../stores/portfolio.js'
 import { Karte, Knopf, Hinweis, Kreisel, Leerzustand, Symbol } from '../basis/index.js'
 
 const { t } = useI18n()
@@ -159,7 +159,7 @@ function linie(v) {
                 <Karte class="fp-kachel">
                     <span class="fp-etikett">{{ t('portfolio.fpWert') }}</span>
                     <b class="fp-zahl">{{ usd(summe.wertUsd) }}</b>
-                    <small class="at-gedaempft">{{ chf(summe.wertChf) }} · {{ t('portfolio.fpCoins', { n: summe.anzahl }, summe.anzahl) }}</small>
+                    <small class="at-gedaempft"><template v-if="waehrung !== 'USD'">{{ geld(summe.wertChf) }} · </template>{{ t('portfolio.fpCoins', { n: summe.anzahl }, summe.anzahl) }}</small>
                 </Karte>
                 <Karte class="fp-kachel">
                     <span class="fp-etikett">{{ t('portfolio.fpEingesetzt') }}</span>
@@ -212,7 +212,7 @@ function linie(v) {
                             <dt>{{ t('portfolio.stMenge') }}</dt>
                             <dd>{{ menge(z.menge) }}<small class="at-gedaempft"> {{ z.menge == null ? '' : z.mengeVonHand ? t('portfolio.fpVonHand') : t('portfolio.fpAusWallet') }}</small></dd>
                         </div>
-                        <div><dt>{{ t('portfolio.fpWertJetzt') }}</dt><dd>{{ usd(z.wertUsd) }}<small class="at-gedaempft"> {{ z.wertChf != null ? chf(z.wertChf) : '' }}</small></dd></div>
+                        <div><dt>{{ t('portfolio.fpWertJetzt') }}</dt><dd>{{ usd(z.wertUsd) }}<small class="at-gedaempft"> {{ z.wertChf != null && waehrung !== 'USD' ? geld(z.wertChf) : '' }}</small></dd></div>
                         <div><dt>{{ t('portfolio.fpEinsatzKurz') }}</dt><dd>{{ usd(z.einsatzUsd) }}<small v-if="z.einstiegUsd" class="at-gedaempft"> @ {{ kurs(z.einstiegUsd) }}</small></dd></div>
                         <div>
                             <dt>{{ t('portfolio.fpErgebnis') }}</dt>
