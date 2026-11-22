@@ -371,6 +371,9 @@ export const GUSS_PARAMS = [
     SZ('ema_touch', 'maxGegenkerzen', 0, 0, 5, 1, 'gussKorrektur'),
     SZ('ema_touch', 'maxGegenkerzenAtr', 0.1, 0, 5, 0.05, 'gussKorrektur'),
     { key: 'gussEmas', typ: 'schalter', vorgabe: true, gruppe: 'sigBild' },
+    { key: 'gussFarbeFast', typ: 'farbe', vorgabe: '#29b6f6', gruppe: 'sigBild' },
+    { key: 'gussFarbeEntry', typ: 'farbe', vorgabe: '#f5c542', gruppe: 'sigBild' },
+    { key: 'gussFarbeSlow', typ: 'farbe', vorgabe: '#ab47bc', gruppe: 'sigBild' },
     ...SIGNAL_DARSTELLUNG,
 ]
 // ── LSOB (Boxen) / GUSS-Rücklauf ──
@@ -780,9 +783,9 @@ export const INDIKATOREN = {
         params: GUSS_PARAMS,
         ausgaben: [],
         ausgabenFuer: (p) => (p.gussEmas ? [
-            { key: 'ema21', art: 'linie', farbe: '#29b6f6', breite: 1 },
-            { key: 'ema50', art: 'linie', farbe: '#f5c542', breite: 2 },
-            { key: 'ema200', art: 'linie', farbe: '#ab47bc', breite: 1 },
+            { key: 'ema21', art: 'linie', farbe: p.gussFarbeFast || '#29b6f6', breite: 1 },
+            { key: 'ema50', art: 'linie', farbe: p.gussFarbeEntry || '#f5c542', breite: 2 },
+            { key: 'ema200', art: 'linie', farbe: p.gussFarbeSlow || '#ab47bc', breite: 1 },
         ] : []),
         rechne: (k, p) => (p.gussEmas ? { ema21: ema(k, p.emaFast), ema50: ema(k, p.emaEntry), ema200: ema(k, p.emaSlow) } : {}),
     },
