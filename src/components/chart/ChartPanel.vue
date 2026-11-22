@@ -1769,6 +1769,30 @@ function zeigeNeueste() {
     if (n) chart.value?.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 8 })
 }
 watch(() => props.seiteScrollt, (s) => chart.value?.applyOptions({ handleScroll: { vertTouchDrag: !s } }))
+/*
+ * Handy ausserhalb des Vollbilds: `vertTouchDrag: false` gibt den senkrechten
+ * Wisch der Seite — die Bibliothek wendet das aber auch auf die Preisachse an,
+ * die sich dann nicht mehr ziehen liess (Skala strecken/stauchen, damit auch
+ * kein «Auto aus»). Beginnt der Finger AUF der Preisachse, gehört der Wisch
+ * darum für diese eine Berührung dem Chart; überall sonst scrollt weiter die Seite.
+ */
+let achsenGriff = false
+function achseBeruehrt(e) {
+    const c = chart.value
+    if (!props.seiteScrollt || !c || !huelle.value || e.touches.length !== 1) return
+    let breite = 0
+    try { breite = c.priceScale('right', 0).width() } catch { /* ohne Skala */ }
+    const rect = huelle.value.getBoundingClientRect()
+    if (!breite || e.touches[0].clientX < rect.right - breite) return
+    achsenGriff = true
+    c.applyOptions({ handleScroll: { vertTouchDrag: true } })
+}
+function achseLos(e) {
+    if (!achsenGriff || e.touches.length) return
+    achsenGriff = false
+    chart.value?.applyOptions({ handleScroll: { vertTouchDrag: !props.seiteScrollt } })
+    skalaAbgleich()
+}
 // Schalter in der Kopfleiste (oder ein anderes Gerät) hat umgestellt
 watch(() => props.panel.autoSkala !== false, (an) => { if (an !== autoSkala.value) autoEinpassen(an) })
 
@@ -2073,6 +2097,10 @@ onMounted(() => {
     huelle.value.addEventListener('contextmenu', rechtsklick)
     // Capture + nicht passiv: vor der Bibliothek, die das Rad sonst als Zeit-Zoom nimmt.
     huelle.value.addEventListener('wheel', radAufAchse, { capture: true, passive: false })
+    // Capture: vor der Bibliothek, die den Schalter beim ersten Wisch liest.
+    huelle.value.addEventListener('touchstart', achseBeruehrt, { capture: true, passive: true })
+    huelle.value.addEventListener('touchend', achseLos, { passive: true })
+    huelle.value.addEventListener('touchcancel', achseLos, { passive: true })
     document.addEventListener('visibilitychange', sichtbarkeitGeaendert)
     titelUhr = setInterval(() => { if (!document.hidden) titelAbgleich() }, 500)
 })
@@ -2080,6 +2108,9 @@ onBeforeUnmount(() => {
     clearInterval(titelUhr)
     document.removeEventListener('visibilitychange', sichtbarkeitGeaendert)
     huelle.value?.removeEventListener('wheel', radAufAchse, { capture: true })
+    huelle.value?.removeEventListener('touchstart', achseBeruehrt, { capture: true })
+    huelle.value?.removeEventListener('touchend', achseLos)
+    huelle.value?.removeEventListener('touchcancel', achseLos)
     ladeNummer++
     clearTimeout(nachfuehrUhr)
     zeichner?.abbauen()
