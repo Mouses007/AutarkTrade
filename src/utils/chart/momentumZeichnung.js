@@ -6,7 +6,7 @@
  * Die Rechnung kommt fertig vom Server (`server/momentum-radar.js`, Konstanten
  * 1:1 aus der Vorlage); hier wird nur gezeichnet, in der Reihenfolge der Vorlage:
  *   unten   Marken ±100/±Grenze (Vorgabe 50)/0, Schienen ±115, Schatten (Signallinie als Fläche),
- *           helle Wellenfläche, Geldfluss je Kerze (violett = Futures treiben),
+ *           helle Wellenfläche, Streifen Welle↔Signallinie (grün = Welle darüber, rot = darunter), Geldfluss je Kerze (violett = Futures treiben),
  *           weisse Spot-Linie, 4h-Farbleiste am unteren Rand
  *   (dazwischen zeichnet die Bibliothek Welle und Signallinie als Serien)
  *   oben    Punkte (gross = höhere Zeitebenen stützen), Rauten, Schienen-Punkte
@@ -51,6 +51,7 @@ export class MomentumZeichnung {
         this.chart = chart
         this.serie = serie
         this.v = null
+        this.p = {}
         this.zeiten = []
         this.iv = 3_600_000
         this.requestUpdate = () => {}
@@ -68,7 +69,9 @@ export class MomentumZeichnung {
     updateAllViews() {}
     abbauen() { try { this.serie.detachPrimitive(this) } catch { /* weg */ } }
 
-    setze(verlauf, zeiten, iv) {
+    /** `params`: Schalter je Ebene (`MOMENTUM_PARAMS` im Register); ohne sie ist alles an. */
+    setze(verlauf, zeiten, iv, params) {
+        this.p = params || {}
         this.v = verlauf || null
         this.zeiten = zeiten || []
         this.iv = iv || this.iv
@@ -125,6 +128,29 @@ export class MomentumZeichnung {
         schliesse()
     }
 
+    /**
+     * Streifen zwischen Welle und Signallinie, je Kerzenschritt eingefärbt: grün, solange
+     * die Welle ÜBER der Signallinie liegt (Momentum dreht nach oben), rot darunter.
+     * Die Signallinie ist nur der 3-Kerzen-Schnitt der Welle — hell vor dunkel im selben
+     * Blau liess die Kreuzung kaum erkennen; der Farbwechsel zeigt sie.
+     */
+    luecke(ctx, w1, w2) {
+        if (!Array.isArray(w1) || !Array.isArray(w2)) return
+        let vor = null
+        for (let i = 0; i < w1.length; i++) {
+            const x = this.X(i), a = this.Y(w1[i]), b = this.Y(w2[i])
+            const jetzt = x == null || a == null || b == null || w1[i] == null || w2[i] == null ? null : { x, a, b, oben: w1[i] >= w2[i] }
+            if (vor && jetzt) {
+                ctx.beginPath()
+                ctx.moveTo(vor.x, vor.a); ctx.lineTo(jetzt.x, jetzt.a); ctx.lineTo(jetzt.x, jetzt.b); ctx.lineTo(vor.x, vor.b)
+                ctx.closePath()
+                ctx.fillStyle = alpha(jetzt.oben ? F.longStark : F.shortStark, 0.9)
+                ctx.fill()
+            }
+            vor = jetzt
+        }
+    }
+
     linie(ctx, werte, farbe, dicke) {
         if (!Array.isArray(werte)) return
         ctx.strokeStyle = farbe
@@ -155,29 +181,32 @@ export class MomentumZeichnung {
         this.waagerecht(ctx, -SCHIENE, breite, alpha(F.long, 0.45), 1)
         if (!v || !this.zeiten.length) return
 
-        this.flaeche(ctx, v.w2, alpha(F.schatten, 0.85))
-        this.flaeche(ctx, v.w1, alpha(F.welle, 0.45))
+        const an = (key) => this.p?.[key] !== false
+        if (an('mrSignal')) this.flaeche(ctx, v.w2, alpha(F.schatten, 0.85))
+        if (an('mrWelle')) this.flaeche(ctx, v.w1, alpha(F.welle, 0.45))
+        if (an('mrWelle') && an('mrSignal')) this.luecke(ctx, v.w1, v.w2)
 
         // Geldfluss als Balken je Kerze: nur so kann jede Kerze ihre Farbe haben (violett).
         const s = this.schritt()
         const b = Math.max(1, s * 0.92)
         const y0 = this.Y(0)
-        if (Array.isArray(v.mf) && y0 != null) {
+        if (an('mrFluss') && Array.isArray(v.mf) && y0 != null) {
+            const violett = an('mrFutures')
             for (let i = 0; i < v.mf.length; i++) {
                 const w = v.mf[i]
                 const x = this.X(i), y = this.Y(w)
                 if (w == null || x == null || y == null) continue
-                const tr = v.treiber?.[i]
+                const tr = violett ? v.treiber?.[i] : null
                 ctx.fillStyle = alpha(tr === 'f' ? F.futures : w >= 0 ? F.rein : F.raus, 0.95)
                 ctx.fillRect(x - b / 2, Math.min(y, y0), b, Math.max(0.5, Math.abs(y - y0)))
             }
         }
         // Weisse Linie = Spotmarkt (läuft sie unter der Fläche, sind die Futures voraus).
-        if (Array.isArray(v.mfSpot)) this.linie(ctx, v.mfSpot, 'rgba(255,255,255,0.85)', 1)
+        if (an('mrSpot') && Array.isArray(v.mfSpot)) this.linie(ctx, v.mfSpot, 'rgba(255,255,255,0.85)', 1)
 
         // Farbleiste: 4h-Geldfluss, ganz unten.
         const ya = this.Y(-SCHIENE - 8), yb = this.Y(-SCHIENE - 18)
-        if (Array.isArray(v.mf4) && ya != null && yb != null) {
+        if (an('mrLeiste') && Array.isArray(v.mf4) && ya != null && yb != null) {
             const bl = Math.max(1, s)
             for (let i = 0; i < v.mf4.length; i++) {
                 const x = this.X(i)
@@ -194,8 +223,9 @@ export class MomentumZeichnung {
         if (!v || !this.zeiten.length) return
         const s = this.schritt()
         const faktor = Math.max(0.7, Math.min(1.6, s / 6))
+        const an = (key) => this.p?.[key] !== false
 
-        for (const d of v.divergenzen || []) {
+        for (const d of an('mrDiv') ? v.divergenzen || [] : []) {
             const x1 = this.X(d.i1), y1 = this.Y(d.w1), x2 = this.X(d.i2), y2 = this.Y(d.w2)
             if ([x1, y1, x2, y2].some((q) => q == null)) continue
             const farbe = d.seite === 'long' ? F.long : F.short
@@ -210,7 +240,7 @@ export class MomentumZeichnung {
             ctx.fillText('DIV', (x1 + x2) / 2 - 8, (y1 + y2) / 2 - 4)
         }
 
-        for (const p of v.punkte || []) {
+        for (const p of an('mrPunkte') ? v.punkte || [] : []) {
             const x = this.X(p.i), y = this.Y(v.w1?.[p.i] ?? 0)
             if (x == null || y == null) continue
             const r = (p.stark ? 4.5 : 2.6) * faktor
@@ -219,7 +249,7 @@ export class MomentumZeichnung {
             ctx.fill()
         }
 
-        for (const r of v.rauten || []) {
+        for (const r of an('mrPunkte') ? v.rauten || [] : []) {
             const x = this.X(r.i), y = this.Y(v.w1?.[r.i] ?? 0)
             if (x == null || y == null) continue
             const g = 3.5 * faktor
@@ -230,7 +260,7 @@ export class MomentumZeichnung {
             ctx.fill()
         }
 
-        for (const sp of v.schienen || []) {
+        for (const sp of an('mrSchienen') ? v.schienen || [] : []) {
             const x = this.X(sp.i), y = this.Y(sp.seite === 'long' ? -SCHIENE : SCHIENE)
             if (x == null || y == null) continue
             ctx.beginPath(); ctx.arc(x, y, (TF_RADIUS[sp.tf] || 3) * Math.max(1, faktor), 0, Math.PI * 2)

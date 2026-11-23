@@ -420,6 +420,42 @@ export function strategieParams(typ, roh) {
     return Object.fromEntries((INDIKATOREN[typ]?.params || []).filter((x) => x.strategie).map((x) => [x.key, p[x.key]]))
 }
 
+/**
+ * Momentum Radar: jede Ebene der Zeichnung einzeln schaltbar, dazu eine Schnellwahl.
+ * `setzt` an der Wahl: die Option stellt diese Schalter in einem Griff (der Dialog
+ * führt es aus und zeigt «Eigene Auswahl», sobald die Schalter zu keiner Option passen).
+ * Gezeichnet wird allein nach den Schaltern — `mrAnsicht` ist nur Bedienhilfe.
+ */
+const MR_SCHALTER = [
+    ['mrWelle', 'mrWelle'], ['mrSignal', 'mrWelle'],
+    ['mrFluss', 'mrFluss'], ['mrFutures', 'mrFluss'], ['mrSpot', 'mrFluss'], ['mrLeiste', 'mrFluss'],
+    ['mrPunkte', 'mrSignale'], ['mrDiv', 'mrSignale'], ['mrSchienen', 'mrSignale'],
+]
+/**
+ * Schnellschalter neben dem Fenstertitel im Chart (ein Tipp, ohne Dialog): jeder
+ * stellt seine Schalter gemeinsam; «an» ist er, sobald einer davon an ist.
+ */
+export const MOMENTUM_SCHNELL = [
+    { id: 'welle', keys: ['mrWelle', 'mrSignal'] },
+    { id: 'fluss', keys: ['mrFluss', 'mrLeiste'] },
+    { id: 'spot', keys: ['mrSpot'] },
+    { id: 'futures', keys: ['mrFutures'] },
+    { id: 'signale', keys: ['mrPunkte', 'mrDiv', 'mrSchienen'] },
+]
+const mrSatz = (an) => Object.fromEntries(MR_SCHALTER.map(([key, gruppe]) => [key, an.includes(gruppe)]))
+export const MOMENTUM_PARAMS = [
+    {
+        key: 'mrAnsicht', typ: 'wahl', vorgabe: 'mrAlles', optionen: ['mrAlles', 'mrNurWelle', 'mrNurFluss', 'mrEigen'],
+        frei: 'mrEigen',
+        setzt: {
+            mrAlles: mrSatz(['mrWelle', 'mrFluss', 'mrSignale']),
+            mrNurWelle: mrSatz(['mrWelle', 'mrSignale']),
+            mrNurFluss: mrSatz(['mrFluss']),
+        },
+    },
+    ...MR_SCHALTER.map(([key, gruppe]) => ({ key, typ: 'schalter', vorgabe: true, gruppe })),
+]
+
 export const INDIKATOREN = {
     sma: {
         ort: 'preis',
@@ -727,7 +763,8 @@ export const INDIKATOREN = {
     momentum: {
         ort: 'eigen',
         extern: 'momentum',
-        params: [],
+        kurzOhneParams: true,
+        params: MOMENTUM_PARAMS,
         // Eigene Zeichnung wie in der Vorlage (`momentumZeichnung.js`): Flächen bis zur
         // Nulllinie, Geldfluss je Kerze mit violetter Futures-Phase, Spot-Linie,
         // Punkte, Rauten, Schienen, Divergenzen, 4h-Farbleiste. Als Serien
@@ -738,6 +775,13 @@ export const INDIKATOREN = {
             { key: 'w1', art: 'linie', farbe: '#6fa8ff', breite: 2 },
             { key: 'w2', art: 'linie', farbe: 'rgba(61,99,214,0.55)', breite: 1 },
             { key: 'mf', art: 'wert', farbe: '#4caf50' },
+        ],
+        // Ausgeblendete Ebenen: die Serien bleiben (die Zeichnung hängt an der Welle und
+        // braucht deren Skala), sie werden nur nicht gezeichnet und fehlen in der Legende.
+        ausgabenFuer: (p) => [
+            { key: 'w1', art: 'linie', farbe: '#6fa8ff', breite: 2, versteckt: !p.mrWelle },
+            { key: 'w2', art: 'linie', farbe: 'rgba(61,99,214,0.55)', breite: 1, versteckt: !p.mrSignal },
+            { key: 'mf', art: 'wert', farbe: '#4caf50', versteckt: !p.mrFluss },
         ],
         bereich: [-140, 128],
         rechne: (k, _p, ext) => ({

@@ -6086,7 +6086,7 @@
         "name": "Momentum Radar",
         "kurz": "Momentum",
         "text": "Welle (WaveTrend) und Geldfluss aus dem Momentum-Radar des Live-Tradings — nur 5m, 15m, 1h, 4h.",
-        "info": "Momentum Radar — was die Farben bedeuten:\nHELLBLAUE FLÄCHE = die Welle (WaveTrend), dunkelblau dahinter = ihre Signallinie. Läuft hell über dunkel, dreht das Momentum nach oben.\nBALKEN = Geldfluss je Kerze: grün rein, rot raus, violett = nur die Futures treiben, die Bewegung läuft auf Hebel. WEISSE LINIE = Geldfluss am Spotmarkt; liegt sie unter den Balken, sind die Futures voraus.\nLINIEN: ±50 (kräftig, einstellbar unter Einstellungen › Chart & Analyse › Marktradar · Kacheln) überkauft/überverkauft, ±100 Extrem, 0 gestrichelt.\nPUNKTE auf der Welle: grün = Long suchen, rot = Short suchen; gross = die höheren Zeitebenen plus Geldfluss stützen das Signal (≥ 60 %). Orange Raute = Extremwert jenseits ±100, ausgereizt, kein Einstieg.\nSCHIENEN bei +115 (Short) und −115 (Long): Signale der höheren Zeitebenen — 1h orange klein, 4h violett, Tag weiss, Woche gelb gross.\nDIV-Linie: Divergenz zwischen Welle und Kurs (rot bärisch, grün bullisch).\nFARBLEISTE ganz unten: Geldfluss der letzten geschlossenen 4h-Kerze (grün rein, rot raus).\nNur geschlossene Kerzen. Der Radar sagt WANN, nicht WO."
+        "info": "Momentum Radar — was die Farben bedeuten:\nHELLBLAUE FLÄCHE = die Welle (WaveTrend), dunkelblau dahinter = ihre Signallinie (Schnitt über 3 Kerzen, darum nur knapp versetzt). Der schmale STREIFEN dazwischen zeigt die Richtung: grün = Welle über der Signallinie, das Momentum dreht nach oben; rot = darunter, es dreht nach unten.\nBALKEN = Geldfluss je Kerze: grün rein, rot raus, violett = nur die Futures treiben, die Bewegung läuft auf Hebel. WEISSE LINIE = Geldfluss am Spotmarkt; liegt sie unter den Balken, sind die Futures voraus.\nLINIEN: ±50 (kräftig, einstellbar unter Einstellungen › Chart & Analyse › Marktradar · Kacheln) überkauft/überverkauft, ±100 Extrem, 0 gestrichelt.\nPUNKTE auf der Welle: grün = Long suchen, rot = Short suchen; gross = die höheren Zeitebenen plus Geldfluss stützen das Signal (≥ 60 %). Orange Raute = Extremwert jenseits ±100, ausgereizt, kein Einstieg.\nSCHIENEN bei +115 (Short) und −115 (Long): Signale der höheren Zeitebenen — 1h orange klein, 4h violett, Tag weiss, Woche gelb gross.\nDIV-Linie: Divergenz zwischen Welle und Kurs (rot bärisch, grün bullisch).\nFARBLEISTE ganz unten: Geldfluss der letzten geschlossenen 4h-Kerze (grün rein, rot raus).\nNur geschlossene Kerzen. Der Radar sagt WANN, nicht WO.\nANSICHT: In den Einstellungen des Indikators lässt sich jede Ebene einzeln ausblenden; die Knöpfe neben dem Titel (Momentum, Geldfluss, Spot, Futures, Signale) schalten mit einem Tipp, die Schnellwahl stellt «Alles», «Nur Momentum» oder «Nur Geldfluss»."
       },
       "vwapVector": {
         "name": "VWAP Vector",
@@ -6150,6 +6150,16 @@
       }
     },
     "indParam": {
+      "mrAnsicht": "Ansicht",
+      "mrWelle": "Momentum-Welle",
+      "mrSignal": "Signallinie (Schatten, grün/roter Streifen)",
+      "mrFluss": "Geldfluss-Balken",
+      "mrFutures": "Futures-Phasen violett",
+      "mrSpot": "Spot-Linie (weiss)",
+      "mrLeiste": "4h-Farbleiste",
+      "mrPunkte": "Punkte und Rauten",
+      "mrDiv": "Divergenzen",
+      "mrSchienen": "Höhere Zeitebenen (Schienen)",
       "laenge": "Länge",
       "quelle": "Quelle",
       "mult": "Faktor",
@@ -6404,6 +6414,10 @@
       "kennzahlen": "Kennzahlen-Zeilen (Vol, Δ, Δ %)"
     },
     "indWahl": {
+      "mrAlles": "Alles",
+      "mrNurWelle": "Nur Momentum",
+      "mrNurFluss": "Nur Geldfluss",
+      "mrEigen": "Eigene Auswahl",
       "c": "Schluss",
       "o": "Eröffnung",
       "h": "Hoch",
@@ -7125,7 +7139,11 @@
     },
     "indAktiv": "Aktiv in diesem Chart",
     "indHinzu": "Hinzufügen",
+    "radarSchnell": {"welle": "Momentum", "fluss": "Geldfluss", "spot": "Spot", "futures": "Futures", "signale": "Signale"},
     "indGruppe": {
+      "mrWelle": "Momentum",
+      "mrFluss": "Geldfluss",
+      "mrSignale": "Signale",
       "pvsra": "PVSRA Vektorkerzen",
       "vwap": "VWAP",
       "ema": "EMA",
@@ -7162,6 +7180,9 @@
       "cvdMa": "Signal-MA"
     },
     "indHilfe": {
+      "mrAnsicht": "Schnellwahl: stellt die Schalter darunter in einem Griff. «Nur Geldfluss» zeigt Balken, Spot-Linie und 4h-Leiste ohne Welle und Signale.",
+      "mrFutures": "Aus: die Balken bleiben grün/rot, auch wenn nur die Futures treiben.",
+      "mrSpot": "Geldfluss am Spotmarkt. Liegt die Linie unter den Balken, sind die Futures voraus.",
       "showVector": "Färbt die Kerzen nach VOLUMEN statt nur grün/rot — dort, wo ungewöhnlich viel gehandelt wurde, waren grosse Marktteilnehmer aktiv.",
       "climaxMult": "Ab wie viel Volumen eine Kerze als Climax gilt (stärkste Stufe). 2.0 = doppeltes Durchschnittsvolumen, die etablierte PVSRA-Definition.",
       "risingMult": "Ab wie viel Volumen eine Kerze als Rising gilt (mittlere Stufe). Muss kleiner sein als der Climax-Wert.",
@@ -7286,6 +7307,7 @@
       "auf": "Box ausklappen",
       "nurFutures": "Der Momentum Radar rechnet nur auf Perpetuals.",
       "radarTf": "Radar gerechnet auf {tf} (nächste Zeitebene des Radars)",
+      "spotUeber": "Spot über üblich ({n} %)",
       "spotHoch": "Spot-Anteil hoch",
       "kauft": "kauft",
       "verkauft": "verkauft",

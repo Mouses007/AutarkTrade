@@ -57,7 +57,7 @@ import { ladeAktienKontext, aktieVon, termineGrundSchluessel } from '../../utils
 import { zahlenMarken } from '../../utils/chart/sitzungsAbschnitte.js'
 import { researchZiel, researchAdresse } from '../../utils/researchZiel.js'
 import { POC_FEIN_PERIODEN, TF_MS as VV_TF_MS } from '../../utils/chart/vwapVector.js'
-import { benoetigteQuellen, vwapVectorQuellen, vwapVectorSchluessel, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
+import { benoetigteQuellen, vwapVectorQuellen, vwapVectorSchluessel, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, MOMENTUM_SCHNELL, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
 import { positionsTitel as positionsTitelFuer } from '../../utils/chart/overlays/positionsTitel.js'
 import { positionenAus } from '../../stores/chartPositionen.js'
@@ -131,6 +131,19 @@ const SCHMAL = 640
 const TABELLEN_SCHLUESSEL = 'chartTabellenZu'
 const tabellenWahl = ref((() => { try { return JSON.parse(localStorage.getItem(TABELLEN_SCHLUESSEL) || '{}') || {} } catch { return {} } })())
 const typVon = (id) => fensterTitel.value.find((f) => f.id === id)?.typ
+/*
+ * Schnellschalter des Momentum Radar neben dem Fenstertitel: Welle, Geldfluss, Spot,
+ * Futures, Signale — ein Tipp blendet die Ebene aus oder ein, ohne Dialog. Dieselben
+ * Schalter wie in den Einstellungen des Indikators, also im Layout gespeichert.
+ */
+function radarSchalter(id) {
+    const inst = (props.panel.indikatoren || []).find((x) => x.id === id)
+    const p = saubereParams('momentum', inst?.params)
+    return MOMENTUM_SCHNELL.map((s) => ({ ...s, an: s.keys.some((k) => p[k]) }))
+}
+function radarSchalten(id, s) {
+    emit('indikator', { aktion: 'params', id, patch: Object.fromEntries(s.keys.map((k) => [k, !s.an])) })
+}
 function tabelleOffen(id) {
     const zu = tabellenWahl.value[typVon(id)]
     return zu != null ? !zu : (huelle.value?.clientWidth || 999) >= SCHMAL
@@ -2223,6 +2236,11 @@ defineExpose({
         <!-- „i" neben den Titeln der Indikator-Fenster (z. B. Momentum Radar); der Titel selbst ist Canvas. -->
         <span v-for="f in fensterTitel" :key="f.id" class="fensterInfo" :style="{ top: f.oben + 5 + 'px', left: 4 + f.breite + 6 + 'px' }">
             <InfoTipp v-if="te('chart.ind.' + f.typ + '.info')" :schluessel="'chart.ind.' + f.typ + '.info'" breit />
+            <template v-if="f.typ === 'momentum'">
+                <button v-for="s in radarSchalter(f.id)" :key="s.id" type="button" class="radarSchalter" :class="{ an: s.an }"
+                    :aria-pressed="s.an" :title="t(s.an ? 'chart.ausblenden' : 'chart.einblenden') + ': ' + t('chart.radarSchnell.' + s.id)"
+                    @click.stop="radarSchalten(f.id, s)" @pointerdown.stop>{{ t('chart.radarSchnell.' + s.id) }}</button>
+            </template>
             <button v-if="f.tabelle" class="tabellenKnopf" @click.stop="tabelleUmschalten(f.id)"
                 :title="t(tabelleOffen(f.id) ? 'chart.tabelleZu' : 'chart.tabelleAuf')" :aria-label="t(tabelleOffen(f.id) ? 'chart.tabelleZu' : 'chart.tabelleAuf')"><Symbol :name="tabelleOffen(f.id) ? 'runter' : 'ausklappen'" /></button>
         </span>
@@ -2403,6 +2421,25 @@ defineExpose({
     border-radius: 4px;
     background: rgba(10, 14, 22, 0.78);
 }
+.radarSchalter {
+    height: 16px;
+    padding: 0 6px;
+    margin-left: 3px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.radarSchalter.an {
+    color: var(--text);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.radarSchalter:hover { color: var(--accent); }
 .tabellenKnopf {
     display: inline-flex;
     align-items: center;

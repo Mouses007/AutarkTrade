@@ -61,6 +61,24 @@ function klappe(id) {
     if (n.has(id)) n.delete(id); else n.add(id)
     offen.value = n
 }
+/*
+ * Schnellwahl (Momentum Radar «Ansicht»): eine Wahl mit `setzt` stellt mehrere Schalter
+ * in einem Griff. Umgekehrt zeigt sie die Option, zu der die Schalter gerade passen —
+ * sonst `frei` («Eigene Auswahl»). So widersprechen sich Wahl und Schalter nie.
+ */
+function schnellGewaehlt(p) {
+    const satz = p.setzt?.[entwurf.value.params[p.key]]
+    if (satz) Object.assign(entwurf.value.params, satz)
+}
+watch(() => entwurf.value?.params, (params) => {
+    if (!params) return
+    for (const p of def.value?.params || []) {
+        if (!p.setzt) continue
+        const passt = Object.keys(p.setzt).find((o) => Object.entries(p.setzt[o]).every(([k, v]) => params[k] === v))
+        const soll = passt || p.frei
+        if (soll && params[p.key] !== soll) params[p.key] = soll
+    }
+}, { deep: true, immediate: true })
 const zeileAus = (z) => z[0].typ === 'schalter' && z.length > 1 && entwurf.value.params[z[0].key] === false
 const gruppeAus = (g) => g.haupt && entwurf.value.params[g.haupt.key] === false
 const hilfe = (key) => (te('chart.indHilfe.' + key) ? t('chart.indHilfe.' + key) : '')
@@ -212,7 +230,7 @@ onMounted(async () => {
                                         <FarbWahl v-else-if="p.typ === 'farbe'" v-model="entwurf.params[p.key]"
                                             :titel="t('chart.indParam.' + p.key)" />
                                         <select v-else v-model="entwurf.params[p.key]" class="at-feld klein wahl"
-                                            :title="name(p)">
+                                            :title="name(p)" @change="schnellGewaehlt(p)">
                                             <option v-for="o in p.optionen" :key="o" :value="o">{{ optionName(p, o) }}</option>
                                         </select>
                                     </template>

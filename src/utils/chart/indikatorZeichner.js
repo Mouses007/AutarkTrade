@@ -447,7 +447,8 @@ export class IndikatorZeichner {
                     }, pane)
                     serien[a.key].priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.3 } })
                 } else {
-                    serien[a.key] = this.chart.addSeries(LineSeries, { ...gemeinsam, ...(format || {}), color: farbe, lineWidth: a.breite || 1, ...(a.strich === 'gestrichelt' ? { lineStyle: LineStyle.Dashed } : {}) }, pane)
+                    // `versteckt` (Momentum Radar, Ebene ausgeblendet): Serie bleibt für Skala und Zeichnung, ohne Linie und Achsenmarke
+                    serien[a.key] = this.chart.addSeries(LineSeries, { ...gemeinsam, ...(format || {}), color: farbe, lineWidth: a.breite || 1, ...(a.strich === 'gestrichelt' ? { lineStyle: LineStyle.Dashed } : {}), ...(a.versteckt ? { lineVisible: false, lastValueVisible: false } : {}) }, pane)
                 }
             }
             const erste = serien[ausgaben.find((a) => a.art === 'kerzen' || a.art === 'linie' || a.art === 'flaeche')?.key] || Object.values(serien)[0]
@@ -596,7 +597,7 @@ export class IndikatorZeichner {
         else if (e.def.zeichner === 'footprint') e.zeichnung?.setze(this.extern.footprint, this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'cv') e.zeichnung?.setze(e.werte._cv, this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'signale') e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
-        else e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand())
+        else e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
     }
 
     /**
@@ -700,7 +701,7 @@ export class IndikatorZeichner {
         const aus = {}
         for (const e of this.eintraege) {
             aus[e.instanz.id] = e.ausgaben
-                .filter((a) => e.werte[a.key])
+                .filter((a) => e.werte[a.key] && !a.versteckt)
                 .map((a) => {
                     const reihe = e.werte[a.key]
                     let j = i

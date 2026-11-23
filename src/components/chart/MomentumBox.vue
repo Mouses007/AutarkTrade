@@ -87,7 +87,12 @@ const herkunft = computed(() => {
         const s = fluss.value.spot
         const offen = s == null || Math.abs(s) < MF_MIN
         const richtung = offen ? t('chart.mbox.richtungOffen') : s > 0 ? t('chart.mbox.kauft') : t('chart.mbox.verkauft')
-        return { text: `${t('chart.mbox.spotHoch')} · ${richtung}`, art: offen ? 'neutral' : s > 0 ? 'long' : 'short' }
+        // «hoch» heisst: über dem EIGENEN Normalmass der Münze (Schnitt der letzten 200 Kerzen),
+        // nicht über 50 % — bei 17 % Spot und üblichen 9 % ist das viel. Darum steht das Übliche dabei.
+        const sn = her.value.schnitt
+        const ueblich = istZahl(sn) && sn > 0 ? Math.round(100 / (1 + sn)) : null
+        const kopf = ueblich == null ? t('chart.mbox.spotHoch') : t('chart.mbox.spotUeber', { n: ueblich })
+        return { text: `${kopf} · ${richtung}`, art: offen ? 'neutral' : s > 0 ? 'long' : 'short' }
     }
     if (!her.value.urteil) return { text: t('livetrading.momentum.herkunft_unbekannt'), art: 'neutral' }
     return { text: t('livetrading.momentum.herkunft_normal'), art: 'neutral' }

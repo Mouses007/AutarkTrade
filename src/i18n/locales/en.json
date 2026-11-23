@@ -6086,7 +6086,7 @@
         "name": "Momentum Radar",
         "kurz": "Momentum",
         "text": "Wave (WaveTrend) and money flow from the live-trading momentum radar — only 5m, 15m, 1h, 4h.",
-        "info": "Momentum Radar — what the colours mean:\nLIGHT BLUE AREA = the wave (WaveTrend), dark blue behind it = its signal line. Light crossing above dark means momentum turns up.\nBARS = money flow per candle: green in, red out, violet = only futures are driving, the move runs on leverage. WHITE LINE = spot money flow; below the bars means futures are ahead.\nLINES: ±50 (bold, adjustable under Settings › Chart & analysis › Market radar · tiles) overbought/oversold, ±100 extreme, 0 dashed.\nDOTS on the wave: green = look for longs, red = look for shorts; large = higher timeframes plus money flow back the signal (≥ 60 %). Orange diamond = extreme beyond ±100, exhausted, no entry.\nRAILS at +115 (short) and −115 (long): signals of the higher timeframes — 1h orange small, 4h violet, day white, week yellow large.\nDIV line: divergence between wave and price (red bearish, green bullish).\nCOLOUR BAR at the bottom: money flow of the last closed 4h candle (green in, red out).\nClosed candles only. The radar says WHEN, not WHERE."
+        "info": "Momentum Radar — what the colours mean:\nLIGHT BLUE AREA = the wave (WaveTrend), dark blue behind it = its signal line (3-candle average, hence only slightly offset). The narrow STRIP between them shows direction: green = wave above the signal line, momentum turns up; red = below, it turns down.\nBARS = money flow per candle: green in, red out, violet = only futures are driving, the move runs on leverage. WHITE LINE = spot money flow; below the bars means futures are ahead.\nLINES: ±50 (bold, adjustable under Settings › Chart & analysis › Market radar · tiles) overbought/oversold, ±100 extreme, 0 dashed.\nDOTS on the wave: green = look for longs, red = look for shorts; large = higher timeframes plus money flow back the signal (≥ 60 %). Orange diamond = extreme beyond ±100, exhausted, no entry.\nRAILS at +115 (short) and −115 (long): signals of the higher timeframes — 1h orange small, 4h violet, day white, week yellow large.\nDIV line: divergence between wave and price (red bearish, green bullish).\nCOLOUR BAR at the bottom: money flow of the last closed 4h candle (green in, red out).\nClosed candles only. The radar says WHEN, not WHERE.\nVIEW: every layer can be hidden in the indicator settings; the buttons next to the title (Momentum, Flow, Spot, Futures, Signals) switch with one tap; the quick pick sets “Everything”, “Momentum only” or “Money flow only”."
       },
       "vwapVector": {
         "name": "VWAP Vector",
@@ -6150,6 +6150,16 @@
       }
     },
     "indParam": {
+      "mrAnsicht": "View",
+      "mrWelle": "Momentum wave",
+      "mrSignal": "Signal line (shadow, green/red strip)",
+      "mrFluss": "Money flow bars",
+      "mrFutures": "Futures phases in violet",
+      "mrSpot": "Spot line (white)",
+      "mrLeiste": "4h colour bar",
+      "mrPunkte": "Dots and diamonds",
+      "mrDiv": "Divergences",
+      "mrSchienen": "Higher timeframes (rails)",
       "laenge": "Length",
       "quelle": "Source",
       "mult": "Multiplier",
@@ -6404,6 +6414,10 @@
       "kennzahlen": "Summary rows (vol, Δ, Δ %)"
     },
     "indWahl": {
+      "mrAlles": "Everything",
+      "mrNurWelle": "Momentum only",
+      "mrNurFluss": "Money flow only",
+      "mrEigen": "Custom",
       "c": "Close",
       "o": "Open",
       "h": "High",
@@ -7125,7 +7139,11 @@
     },
     "indAktiv": "Active in this chart",
     "indHinzu": "Add",
+    "radarSchnell": {"welle": "Momentum", "fluss": "Flow", "spot": "Spot", "futures": "Futures", "signale": "Signals"},
     "indGruppe": {
+      "mrWelle": "Momentum",
+      "mrFluss": "Money flow",
+      "mrSignale": "Signals",
       "pvsra": "PVSRA vector candles",
       "vwap": "VWAP",
       "ema": "EMA",
@@ -7162,6 +7180,9 @@
       "cvdMa": "Signal MA"
     },
     "indHilfe": {
+      "mrAnsicht": "Quick pick: sets the switches below in one go. “Money flow only” shows bars, spot line and 4h bar without wave and signals.",
+      "mrFutures": "Off: bars stay green/red even when only futures are driving.",
+      "mrSpot": "Money flow on the spot market. If the line runs below the bars, futures are ahead.",
       "showVector": "Colours candles by VOLUME — where unusually much traded, large participants were active.",
       "climaxMult": "Volume from which a candle counts as climax (strongest tier). 2.0 = double the average volume.",
       "risingMult": "Volume from which a candle counts as rising (middle tier). Must be below the climax value.",
@@ -7286,6 +7307,7 @@
       "auf": "Expand box",
       "nurFutures": "The Momentum Radar only computes on perpetuals.",
       "radarTf": "Radar computed on {tf} (nearest radar timeframe)",
+      "spotUeber": "Spot above usual ({n}%)",
       "spotHoch": "Spot share high",
       "kauft": "buying",
       "verkauft": "selling",

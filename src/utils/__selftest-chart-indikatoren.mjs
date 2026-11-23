@@ -223,5 +223,27 @@ console.log('\nEingaben säubern\n')
     check('Neue Instanz teilt die Farben nicht mit dem Standard', eigen.farben.wert === '#ff0000')
 }
 
+// Momentum Radar: Ebenen einzeln schaltbar, Schnellwahl «Ansicht»
+{
+    const P = INDIKATOREN.momentum.params
+    const schalter = P.filter((x) => x.typ === 'schalter').map((x) => x.key)
+    const ansicht = P.find((x) => x.key === 'mrAnsicht')
+    const v = vorgaben('momentum')
+    check('Momentum: ab Werk alles an (Bild wie bisher)', schalter.length === 9 && schalter.every((k) => v[k] === true) && v.mrAnsicht === 'mrAlles')
+    check('Momentum: altes Layout ohne Parameter → alles an', schalter.every((k) => saubereParams('momentum', undefined)[k] === true))
+    check('Momentum: jede Schnellwahl stellt ALLE Schalter', Object.values(ansicht.setzt).every((s) => schalter.every((k) => typeof s[k] === 'boolean')))
+    check('Momentum: «Alles» entspricht den Vorgaben', schalter.every((k) => ansicht.setzt.mrAlles[k] === true))
+    const nf = ansicht.setzt.mrNurFluss
+    check('Momentum: «Nur Geldfluss» ohne Welle und Signale', nf.mrFluss && nf.mrSpot && nf.mrLeiste && !nf.mrWelle && !nf.mrSignal && !nf.mrPunkte && !nf.mrDiv && !nf.mrSchienen)
+    const nw = ansicht.setzt.mrNurWelle
+    check('Momentum: «Nur Welle» ohne Geldfluss', nw.mrWelle && nw.mrPunkte && !nw.mrFluss && !nw.mrSpot && !nw.mrLeiste)
+    const saetze = Object.values(ansicht.setzt).map((s) => JSON.stringify(s))
+    check('Momentum: Schnellwahlen sind unterscheidbar', new Set(saetze).size === saetze.length)
+    check('Momentum: freie Wahl ist eine Option ohne Satz', ansicht.optionen.includes(ansicht.frei) && !(ansicht.frei in ansicht.setzt))
+    const aus = INDIKATOREN.momentum.ausgabenFuer(saubereParams('momentum', { mrWelle: false, mrFluss: false }))
+    check('Momentum: ausgeblendete Ebenen bleiben als Serie, nur versteckt', aus.length === 3 && aus.find((a) => a.key === 'w1').versteckt === true && aus.find((a) => a.key === 'w2').versteckt === false && aus.find((a) => a.key === 'mf').versteckt === true)
+    check('Momentum: Kurzname ohne Parameter', kurzname('momentum', v, 'Momentum') === 'Momentum')
+}
+
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 if (fehlgeschlagen) { console.log('Fehler:', fehler.join(', ')); process.exit(1) }
