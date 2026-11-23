@@ -34,7 +34,7 @@ const veraltet = ref(false)
 
 // Ziel und Idee (21.11.2026): der Code baut die Kandidaten für das gewählte Ziel, die Idee geht in den Auftrag
 // an die KI. Das Ziel gilt für alle Bots (gemerkt), die Idee je Bot.
-const ZIELE = ['offen', 'absichern', 'verlust', 'ertrag', 'abwarten', 'aussteigen']
+const ZIELE = ['offen', 'absichern', 'aufstocken', 'verlust', 'ertrag', 'abwarten', 'aussteigen']
 const merk = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v) } catch { /* ohne Speicher */ } return null }
 const ziel = ref(ZIELE.includes(merk('at.bots.kiZiel')) ? merk('at.bots.kiZiel') : 'offen')
 const ideeSchluessel = () => `at.bots.kiIdee.${props.bot.id}`
@@ -108,7 +108,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <Pille ton="akzent" symbol="ki">{{ t('bots.ki.kennzeichnung') }}</Pille>
                 <span v-if="erg.kurs" class="leise">{{ t('bots.ki.kursStand', { kurs: preis(erg.kurs) }) }}</span>
             </div>
-            <p v-if="erg.ziel" class="leise">{{ t('bots.ki.zielStand', { ziel: t(`bots.ki.ziel.${erg.ziel}`) }) }}<template v-if="erg.idee"> {{ t('bots.ki.ideeStand', { idee: erg.idee }) }}</template></p>
+            <p v-if="erg.ziel" class="leise zielStand"><span>{{ t('bots.ki.zielStand', { ziel: t(`bots.ki.ziel.${erg.ziel}`) }) }}</span><span v-if="erg.idee">{{ t('bots.ki.ideeStand', { idee: erg.idee }) }}</span></p>
             <p v-if="erg.lage" class="lage">{{ erg.lage }}</p>
             <p v-if="erg.lageUnbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: erg.lageUnbelegt.join(', ') }) }}</p>
 
@@ -204,6 +204,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 .wahl button:hover:not(:disabled):not(.an) { border-color: var(--muted); }
 .wahl button:disabled { opacity: 0.5; cursor: default; }
 .wahl button.an { border-color: var(--accent); background: var(--accent-flaeche); color: var(--accent); font-weight: 600; }
+.zielStand { display: flex; flex-wrap: wrap; gap: 0 0.5em; }
 .idee { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--muted); }
 .idee textarea { resize: vertical; font-size: 0.9rem; min-height: 3.2rem; }
 .ki > * { min-width: 0; max-width: 100%; }

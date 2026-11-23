@@ -8815,6 +8815,7 @@
       "ziel": {
         "offen": "Überblick",
         "absichern": "Absichern",
+        "aufstocken": "Aufstocken",
         "verlust": "Verlust begrenzen",
         "ertrag": "Mehr Ertrag",
         "abwarten": "Abwarten",
@@ -8823,6 +8824,7 @@
       "zielText": {
         "offen": "Kein bestimmtes Ziel: alle üblichen Varianten (Extra-Marge, Hebel, Band, Stop-Loss).",
         "absichern": "Die Liquidation weiter weg bringen — auch mit frischem Geld: Extra-Marge, tieferer Hebel und Kombinationen.",
+        "aufstocken": "Die Position vergrössern: Investition um 25, 50 oder 100 % erhöhen, je auch mit Stop-Loss an einem gemessenen Niveau. Anders als Extra-Marge wächst die Position mit — und mit ihr der mögliche Verlust.",
         "verlust": "Den möglichen Verlust begrenzen: Stop-Loss an gemessenen Niveaus, Position reduzieren.",
         "ertrag": "Mehr aus den Schwankungen holen: Band neu um den Kurs legen, Grid-Dichte anpassen.",
         "abwarten": "Weiterlaufen lassen, ohne Geld nachzuschiessen: nichts ändern, Stop-Loss, Band verschieben oder pausieren.",

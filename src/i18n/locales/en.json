@@ -8815,6 +8815,7 @@
       "ziel": {
         "offen": "Overview",
         "absichern": "Protect",
+        "aufstocken": "Add to position",
         "verlust": "Limit loss",
         "ertrag": "More yield",
         "abwarten": "Wait",
@@ -8823,6 +8824,7 @@
       "zielText": {
         "offen": "No particular goal: all usual variants (extra margin, leverage, range, stop-loss).",
         "absichern": "Move the liquidation further away — also with fresh money: extra margin, lower leverage and combinations.",
+        "aufstocken": "Enlarge the position: raise the investment by 25, 50 or 100 %, each also with a stop-loss at a measured level. Unlike extra margin the position grows — and with it the possible loss.",
         "verlust": "Limit the possible loss: stop-loss at measured levels, reduce the position.",
         "ertrag": "Get more out of the swings: place the range around the price again, adjust grid density.",
         "abwarten": "Keep it running without adding money: change nothing, stop-loss, move the range or pause.",

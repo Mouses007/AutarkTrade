@@ -33,10 +33,13 @@ export const MAX_VORSCHLAEGE = 3
  * Jetzt wählt der Nutzer ein Ziel; der Code baut die Kandidaten dafür (Gruppen unten), und die KI begründet
  * im Hinblick darauf. «offen» ist der bisherige Satz. Dazu eine freie Idee in eigenen Worten (`pruefeIdee`).
  */
-export const ZIELE = ['offen', 'absichern', 'verlust', 'ertrag', 'abwarten', 'aussteigen']
+export const ZIELE = ['offen', 'absichern', 'aufstocken', 'verlust', 'ertrag', 'abwarten', 'aussteigen']
 const ZIEL_GRUPPEN = {
     offen: ['marge', 'hebel', 'band', 'stop', 'bandHebel', 'bandMarge', 'margeStop'],
     absichern: ['marge', 'hebel', 'bandHebel', 'bandMarge', 'margeStop', 'nichts'],
+    // Aufstocken (23.11.2026): «an einem Level die Position vergrössern» war mit keinem Ziel zu haben — Extra-Marge
+    // lässt die Position gleich. Investition erhöhen, je auch mit Stop-Loss an einem gemessenen Niveau.
+    aufstocken: ['aufstocken', 'aufstockenStop', 'nichts'],
     verlust: ['stop', 'margeStop', 'reduzieren', 'nichts'],
     ertrag: ['band', 'grids', 'bandMarge', 'nichts'],
     abwarten: ['nichts', 'stop', 'band', 'pausieren'],
@@ -45,6 +48,7 @@ const ZIEL_GRUPPEN = {
 const ZIEL_TEXT = {
     offen: 'kein bestimmtes Ziel — Überblick über die Möglichkeiten',
     absichern: 'die Liquidation weiter weg bringen (absichern), auch mit frischem Geld',
+    aufstocken: 'die Position vergrössern (Investition erhöhen), weil er an dieser Stelle zukaufen will',
     verlust: 'den möglichen Verlust begrenzen',
     ertrag: 'mehr Grid-Ertrag aus den Schwankungen holen',
     abwarten: 'weiterlaufen lassen und abwarten, OHNE Geld nachzuschiessen',
@@ -185,6 +189,13 @@ export function kandidaten(bot, kurs, atr, zr = null, ziel = 'offen') {
     const sl = liste.find((k) => k.variante.stopLoss)
     if (em && sl) neu(`${em.titel} und ${sl.titel}`, { ...em.variante, stopLoss: sl.variante.stopLoss }, 'margeStop')
 
+    // Aufstocken: Investition erhöhen — die Position wächst mit (Pionex `invest_in`), anders als bei Extra-Marge.
+    // Nur Futures-Grids; je auch mit jedem gerechneten Stop-Loss, damit der grössere Einsatz eine Grenze hat.
+    if (bot.typ !== 'spot_grid' && istZahl(einsatz) && einsatz > 0) {
+        for (const f of [0.25, 0.5, 1]) neu(`Investition +${Math.round(f * 100)} % (Position wächst mit)`, { einsatz: runde(einsatz * (1 + f), 6) }, 'aufstocken')
+        for (const st of liste.filter((k) => k.gruppe === 'stop')) neu(`Investition +50 % und ${st.titel}`, { einsatz: runde(einsatz * 1.5, 6), stopLoss: st.variante.stopLoss }, 'aufstockenStop')
+    }
+
     // Grid-Dichte (Ziel «Ertrag»): gemessen (17.11.2026) bringen Abstände unter etwa 0,5–1 % weniger, weil
     // Gebühren den Zyklus fressen; sehr weite Abstände lassen Schwankungen ungenutzt.
     const n = bot.grid?.anzahl, abst = bot.grid?.abstand?.mitte
@@ -284,6 +295,7 @@ export function systemText() {
         'Du bekommst Zahlen, die der Code gerechnet hat. Du rechnest NICHT selbst und nennst KEINE Zahl, die nicht in der Eingabe steht.',
         'Wähle aus den KANDIDATEN höchstens drei, die du vorschlägst, und begründe sie mit den Zahlen. Wenn keiner sinnvoll ist, wähle keinen und sag warum.',
         'Oben steht das ZIEL DES NUTZERS; die KANDIDATEN hat der Code für dieses Ziel gebaut. Wähle danach und sag bei jedem Vorschlag in der Begründung, wie er diesem Ziel dient. Steht dort eine IDEE DES NUTZERS, richte Auswahl und Begründung nach ihr; Zahlen aus der Idee sind seine Annahmen — nenne sie als «deine Annahme», nicht als Messung. Spricht die gemessene Lage gegen das Ziel oder die Idee (z. B. die Struktur auf allen Zeitrahmen gegen die Richtung des Bots), sag das klar im Feld "lage", ohne Kursprognose.',
+        '«Investition erhöhen» vergrössert die Position (anders als Extra-Marge): „jetzt: nachschiessen" ist das zusätzliche Geld, und der Verlust bei weiter fallendem (Long) bzw. steigendem (Short) Kurs wächst mit. Nenne bei so einem Vorschlag die neue Liquidation und ihren Abstand und sag, ob ein gemessenes Niveau (Z…, C…) die Stelle stützt.',
         '«Nichts ändern», «pausieren», «reduzieren» und «beenden» sind gültige Vorschläge, wenn sie unter den KANDIDATEN stehen. Bei «reduzieren» und «beenden» steht in „jetzt: realisiert" der schwebende Gewinn oder Verlust, der damit fest wird; die neue Liquidation nach einem Reduzieren nennt erst Pionex bei der Prüfung (hier «—»).',
         'Beachte: Der Rückblick ist mit dem Wissen um den vergangenen Kursverlauf gerechnet — gewichte die Spalten „jetzt" (Liquidationsabstand, realisierter Verlust) mindestens so stark.',
         'So setzt Pionex Änderungen um: Band/Grids ändern behält die heutige Position (nichts wird realisiert), ein Band weiter nach unten (Long) bringt die Liquidation NÄHER. Hebel senken behält die Position und verlangt mehr Einsatz (Spalte „nachschiessen"). Extra-Marge lässt die Position gleich und schiebt die Liquidation weg. Nachschiessen braucht freies Guthaben auf dem Konto.',
