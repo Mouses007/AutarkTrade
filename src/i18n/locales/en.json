@@ -8845,7 +8845,9 @@
       "ideeSzenarioHinweis": "Price scenario: straight path from the current price, change of the result compared with now – without grid profit from swings on the way and without funding.",
       "ideeNicht": "Not calculated – {was}: {grund}",
       "ideeNichts": "Nothing calculable could be read from your sentence; it only steers selection and reasoning. With a value (leverage, price, amount) the code calculates it.",
-      "ideeUngelesen": "The idea could not be evaluated this time (the call for it failed). It went to the AI as text only."
+      "ideeUngelesen": "The idea could not be evaluated this time (the call for it failed). It went to the AI as text only.",
+      "warnOk": "Read and accepted – don't show again",
+      "warnZeigen": "Show the notice on AI suggestions"
     },
     "st": {
       "titel": "Bot control (Pionex)",

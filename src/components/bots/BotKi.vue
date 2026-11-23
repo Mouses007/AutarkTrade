@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Knopf from '@/components/basis/Knopf.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
+import KiWarnung from './KiWarnung.vue'
 import Pille from '@/components/basis/Pille.vue'
 import { preis, betrag, prozent, datum, ton } from './format.js'
 
@@ -76,15 +77,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 
 <template>
     <div class="ki" data-ki-generiert="true">
-        <Hinweis art="warn" :titel="t('bots.ki.warnTitel')">
-            <ul class="warnliste">
-                <li>{{ t('bots.ki.warn1') }}</li>
-                <li>{{ t('bots.ki.warn2') }}</li>
-                <li>{{ t('bots.ki.warn3') }}</li>
-                <li>{{ t('bots.ki.warn4') }}</li>
-            </ul>
-            <p class="warnfuss">{{ t('bots.ki.warnFuss') }}</p>
-        </Hinweis>
+        <KiWarnung />
 
         <p class="leise">{{ t('bots.ki.erklaerung') }}</p>
         <p class="leise">{{ t('bots.ki.zrErklaerung') }}</p>
@@ -255,8 +248,6 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 .idee { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--muted); }
 .idee textarea { resize: vertical; font-size: 0.9rem; min-height: 3.2rem; }
 .ki > * { min-width: 0; max-width: 100%; }
-.warnliste { margin: 0; padding-left: 1.1em; }
-.warnfuss { margin: var(--abstand-1) 0 0; }
 .leise { color: var(--muted); font-size: 0.8rem; margin: 0; }
 .laedt { text-align: right; color: var(--accent); }
 .knoepfe { display: flex; gap: var(--abstand-2); justify-content: flex-end; align-items: center; flex-wrap: wrap; }

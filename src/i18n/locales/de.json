@@ -8845,7 +8845,9 @@
       "ideeSzenarioHinweis": "Kurs-Szenario: direkter Weg vom heutigen Kurs dorthin, Änderung des Ergebnisses gegenüber jetzt – ohne Grid-Gewinn aus Schwankungen unterwegs und ohne Funding.",
       "ideeNicht": "Nicht gerechnet – {was}: {grund}",
       "ideeNichts": "Aus deinem Satz liess sich nichts Rechenbares lesen; er lenkt nur Auswahl und Begründung. Mit einem Wert (Hebel, Preis, Betrag) rechnet der Code es durch.",
-      "ideeUngelesen": "Die Idee konnte diesmal nicht ausgewertet werden (der Aufruf dafür ist fehlgeschlagen). Sie ging nur als Text an die KI."
+      "ideeUngelesen": "Die Idee konnte diesmal nicht ausgewertet werden (der Aufruf dafür ist fehlgeschlagen). Sie ging nur als Text an die KI.",
+      "warnOk": "Gelesen und akzeptiert – nicht mehr anzeigen",
+      "warnZeigen": "Hinweis zu KI-Vorschlägen anzeigen"
     },
     "st": {
       "titel": "Bot-Steuerung (Pionex)",

@@ -17,6 +17,7 @@ import axios from 'axios'
 import Karte from '@/components/basis/Karte.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
+import KiWarnung from './KiWarnung.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Dialog from '@/components/basis/Dialog.vue'
 import BotAktionDialog from './BotAktionDialog.vue'
@@ -663,15 +664,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
 
         <Karte v-if="erg" :titel="t('bots.ki.titelPlan')">
             <div class="ki" data-ki-generiert="true">
-                <Hinweis art="warn" :titel="t('bots.ki.warnTitel')">
-                    <ul class="warnliste">
-                        <li>{{ t('bots.ki.warn1') }}</li>
-                        <li>{{ t('bots.ki.warn2') }}</li>
-                        <li>{{ t('bots.ki.warn3') }}</li>
-                        <li>{{ t('bots.ki.warn4') }}</li>
-                    </ul>
-                    <p class="warnfuss">{{ t('bots.ki.warnFuss') }}</p>
-                </Hinweis>
+                <KiWarnung />
                 <p class="leise">{{ t('bots.plan.kiErklaerung') }}</p>
                 <div class="knoepfe">
                     <span v-if="ki && kiPasst" class="leise">{{ t('bots.ki.stand', { zeit: datum(ki.zeit), modell: ki.modell || ki.anbieter }) }}</span>
@@ -866,8 +859,6 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
 .warnmarke { color: var(--warn); cursor: help; }
 .legende { margin: var(--abstand-2) 0 0; padding: 0; list-style: none; color: var(--warn); font-size: 0.8rem; display: flex; flex-direction: column; gap: 2px; }
 .ki { display: flex; flex-direction: column; gap: var(--abstand-3); min-width: 0; }
-.warnliste { margin: 0; padding-left: 1.1em; }
-.warnfuss { margin: var(--abstand-1) 0 0; }
 .kopf { display: flex; gap: var(--abstand-2); align-items: center; flex-wrap: wrap; }
 .lage { margin: 0; line-height: 1.5; }
 .unbelegt { color: var(--warn); font-size: 0.82rem; margin: 0; }
