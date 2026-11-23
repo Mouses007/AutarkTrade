@@ -403,6 +403,9 @@
     "src/components/coinradar/CoinDerivate.vue|96a0bcc6a832": "Optionen von ECharts (dokumentierte Schlüssel)",
     "src/components/coinradar/CoinMessung.vue|96ec1b087699": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/coinradar/CoinMessung.vue|d700312ff7af": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/components/coinradar/CoinMessung.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
+    "src/components/coinradar/CoinMessung.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "server/bots/bot-ki.js|e1d53e9d1716": "Allerweltsmuster (Liste mit push je gesetztem Feld, if != null; keine übernommene Logik)",
+    "src/components/bots/BotPlaner.vue|504e50152d43": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/coinradar/CoinLage.vue|f328401165de": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
   }
 }
