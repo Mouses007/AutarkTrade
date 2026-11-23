@@ -9,7 +9,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
 import { kennzahlen } from './kennzahlen.js'
-import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE, hoheZeitrahmen, niveausAusZeitrahmen, unbelegteZahlen, ZIELE, aktionJetzt, pruefeIdee, zielVon } from './bot-ki.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE, hoheZeitrahmen, niveausAusZeitrahmen, unbelegteZahlen, ZIELE, aktionJetzt, pruefeIdee, zielVon, wuenscheAus, ideeKandidaten, margeFuerLiq, wunschSystemText, wunschPrompt } from './bot-ki.js'
+import { umstellenJetzt } from './simulation.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -157,6 +158,59 @@ console.log('Ziel und Idee des Nutzers (21.11.2026)')
     p('Systemtext: Ziel, Idee als Annahme, Eingriffe erlaubt', /ZIEL DES NUTZERS/.test(systemText()) && /deine Annahme/.test(systemText()) && /Nichts ändern/.test(systemText()))
     const antw = pruefeKiAntwort({ lage: 'x', vorschlaege: [{ id: ga.kandidaten.find((c) => c.variante.aktion === 'beenden').id, titel: 'Beenden', begruendung: 'b', risiko: 'r', passtNichtWenn: 'p' }] }, ga, pr)
     p('KI darf einen Eingriff wählen', antw.vorschlaege.length === 1 && antw.vorschlaege[0].variante.aktion === 'beenden')
+}
+
+console.log('Idee wird gerechnet (23.11.2026)')
+{
+    const eh = bot.einsatz.basis, liqH = bot.liquidation.unten
+    const w = (j) => wuenscheAus(j, bot, bot.kurs)
+    const eine = (j) => w({ varianten: [j] }).varianten[0]?.variante
+    // Szenarien, die ein Satz im Feld «Deine Idee» abdecken muss — je mit dem, was der Übersetzer dafür liefert
+    p('«Hebel auf 10»: Variante Hebel 10, auch als "10x"', eine({ hebel: 10 })?.hebel === 10 && eine({ hebel: '10x' })?.hebel === 10)
+    p('«Hebel 5 oder 10»: zwei Varianten', w({ varianten: [{ hebel: 5 }, { hebel: 10 }] }).varianten.map((x) => x.variante.hebel).join() === '5,10')
+    p('heutiger Hebel, Hebel 1,5 und 200: nicht gerechnet, mit Grund', w({ varianten: [{ hebel: 4 }] }).nicht[0]?.grund === 'gleich' && w({ varianten: [{ hebel: 1.5 }] }).nicht[0]?.grund === 'hebel' && w({ varianten: [{ hebel: 200 }] }).nicht[0]?.grund === 'hebel')
+    p('«Stop-Loss 10 % unter dem Kurs» und als Preis', nahe(eine({ stopLoss: '-10%' })?.stopLoss, bot.kurs * 0.9, 1e-5) && eine({ stopLoss: '75,5' })?.stopLoss === 75.5 && eine({ stopLoss: '75.5 USD' })?.stopLoss === 75.5)
+    p('Long: Stop-Loss über dem Kurs → nicht gerechnet (falsche Seite)', w({ varianten: [{ stopLoss: 90 }] }).nicht[0]?.grund === 'stopLoss' && w({ varianten: [{ stopLoss: 90 }] }).varianten.length === 0)
+    p('«Take-Profit bei 120»', eine({ takeProfit: 120 })?.takeProfit === 120 && w({ varianten: [{ takeProfit: 70 }] }).nicht[0]?.grund === 'takeProfit')
+    p('«Untergrenze auf 70»: Obergrenze bleibt die heutige', eine({ unten: 70 })?.unten === 70 && eine({ unten: 70 })?.oben === bot.grid.oben)
+    p('«100 Grids»', eine({ anzahl: 100 })?.anzahl === 100)
+    p('«0.5 nachschiessen» und «+50 % Marge»', eine({ extraMarge: '0.5' })?.extraMarge === 0.5 && nahe(eine({ extraMarge: '+50%' })?.extraMarge, eh * 0.5, 1e-5))
+    p('«aufstocken»: +Betrag, +Prozent, neuer Gesamtbetrag', nahe(eine({ investition: '+0.2' })?.einsatz, eh + 0.2, 1e-5) && nahe(eine({ investition: '+100%' })?.einsatz, eh * 2, 1e-5) && eine({ investition: '3' })?.einsatz === 3)
+    p('Investition senken geht nicht → nicht gerechnet', w({ varianten: [{ investition: '0.5' }] }).nicht[0]?.grund === 'einsatz')
+    p('Kombination «Hebel 2 und Stop-Loss −10 %» bleibt EINE Variante', Object.keys(eine({ hebel: 2, stopLoss: '-10%' }) || {}).sort().join() === 'hebel,stopLoss')
+    p('«30 % reduzieren», «pausieren», «beenden»', eine({ aktion: 'reduzieren', anteil: '30%' })?.anteil === 30 && eine({ aktion: 'pausieren' })?.aktion === 'pausieren' && eine({ aktion: 'beenden' })?.aktion === 'beenden' && w({ varianten: [{ aktion: 'reduzieren' }] }).varianten.length === 0)
+    p('«was, wenn der Kurs auf 70 fällt / um 20 % steigt»: höchstens zwei Kurse, Tippfehler (Faktor > 5) fliegt', JSON.stringify(w({ kurse: [70, '+20%', 60] }).kurse) === JSON.stringify([70, Number((bot.kurs * 1.2).toPrecision(6))]) && w({ kurse: [8000] }).kurse.length === 0 && w({ kurse: 70 }).kurse[0] === 70)
+    p('Niveau-ID als Preis', wuenscheAus({ varianten: [{ stopLoss: 'z2' }], kurse: ['C1'] }, bot, bot.kurs, { marken: [{ id: 'Z2', preis: 76 }], treffen: [{ id: 'C1', preis: 72 }] }).varianten[0]?.variante.stopLoss === 76 && w({ varianten: [{ stopLoss: 'Z9' }] }).nicht[0]?.grund === 'preis')
+    p('höchstens vier Varianten, Doppelte einmal, Unsinn ergibt nichts', w({ varianten: [{ hebel: 2 }, { hebel: 2 }, { hebel: 3 }, { hebel: 5 }, { hebel: 6 }, { hebel: 7 }] }).varianten.length === 4 && w(null).varianten.length === 0 && w({ varianten: 'x', kurse: [{}], liqZiel: 'abc' }).varianten.length === 0)
+    const spot = { ...bot, typ: 'spot_grid' }
+    p('Spot: Hebel, Marge, Aufstocken, Pausieren nicht gerechnet — Beenden schon', wuenscheAus({ varianten: [{ hebel: 3 }, { extraMarge: 1 }, { aktion: 'pausieren' }, { aktion: 'beenden' }], liqZiel: 60 }, spot, bot.kurs).varianten.map((x) => x.variante.aktion).join() === 'beenden' && wuenscheAus({ varianten: [{ hebel: 3 }], liqZiel: 60 }, spot, bot.kurs).nicht.length === 2)
+
+    const ml = margeFuerLiq(bot, 60)
+    p('«Liquidation bei 60»: nötige Extra-Marge, und die Liquidation liegt dann dort', ml.extraMarge > 0 && ml.liqNeu <= 58.8 && ml.liqNeu > 58.3, JSON.stringify(ml))
+    p('etwas weniger Marge reicht nicht (kleinster Betrag)', umstellenJetzt(bot, [{ extraMarge: ml.extraMarge * 0.97 }])[0].liqNeu > 58.8)
+    p('Ziel schon erreicht / unerreichbar → Grund', margeFuerLiq(bot, liqH + 2).fehler === 'liqSeite' && margeFuerLiq(bot, 1).fehler === 'liqUnerreichbar')
+
+    const wu = w({ varianten: [{ hebel: 10 }, { investition: '+50%' }], kurse: [66, 100], liqZiel: 60, budget: '1' })
+    const ik = ideeKandidaten(bot, wu)
+    p('Idee-Kandidaten: Varianten, Ziel-Liquidation, Budget als Marge und als Investition', ik.length === 5 && ik.every((k) => k.gruppe === 'idee' && k.titel.startsWith('Deine Idee: ')) && ik.some((k) => /Liquidation unter 60/.test(k.titel)) && ik.filter((k) => /Budget/.test(k.titel)).length === 2)
+    const mit = kandidaten(bot, bot.kurs, 4.3, null, 'aufstocken', ik)
+    p('stehen vorn, bei jedem Ziel, und verdrängen die gleiche Ziel-Variante', mit.slice(0, 5).every((k) => k.gruppe === 'idee') && mit[0].id === 'K1' && mit.filter((k) => JSON.stringify(k.variante) === JSON.stringify(ik[1].variante)).length === 1 && kandidaten(bot, bot.kurs, 4.3, null, 'abwarten', ik).slice(0, 5).every((k) => k.gruppe === 'idee'))
+    const g = rechneKandidaten(bot, kerzen, mit, { kursZiele: wu.kurse })
+    const h10 = g.kandidaten[0], heute = g.heuteBeiKurs
+    p('Hebel 10 gerechnet: nichts nachzuschiessen, Liquidation bleibt (Position und Marge bleiben)', !g.fehler && h10.abJetzt.zusatz === 0 && nahe(h10.abJetzt.liqNeu, liqH, 0.01), JSON.stringify(h10.abJetzt))
+    p('Kurs-Szenario heute: unter der Liquidation liquidiert und im Minus, darüber im Plus', heute.length === 2 && heute[0].liquidiert && heute[0].aenderung < 0 && !heute[1].liquidiert && heute[1].aenderung > 0, JSON.stringify(heute))
+    const marge = g.kandidaten.find((c) => /Liquidation unter 60/.test(c.titel))
+    p('mit der Marge für Liquidation 60 überlebt der Bot den Kurs 66', marge.abJetzt.beiKurs[0].liquidiert === false && marge.abJetzt.beiKurs[0].aenderung < 0)
+    p('«Nichts ändern» trägt das Szenario der heutigen Einstellung', JSON.stringify(g.kandidaten.find((c) => c.variante.aktion === 'nichts').abJetzt.beiKurs) === JSON.stringify(heute))
+    const pr = bauePrompt({ ...bot, kennzahlen: bot.kennzahlen }, { ...lage, atr: 4.3 }, g, false, null, { ziel: 'aufstocken', idee: 'Was passiert, wenn ich den Hebel auf 10 stelle?', wunsch: { ...wu, nicht: [{ was: 'Stop 90', text: 'falsche Seite' }] } })
+    p('Prompt: Idee-Kandidaten, Kurs-Szenario mit heutiger Einstellung und K1, nicht Rechenbares', /K1 \| Deine Idee: Hebel 10 statt 4/.test(pr) && /KURS-SZENARIO/.test(pr) && /heutige Einstellung \| -/.test(pr) && /LIQUIDIERT auf dem Weg/.test(pr) && /NICHT RECHENBAR/.test(pr) && /Stop 90: falsche Seite/.test(pr))
+    p('ohne Wunsch kein Szenario-Block', !/KURS-SZENARIO/.test(bauePrompt({ ...bot, kennzahlen: bot.kennzahlen }, { ...lage, atr: 4.3 }, rechneKandidaten(bot, kerzen, kandidaten(bot, bot.kurs, 4.3), {}))))
+    p('Systemtext: Antwort auf die Idee Pflicht, nie «keine Rechnung», Hebel-Regel', /"antwort"/.test(systemText()) && /keine Rechnung/.test(systemText()) && /Hebel erhöhen ändert/.test(systemText()))
+    const a = pruefeKiAntwort({ antwort: 'Mit Hebel 10 bleibt die Liquidation bei 70.88.', lage: 'x', vorschlaege: [{ id: 'K1', begruendung: 'b', risiko: 'r', passtNichtWenn: 'p' }] }, g, pr)
+    p('Antwort auf die Idee kommt durch, Zahl ist belegt; verbotene Wörter werfen sie raus', a.antwort.startsWith('Mit Hebel 10') && a.antwortUnbelegt.length === 0 && a.vorschlaege[0].variante.hebel === 10 && pruefeKiAntwort({ antwort: 'Das ist garantiert gut.', vorschlaege: [] }, g, pr).antwort === '')
+    p('erfundene Zahl in der Antwort wird gemeldet', pruefeKiAntwort({ antwort: 'Die Liquidation läge bei 12.34.', vorschlaege: [] }, g, pr).antwortUnbelegt.join() === '12.34')
+    const wp = wunschPrompt(bot, { marken: [{ id: 'Z1', tf: '1w', preis: 76 }], treffen: [] }, 'Hebel «10»?')
+    p('Übersetzer: bekommt Bot, Niveaus und den Satz; Auftrag verbietet Rechnen', /Hebel 4x/.test(wp) && /Z1 1w 76/.test(wp) && wp.endsWith('«Hebel 10 ?»') && /rechnest NICHT/.test(wunschSystemText()) && /"kurse"/.test(wunschSystemText()) && /"liqZiel"/.test(wunschSystemText()) && /"budget"/.test(wunschSystemText()))
 }
 
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)

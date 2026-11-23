@@ -66,6 +66,11 @@ onMounted(ladeCache)
 watch(() => props.bot.id, () => { erg.value = null; veraltet.value = false; idee.value = merk(ideeSchluessel()) || ''; ladeCache() })
 watch(() => props.stand, (neu, alt) => { if (erg.value && alt && neu !== alt) veraltet.value = true })
 
+// Was der Code aus der Idee gerechnet hat — steht da, auch wenn die KI es nicht aufgreift
+const ideeZeilen = computed(() => (erg.value?.kandidaten || []).filter((c) => c.gruppe === 'idee'))
+const liqHeute = computed(() => (erg.value?.kandidaten || []).find((c) => c.abJetzt?.liqHeute != null)?.abJetzt.liqHeute ?? null)
+const nachschuss = (c) => (c.abJetzt?.zusatz || 0) + (c.variante.extraMarge || 0)
+const beiKursText = (b) => (!b ? '—' : `${betrag(b.aenderung, mc.value, { vorzeichen: true })}${b.liquidiert ? ` · ${t('bots.ki.ideeLiquidiert')}` : b.ausstieg ? ` · ${t('bots.ki.ideeBeendet')}` : ''}`)
 const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot.kurs - a.liqNeu) / props.bot.kurs : null)
 </script>
 
@@ -109,6 +114,44 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <span v-if="erg.kurs" class="leise">{{ t('bots.ki.kursStand', { kurs: preis(erg.kurs) }) }}</span>
             </div>
             <p v-if="erg.ziel" class="leise zielStand"><span>{{ t('bots.ki.zielStand', { ziel: t(`bots.ki.ziel.${erg.ziel}`) }) }}</span><span v-if="erg.idee">{{ t('bots.ki.ideeStand', { idee: erg.idee }) }}</span></p>
+            <section v-if="erg.idee" class="ideeBlock" data-ki-generiert="true">
+                <h5>{{ t('bots.ki.ideeAntwort') }}</h5>
+                <p v-if="erg.antwort" class="lage">{{ erg.antwort }}</p>
+                <p v-if="erg.antwortUnbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: erg.antwortUnbelegt.join(', ') }) }}</p>
+                <template v-if="ideeZeilen.length || erg.szenario">
+                    <h6>{{ t('bots.ki.ideeGerechnet') }}</h6>
+                    <div class="tabelleRahmen">
+                        <table class="tabelle">
+                            <thead><tr>
+                                <th>{{ t('bots.sim.einstellung') }}</th><th>{{ t('bots.ki.nachschiessen') }}</th><th>{{ t('bots.sim.liqNeu') }}</th>
+                                <th v-for="k in erg.szenario?.kurse || []" :key="k">{{ t('bots.ki.ideeBeiKurs', { kurs: preis(k) }) }}</th><th></th>
+                            </tr></thead>
+                            <tbody>
+                                <tr v-if="erg.szenario?.heute">
+                                    <td>{{ t('bots.ki.ideeHeute') }}</td><td>—</td><td>{{ preis(liqHeute) }}</td>
+                                    <td v-for="(b, i) in erg.szenario.heute" :key="i" :class="ton(b.aenderung, mc)">{{ beiKursText(b) }}</td><td></td>
+                                </tr>
+                                <tr v-for="c in ideeZeilen" :key="c.id">
+                                    <td>{{ c.titel.replace(/^Deine Idee: /, '') }}</td>
+                                    <td>{{ nachschuss(c) > 0 ? betrag(nachschuss(c), mc) : '—' }}</td>
+                                    <td>{{ preis(c.abJetzt?.liqNeu) }} <span v-if="c.abJetzt?.liqNeu != null" class="leise">({{ prozent(abstand(c.abJetzt)) }})</span></td>
+                                    <td v-for="(k, i) in erg.szenario?.kurse || []" :key="k" :class="ton(c.abJetzt?.beiKurs?.[i]?.aenderung, mc)">{{ beiKursText(c.abJetzt?.beiKurs?.[i]) }}</td>
+                                    <td class="zeilenKnoepfe">
+                                        <Knopf v-if="!c.variante.aktion" art="leise" symbol="rechner" klein nurSymbol :titel="t('bots.ki.inSimulation')" @click="emit('inSimulation', c.variante)" />
+                                        <Knopf v-if="steuerungAktiv && !veraltet" art="leise" symbol="hochladen" klein nurSymbol :titel="t('bots.ki.umsetzen')" @click="emit('umsetzen', c.variante)" />
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-if="erg.szenario" class="leise">{{ t('bots.ki.ideeSzenarioHinweis') }}</p>
+                </template>
+                <ul v-if="erg.ideeNicht?.length" class="leise nicht">
+                    <li v-for="(n, i) in erg.ideeNicht" :key="i">{{ t('bots.ki.ideeNicht', { was: n.was, grund: n.text }) }}</li>
+                </ul>
+                <p v-if="erg.ideeGelesen === false" class="leise">{{ t('bots.ki.ideeUngelesen') }}</p>
+                <p v-else-if="!ideeZeilen.length && !erg.szenario && !erg.ideeNicht?.length" class="leise">{{ t('bots.ki.ideeNichts') }}</p>
+            </section>
             <p v-if="erg.lage" class="lage">{{ erg.lage }}</p>
             <p v-if="erg.lageUnbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: erg.lageUnbelegt.join(', ') }) }}</p>
 
@@ -204,6 +247,10 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 .wahl button:hover:not(:disabled):not(.an) { border-color: var(--muted); }
 .wahl button:disabled { opacity: 0.5; cursor: default; }
 .wahl button.an { border-color: var(--accent); background: var(--accent-flaeche); color: var(--accent); font-weight: 600; }
+.ideeBlock { display: flex; flex-direction: column; gap: var(--abstand-2); border: 1px solid var(--accent); border-radius: var(--radius); padding: var(--abstand-3); min-width: 0; }
+.ideeBlock h5, .ideeBlock h6 { margin: 0; font-size: 0.9rem; }
+.ideeBlock h6 { font-size: 0.8rem; color: var(--muted); }
+.ideeBlock .nicht { margin: 0; padding-left: 1.1rem; }
 .zielStand { display: flex; flex-wrap: wrap; gap: 0 0.5em; }
 .idee { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--muted); }
 .idee textarea { resize: vertical; font-size: 0.9rem; min-height: 3.2rem; }

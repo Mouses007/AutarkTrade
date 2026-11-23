@@ -25,7 +25,7 @@ import { kerzen as holeKerzen, fundingVerlauf } from '../marktdaten/index.js'
 import { wartungsmargeMitQuelle } from '../margin-rates.js'
 import { sendeWennAus } from '../quellen/aus.js'
 import { vergleiche, pruefeVariante, SIMULIERBAR, MAX_VARIANTEN } from './simulation.js'
-import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, hoheZeitrahmen, BOT_ZEITRAHMEN, zielVon, pruefeIdee } from './bot-ki.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, hoheZeitrahmen, BOT_ZEITRAHMEN, zielVon, pruefeIdee, wunschSystemText, wunschPrompt, wuenscheAus, ideeKandidaten } from './bot-ki.js'
 import { zeitrahmenTabelle } from '../chart-zeitrahmen.js'
 import { getClosedCandles } from '../market-data.js'
 import { ladeLlmConfigFuerAufgabe, callLLMJson } from '../llm.js'
@@ -213,12 +213,27 @@ async function kiFuer(bot, englisch, ziel = 'offen', idee = '') {
     // Hohe Zeitrahmen wie die Chart-KI: nur geschlossene Kerzen, fehlt einer, bleibt er „unbekannt"
     const reihen = await Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(bot.symbol, tf, 300, { market: 'futures' }).catch(() => null)))
     const zr = hoheZeitrahmen(Object.fromEntries(BOT_ZEITRAHMEN.map((tf, i) => [tf, reihen[i]])), bot.kurs)
-    const liste = kandidaten(bot, bot.kurs, atr, zr, ziel)
-    const gerechnet = rechneKandidaten(bot, kerzen, liste, { funding, mmr })
-    if (gerechnet.fehler) throw new Error(`Simulation: ${gerechnet.fehler}`)
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
-    cfg.maxTokens = 2500
-    const user = bauePrompt(bot, lage, gerechnet, englisch, zr, { ziel, idee })
+    // Die Idee zuerst in rechenbare Wünsche übersetzen (kleiner Aufruf); scheitert er, läuft es ohne weiter
+    let wunsch = null, wunschKosten = 0
+    if (idee) {
+        try {
+            // Gesehen 23.11.2026: einer von 20 Aufrufen kam als Überlegung in Prosa statt als JSON — einmal wiederholen
+            for (let versuch = 0; versuch < 2 && !wunsch; versuch++) {
+                const w = await callLLMJson({ ...cfg, maxTokens: 700 }, {
+                    system: wunschSystemText(), user: wunschPrompt(bot, zr, idee), timeoutMs: 45000,
+                    zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: bot.symbol },
+                })
+                wunschKosten += w.costUsd || 0
+                if (w.json && typeof w.json === 'object') wunsch = wuenscheAus(w.json, bot, bot.kurs, zr)
+            }
+        } catch (e) { logWarn('bots', `KI-Idee nicht übersetzt: ${e.message}`) }
+    }
+    const liste = kandidaten(bot, bot.kurs, atr, zr, ziel, ideeKandidaten(bot, wunsch, { mmr }))
+    const gerechnet = rechneKandidaten(bot, kerzen, liste, { funding, mmr, kursZiele: wunsch?.kurse || [] })
+    if (gerechnet.fehler) throw new Error(`Simulation: ${gerechnet.fehler}`)
+    cfg.maxTokens = 3000
+    const user = bauePrompt(bot, lage, gerechnet, englisch, zr, { ziel, idee, wunsch })
     const antwort = await callLLMJson(cfg, {
         system: systemText(), user, timeoutMs: 90000,
         zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: bot.symbol },
@@ -228,7 +243,10 @@ async function kiFuer(bot, englisch, ziel = 'offen', idee = '') {
     for (const v of geprueft.verworfen) logWarn('bots', `KI-Vorschlag verworfen (${v.grund}): ${v.id}`)
     return {
         ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model, ziel, idee,
-        kostenUsd: antwort.costUsd ?? null, kurs: bot.kurs, markt: lage, eichung: gerechnet.eichung,
+        kostenUsd: antwort.costUsd != null ? antwort.costUsd + wunschKosten : null, kurs: bot.kurs,
+        antwort: geprueft.antwort, antwortUnbelegt: geprueft.antwortUnbelegt,
+        ideeGelesen: idee ? !!wunsch : null, ideeNicht: wunsch?.nicht || [],
+        szenario: gerechnet.kursZiele.length ? { kurse: gerechnet.kursZiele, heute: gerechnet.heuteBeiKurs } : null, markt: lage, eichung: gerechnet.eichung,
         zeitrahmen: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,
         lage: geprueft.lage, lageUnbelegt: geprueft.lageUnbelegt, hinweis: geprueft.hinweis, verworfen: geprueft.verworfen.length,
         vorschlaege: geprueft.vorschlaege.map((v) => ({ ...v, rueckblick: ohneKurve(v.rueckblick) })),

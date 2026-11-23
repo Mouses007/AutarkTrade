@@ -15,7 +15,7 @@
  * Gewinnversprechen werden verworfen. Jede Ausgabe trägt kiGeneriert.
  */
 import { wissenAlsText, TYPEN } from './pionex-wissen.js'
-import { vergleiche, MAX_VARIANTEN } from './simulation.js'
+import { vergleiche, MAX_VARIANTEN, pruefeVariante, umstellenJetzt } from './simulation.js'
 import { messeZeitrahmen, findeTreffen, zeitrahmenText } from '../chart-zeitrahmen.js'
 import { liqRisiko } from './pionex-bots.js'
 
@@ -59,6 +59,203 @@ export const MAX_IDEE = 400
 /** Die Idee des Nutzers für den Prompt: eine Zeile, ohne Steuerzeichen, begrenzt. Rein. */
 export function pruefeIdee(text) {
     return String(text ?? '').replace(/[\u0000-\u001f\u007f«»]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_IDEE)
+}
+
+/**
+ * Die Idee in rechenbare Wünsche übersetzen (23.11.2026). Bis dahin ging der Satz des Nutzers nur als Text an
+ * die KI: auf «Was passiert, wenn ich den Hebel auf 10 stelle?» kam «dazu liegt keine Rechnung vor», weil der
+ * Code nur die Kandidaten des Ziels gebaut hatte. Jetzt liest ein erster, kleiner KI-Aufruf aus dem Satz, WAS
+ * gerechnet werden soll (er rechnet nichts), `wuenscheAus` prüft das, und der Code rechnet es.
+ *
+ * Abgedeckt: Hebel, Stop-Loss, Take-Profit, Bandgrenzen, Anzahl Grids, Extra-Marge, Investition erhöhen,
+ * reduzieren/pausieren/beenden, Kombinationen davon; «was, wenn der Kurs auf X fällt/steigt» (`kurse`);
+ * «Liquidation soll bei/unter X liegen» (`liqZiel` → nötige Extra-Marge); «ich habe X frei» (`budget`).
+ */
+export const MAX_WUNSCH_VARIANTEN = 4
+export const MAX_WUNSCH_KURSE = 2
+export function wunschSystemText() {
+    return [
+        'Du übersetzt den Satz eines Nutzers zu seinem Pionex-Grid-Bot in rechenbare Wünsche. Du rechnest NICHT, bewertest nicht und antwortest NUR mit JSON.',
+        'Form: {"varianten": [ {…} ], "kurse": [ … ], "liqZiel": …, "budget": …}. Lass weg, was der Satz nicht verlangt; ein Satz ohne Rechenbares gibt {"varianten": []}.',
+        '"varianten": höchstens 4 Einstellungen, die der Nutzer nennt, erwägt oder wissen will. Felder je Variante, mehrere zusammen = eine Kombination:',
+        '  "hebel": ganze Zahl · "stopLoss", "takeProfit", "unten" (Untergrenze), "oben" (Obergrenze): PREIS · "anzahl": Anzahl Grids',
+        '  "extraMarge": BETRAG zusätzliche Marge (Position bleibt gleich; «nachschiessen», «Marge erhöhen», «absichern mit X»)',
+        '  "investition": mehr Investition, die Position wächst («aufstocken», «zukaufen», «nachkaufen», «Position vergrössern»): "+20" = 20 dazu, "+50%" = die Hälfte dazu, "150" = neuer Gesamtbetrag',
+        '  "aktion": "reduzieren" (mit "anteil" in Prozent), "pausieren" oder "beenden"',
+        'PREIS: eine Zahl ("0.85"), relativ zum heutigen Kurs ("-5%" = 5 % darunter, "+10%" = 10 % darüber) oder die ID eines gemessenen Niveaus ("Z3", "C1"). BETRAG: eine Zahl in der Margin-Münze oder "+50%" = Anteil am heutigen Einsatz.',
+        'Nennt der Nutzer mehrere Werte («Hebel 5 oder 10»), gib je Wert eine Variante. «Verdoppeln» der Investition = "+100%", «halber Hebel» = die Zahl ausgerechnet aus dem heutigen Hebel.',
+        '"kurse": höchstens 2 PREISE, für die der Nutzer wissen will, was dann mit dem Bot ist, oder die er erwartet («wenn der Kurs auf 0.80 fällt», «ich rechne mit 1.20», «bei −20 %»).',
+        '"liqZiel": PREIS, bei dem die Liquidation liegen soll («Liquidation unter 0.45», «wie viel muss ich nachschiessen, damit die Liquidation bei 0.40 liegt»).',
+        '"budget": BETRAG, den der Nutzer höchstens einsetzen will oder frei hat («ich habe 50 USDT frei», «maximal 30 nachschiessen»).',
+        'Erfinde keine Werte. Was der Satz nur als Stimmung sagt («ich bin unsicher», «soll sicherer werden»), gibt keine Variante.',
+        'Deine ganze Antwort ist das JSON-Objekt: kein Satz davor oder danach, keine Überlegung, kein Markdown. Sie beginnt mit { und endet mit }.',
+    ].join('\n')
+}
+export function wunschPrompt(bot, zr, idee) {
+    const liq = liqRisiko(bot.richtung, bot.liquidation, bot.kurs)
+    const einsatz = bot.einsatz?.basis ?? bot.einsatz?.aktuell
+    return [
+        `BOT ${bot.coin} ${bot.typ === 'spot_grid' ? 'Spot-Grid' : 'Futures-Grid'}, Richtung ${bot.richtung}, Hebel ${bot.hebel}x, Margin-Münze ${bot.marginCoin}`,
+        `Kurs ${bot.kurs}, Band ${bot.grid?.unten}–${bot.grid?.oben}, ${bot.grid?.anzahl} Grids, Einsatz ${einsatz}, Extra-Marge ${bot.einsatz?.extraMarge || 0}, Liquidation ${istZahl(liq) ? liq : 'unbekannt'}`,
+        ...(zr ? [`Gemessene Niveaus: ${[...zr.marken.map((m) => `${m.id} ${m.tf} ${m.preis}`), ...zr.treffen.map((t) => `${t.id} ${t.preis}`)].join(', ')}`] : []),
+        '',
+        `SATZ DES NUTZERS: «${pruefeIdee(idee)}»`,
+    ].join('\n')
+}
+
+const zahlAus = (x) => { const t = String(x).trim().replace(/[\s'’]+/g, '').replace(/[a-z$€]+$/i, '').replace(',', '.'); const n = t === '' ? NaN : Number(t); return Number.isFinite(n) ? n : null }
+const prozentAus = (x) => { const m = /^([+-]?\d+(?:[.,]\d+)?)\s*%$/.exec(String(x).trim()); return m ? Number(m[1].replace(',', '.')) / 100 : null }
+/** PREIS → USD: Zahl, «±x%» vom Kurs oder Niveau-ID. Sonst null. Rein. */
+function preisAus(x, kurs, zr) {
+    if (x == null || x === '') return null
+    const pz = prozentAus(x)
+    if (pz != null) return istZahl(kurs) ? runde(kurs * (1 + pz), 6) : null
+    const id = /^[ZC]\d+$/i.exec(String(x).trim())
+    if (id) {
+        const n = [...(zr?.marken || []), ...(zr?.treffen || [])].find((m) => m.id === id[0].toUpperCase())
+        return n ? n.preis : null
+    }
+    const n = zahlAus(x)
+    return n != null && n > 0 ? n : null
+}
+/** BETRAG → Margin-Münze: Zahl oder «+x%» vom Einsatz. Rein. */
+function betragAus(x, einsatz) {
+    if (x == null || x === '') return null
+    const pz = prozentAus(x)
+    if (pz != null) return istZahl(einsatz) && pz > 0 ? runde(einsatz * pz, 6) : null
+    const n = zahlAus(x)
+    return n != null && n > 0 ? n : null
+}
+const variantenTitel = (v, bot) => {
+    const t = []
+    if (v.aktion === 'reduzieren') t.push(`Position um ${v.anteil} % reduzieren`)
+    if (v.aktion === 'pausieren') t.push('Bot pausieren')
+    if (v.aktion === 'beenden') t.push('Bot beenden')
+    if (v.hebel != null) t.push(`Hebel ${v.hebel} statt ${bot.hebel}`)
+    const eh = bot.einsatz?.basis ?? bot.einsatz?.aktuell
+    if (v.einsatz != null) t.push(`Investition ${istZahl(eh) ? `+${runde(v.einsatz - eh, 5)} ` : ''}auf ${runde(v.einsatz, 6)} (Position wächst mit)`)
+    if (v.extraMarge != null) t.push(`Extra-Marge +${runde(v.extraMarge, 6)}`)
+    if (v.unten != null || v.oben != null) t.push(`Band ${runde(v.unten, 6)}–${runde(v.oben, 6)}`)
+    if (v.anzahl != null) t.push(`${v.anzahl} Grids statt ${bot.grid?.anzahl}`)
+    if (v.stopLoss != null) t.push(`Stop-Loss bei ${runde(v.stopLoss, 6)}`)
+    if (v.takeProfit != null) t.push(`Take-Profit bei ${runde(v.takeProfit, 6)}`)
+    return t.join(', ')
+}
+const NICHT_TEXT = {
+    band: 'das Band ist so nicht möglich (Untergrenze muss unter der Obergrenze liegen)', weitWeg: 'das Band liegt zu weit vom Kurs weg',
+    anzahl: 'die Anzahl Grids ist nicht möglich', hebel: 'der Hebel ist nicht möglich (1–125, ganze Zahl)', einsatz: 'die Investition lässt sich über die App nur erhöhen',
+    extraMarge: 'der Betrag der Extra-Marge ist nicht lesbar', neutralStop: 'ein Neutral-Bot hat hier keine Preis-Stops',
+    stopLoss: 'der Stop-Loss liegt auf der falschen Seite des Kurses', takeProfit: 'der Take-Profit liegt auf der falschen Seite des Kurses',
+    leer: 'kein rechenbarer Wert erkannt', spot: 'ein Spot-Grid kennt weder Hebel noch Extra-Marge, Aufstocken, Reduzieren oder Pausieren', gleich: 'das ist die heutige Einstellung',
+    preis: 'der Preis ist nicht lesbar', liqSeite: 'die Liquidation liegt schon jenseits dieses Preises', liqUnerreichbar: 'auch mit dem 20-fachen Einsatz als Extra-Marge nicht erreichbar',
+}
+/**
+ * Antwort des Übersetzers prüfen (rein). Gibt `{varianten: [{titel, variante}], kurse, liqZiel, budget, nicht: [{was, grund}]}`;
+ * alles Unlesbare oder Unmögliche landet mit Grund in `nicht` — der Nutzer sieht, was nicht gerechnet wurde.
+ */
+export function wuenscheAus(json, bot, kurs, zr = null) {
+    const aus = { varianten: [], kurse: [], liqZiel: null, budget: null, nicht: [] }
+    if (!json || typeof json !== 'object') return aus
+    const spot = bot.typ === 'spot_grid'
+    const einsatz = bot.einsatz?.basis ?? (bot.coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell))
+    const nicht = (was, grund) => aus.nicht.push({ was: String(was).slice(0, 120), grund, text: NICHT_TEXT[grund] || grund })
+    const sig = new Set()
+    for (const roh of (Array.isArray(json.varianten) ? json.varianten : []).slice(0, MAX_WUNSCH_VARIANTEN * 2)) {
+        if (!roh || typeof roh !== 'object') continue
+        const was = JSON.stringify(roh)
+        const aktion = ['reduzieren', 'pausieren', 'beenden'].includes(roh.aktion) ? roh.aktion : null
+        let v
+        if (aktion) {
+            if (spot && aktion !== 'beenden') { nicht(was, 'spot'); continue }
+            const anteil = Math.round(zahlAus(String(roh.anteil ?? '').replace('%', '')) ?? 0)
+            if (aktion === 'reduzieren' && !(anteil >= 1 && anteil <= 99)) { nicht(was, 'leer'); continue }
+            v = aktion === 'reduzieren' ? { aktion, anteil } : { aktion }
+        } else {
+            if (spot && (roh.hebel != null || roh.extraMarge != null || roh.investition != null)) { nicht(was, 'spot'); continue }
+            const e = {}
+            let kaputt = null
+            for (const f of ['stopLoss', 'takeProfit', 'unten', 'oben']) if (roh[f] != null && roh[f] !== '') { const p = preisAus(roh[f], kurs, zr); if (p == null) kaputt = 'preis'; else e[f] = p }
+            if (roh.hebel != null && roh.hebel !== '') { const h = zahlAus(String(roh.hebel).replace(/x$/i, '')); if (h == null || !Number.isInteger(h)) kaputt = 'hebel'; else if (h !== bot.hebel) e.hebel = h }
+            if (roh.anzahl != null && roh.anzahl !== '') { const n = zahlAus(roh.anzahl); if (n == null) kaputt = 'anzahl'; else if (n !== bot.grid?.anzahl) e.anzahl = n }
+            if (roh.extraMarge != null && roh.extraMarge !== '') { const b = betragAus(roh.extraMarge, einsatz); if (b == null) kaputt = 'extraMarge'; else e.extraMarge = b }
+            if (roh.investition != null && roh.investition !== '') {
+                const t = String(roh.investition).trim()
+                const plus = t.startsWith('+') || prozentAus(t) != null
+                const b = betragAus(t.replace(/^\+/, prozentAus(t) != null ? '+' : ''), einsatz)
+                const neu = b == null || !istZahl(einsatz) ? null : plus ? einsatz + b : b
+                if (neu == null || !(neu > einsatz)) kaputt = 'einsatz'; else e.einsatz = runde(neu, 6)
+            }
+            if (kaputt) { nicht(was, kaputt); continue }
+            if (!Object.keys(e).length) { nicht(was, Object.keys(roh).length ? 'gleich' : 'leer'); continue }
+            v = pruefeVariante(e, { ...bot, kurs })
+            if (v.fehler) { nicht(was, v.fehler); continue }
+            if (v.hebel != null && !Number.isInteger(v.hebel)) { nicht(was, 'hebel'); continue }
+        }
+        const s = JSON.stringify(v)
+        if (sig.has(s) || aus.varianten.length >= MAX_WUNSCH_VARIANTEN) continue
+        sig.add(s)
+        aus.varianten.push({ titel: variantenTitel(v, bot), variante: v })
+    }
+    for (const k of (Array.isArray(json.kurse) ? json.kurse : [json.kurse]).filter((x) => x != null && x !== '')) {
+        const p = preisAus(k, kurs, zr)
+        // Tippfehler-Schutz wie beim Band: höchstens Faktor 5 vom Kurs
+        if (p == null || (istZahl(kurs) && (p > kurs * 5 || p < kurs / 5 || Math.abs(p - kurs) / kurs < 1e-4))) { nicht(`Kurs ${k}`, 'preis'); continue }
+        if (aus.kurse.length < MAX_WUNSCH_KURSE && !aus.kurse.includes(p)) aus.kurse.push(p)
+    }
+    if (json.liqZiel != null && json.liqZiel !== '') {
+        const p = preisAus(json.liqZiel, kurs, zr)
+        if (spot) nicht(`Liquidation ${json.liqZiel}`, 'spot'); else if (p == null) nicht(`Liquidation ${json.liqZiel}`, 'preis'); else aus.liqZiel = p
+    }
+    if (json.budget != null && json.budget !== '') {
+        const b = betragAus(json.budget, einsatz)
+        if (b == null) nicht(`Budget ${json.budget}`, 'extraMarge'); else aus.budget = b
+    }
+    return aus
+}
+
+/**
+ * Nötige Extra-Marge, damit die geschätzte Liquidation bei `ziel` (oder weiter weg) liegt — Halbierung über
+ * `umstellenJetzt`. `{extraMarge, liqNeu}` oder `{fehler}`. Rein.
+ */
+export const LIQ_PUFFER = 0.02
+export function margeFuerLiq(bot, ziel, opt = {}) {
+    const einsatz = bot.einsatz?.basis ?? (bot.coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell))
+    if (!istZahl(einsatz) || !(einsatz > 0) || bot.richtung === 'NEUTRAL') return { fehler: 'leer' }
+    const long = bot.richtung !== 'SHORT'
+    const liqBei = (em) => umstellenJetzt(bot, [em > 0 ? { extraMarge: em } : {}], opt)?.[0]?.liqNeu ?? null
+    // «keine Liquidation mehr» (null) gilt als weit genug weg
+    // 2 % Puffer: eine Liquidation genau AUF dem genannten Preis hiesse, dort liquidiert zu werden
+    const grenze = long ? ziel * (1 - LIQ_PUFFER) : ziel * (1 + LIQ_PUFFER)
+    const reicht = (l) => !istZahl(l) || (long ? l <= grenze : l >= grenze)
+    const heute = liqBei(0)
+    if (!istZahl(heute)) return { fehler: 'leer' }
+    if (long ? heute <= ziel : heute >= ziel) return { fehler: 'liqSeite' }
+    let lo = 0, hi = einsatz * 20
+    if (!reicht(liqBei(hi))) return { fehler: 'liqUnerreichbar' }
+    for (let i = 0; i < 40 && (hi - lo) / einsatz > 1e-4; i++) { const m = (lo + hi) / 2; if (reicht(liqBei(m))) hi = m; else lo = m }
+    const extraMarge = runde(hi, 5)
+    return { extraMarge, liqNeu: liqBei(extraMarge) }
+}
+
+/**
+ * Kandidaten aus den Wünschen (Gruppe «idee», stehen immer vorn — unabhängig vom Ziel). Rein.
+ * `opt` = { mmr } für die Ziel-Liquidation.
+ */
+export function ideeKandidaten(bot, wunsch, opt = {}) {
+    if (!wunsch) return []
+    const liste = wunsch.varianten.map((w) => ({ titel: `Deine Idee: ${w.titel}`, variante: w.variante }))
+    const einsatz = bot.einsatz?.basis ?? (bot.coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell))
+    if (istZahl(wunsch.liqZiel)) {
+        const r = margeFuerLiq(bot, wunsch.liqZiel, opt)
+        if (r.fehler) wunsch.nicht.push({ was: `Liquidation bei ${wunsch.liqZiel}`, grund: r.fehler, text: NICHT_TEXT[r.fehler] || r.fehler })
+        else liste.push({ titel: `Deine Idee: Liquidation ${bot.richtung === 'SHORT' ? 'über' : 'unter'} ${runde(wunsch.liqZiel, 6)} (mit 2 % Puffer) — dafür Extra-Marge +${r.extraMarge}`, variante: { extraMarge: r.extraMarge } })
+    }
+    if (istZahl(wunsch.budget) && bot.typ !== 'spot_grid') {
+        liste.push({ titel: `Deine Idee: dein Budget ${runde(wunsch.budget, 6)} als Extra-Marge (Position bleibt)`, variante: { extraMarge: wunsch.budget } })
+        if (istZahl(einsatz)) liste.push({ titel: `Deine Idee: dein Budget ${runde(wunsch.budget, 6)} als Investition (Position wächst mit)`, variante: { einsatz: runde(einsatz + wunsch.budget, 6) } })
+    }
+    const sig = new Set()
+    return liste.filter((k) => { const s = JSON.stringify(k.variante); if (sig.has(s)) return false; sig.add(s); return true }).map((k) => ({ ...k, id: '', gruppe: 'idee' }))
 }
 
 /** Marktlage aus Tageskerzen (aufsteigend). */
@@ -125,7 +322,7 @@ export function niveausAusZeitrahmen(zr, kurs) {
  * Kandidaten aus der Lage. Preise in USDT je Coin, Beträge in der Margin-Münze.
  * Nur, was die Simulation rechnen kann; jeder Kandidat mit Code-Beschreibung.
  */
-export function kandidaten(bot, kurs, atr, zr = null, ziel = 'offen') {
+export function kandidaten(bot, kurs, atr, zr = null, ziel = 'offen', ausIdee = []) {
     const liste = []
     // `gruppe` sagt, wozu die Variante dient; am Ende bleibt, was zum Ziel gehört (ZIEL_GRUPPEN)
     const neu = (titel, v, gruppe) => { if (Object.keys(v).length) liste.push({ id: '', gruppe, titel, variante: v }) }
@@ -212,9 +409,12 @@ export function kandidaten(bot, kurs, atr, zr = null, ziel = 'offen') {
     neu('Nichts ändern', { aktion: 'nichts' }, 'nichts')
 
     const gruppen = ZIEL_GRUPPEN[zielVon(ziel)]
-    return liste.filter((k) => gruppen.includes(k.gruppe))
+    // Was der Nutzer selbst genannt hat, steht vorn und fällt nie dem Ziel-Filter zum Opfer; gleiche Varianten
+    // des Ziels entfallen dafür
+    const eigen = new Set(ausIdee.map((k) => JSON.stringify(k.variante)))
+    const zielListe = liste.filter((k) => gruppen.includes(k.gruppe) && !eigen.has(JSON.stringify(k.variante)))
         .sort((a, b) => (zielVon(ziel) === 'offen' ? 0 : gruppen.indexOf(a.gruppe) - gruppen.indexOf(b.gruppe)))
-        .map((k, i) => ({ ...k, id: `K${i + 1}` }))
+    return [...ausIdee, ...zielListe].map((k, i) => ({ ...k, id: `K${i + 1}` }))
 }
 
 /** Folgen eines Eingriffs ohne neue Einstellung, aus dem heutigen Stand des Bots (rein). */
@@ -241,19 +441,21 @@ export function rechneKandidaten(bot, kerzen, liste, opt) {
         teil.forEach((k, j) => gerechnet.set(k.id, { ...k, rueckblick: r.varianten[j], abJetzt: r.abJetzt?.[j] || null }))
     }
     // Rückblick eines Eingriffs = der heutige: er ändert die Vergangenheit nicht
-    const aus = liste.map((k) => gerechnet.get(k.id) || { ...k, rueckblick: basis, abJetzt: aktionJetzt(bot, k.variante) })
-    return { basis, eichung, kandidaten: aus }
+    // Kurs-Szenario ohne Änderung: gilt für «nichts ändern» und als Vergleichszeile
+    const heuteBeiKurs = opt?.kursZiele?.length ? umstellenJetzt(bot, [{}], opt)?.[0]?.beiKurs || null : null
+    const aus = liste.map((k) => gerechnet.get(k.id) || { ...k, rueckblick: basis, abJetzt: { ...aktionJetzt(bot, k.variante), ...(heuteBeiKurs && ['nichts', 'pausieren'].includes(k.variante.aktion) ? { beiKurs: heuteBeiKurs } : {}) } })
+    return { basis, eichung, kandidaten: aus, heuteBeiKurs, kursZiele: opt?.kursZiele || [] }
 }
 
 const pz = (v, s = 1) => (istZahl(v) ? `${(v * 100).toFixed(s)} %` : '—')
 const zl = (v, s = 4) => (istZahl(v) ? Number(v).toFixed(s) : '—')
 
 /** Prompt-Zeilen: Bot, Markt, heutige Simulation, Kandidaten. */
-export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null, { ziel = 'offen', idee = '' } = {}) {
-    const wunsch = pruefeIdee(idee)
+export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null, { ziel = 'offen', idee = '', wunsch = null } = {}) {
+    const ideeText = pruefeIdee(idee)
     const zielZeilen = [
         `ZIEL DES NUTZERS: ${ZIEL_TEXT[zielVon(ziel)]}`,
-        ...(wunsch ? [`IDEE DES NUTZERS (seine eigenen Worte; Zahlen darin sind seine Annahmen, keine Messung): «${wunsch}»`] : []),
+        ...(ideeText ? [`IDEE DES NUTZERS (seine eigenen Worte; Zahlen darin sind seine Annahmen, keine Messung): «${ideeText}»`] : []),
         '',
     ]
     const mc = bot.marginCoin
@@ -284,9 +486,27 @@ export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null, { 
         'KANDIDATEN (vom Code gerechnet; Rückblick = über die ganze Laufzeit seit Start; jetzt = Folgen eines Umstellens zum heutigen Kurs):',
         'id | Änderung | Rückblick Ergebnis | Rückblick grösster Verlust | Rückblick Ende | jetzt: nachschiessen | jetzt: geschlossen | jetzt: realisiert | jetzt: Liquidation neu | Abstand neu',
         ...tabelle,
+        ...szenarioZeilen(bot, gerechnet),
+        ...(wunsch?.nicht?.length ? ['', 'AUS DER IDEE NICHT RECHENBAR (sag dem Nutzer in "antwort", was nicht ging und warum):', ...wunsch.nicht.map((n) => `- ${n.was}: ${n.text}`)] : []),
+        ...(wunsch && !gerechnet.kandidaten.some((c) => c.gruppe === 'idee') && !gerechnet.kursZiele?.length && !wunsch.nicht.length ? ['', 'Aus der IDEE hat der Code nichts Rechenbares gelesen — sie lenkt nur deine Auswahl.'] : []),
         '',
         englisch ? 'Answer in English.' : 'Antworte auf Deutsch (Schweizer Schreibweise, ss statt ß).',
     ].join('\n')
+}
+
+/** Zeilen «was, wenn der Kurs auf X geht» für den Prompt (leer ohne Kurs-Ziele). */
+function szenarioZeilen(bot, gerechnet) {
+    if (!gerechnet.kursZiele?.length) return []
+    const mc = bot.marginCoin
+    const eine = (b) => `${b.aenderung >= 0 ? '+' : ''}${zl(b.aenderung)} ${mc}, ${b.liquidiert ? 'LIQUIDIERT auf dem Weg' : b.ausstieg ? `beendet durch ${b.ausstieg}` : 'läuft weiter'}`
+    const zeilen = ['', 'KURS-SZENARIO aus der Idee (vom Code gerechnet: DIREKTER Weg vom heutigen Kurs dorthin, ohne Grid-Gewinn aus Schwankungen unterwegs; Änderung des Gesamtergebnisses gegenüber jetzt):']
+    gerechnet.kursZiele.forEach((p, i) => {
+        zeilen.push(`Kurs ${zl(p)} USD (${pz(p / bot.kurs - 1)} vom heutigen Kurs):`)
+        const h = gerechnet.heuteBeiKurs?.[i]
+        if (h) zeilen.push(`  heutige Einstellung | ${eine(h)}`)
+        for (const c of gerechnet.kandidaten) { const b = c.abJetzt?.beiKurs?.[i]; if (b && !c.variante.aktion) zeilen.push(`  ${c.id} | ${eine(b)}`) }
+    })
+    return zeilen
 }
 
 export function systemText() {
@@ -295,13 +515,15 @@ export function systemText() {
         'Du bekommst Zahlen, die der Code gerechnet hat. Du rechnest NICHT selbst und nennst KEINE Zahl, die nicht in der Eingabe steht.',
         'Wähle aus den KANDIDATEN höchstens drei, die du vorschlägst, und begründe sie mit den Zahlen. Wenn keiner sinnvoll ist, wähle keinen und sag warum.',
         'Oben steht das ZIEL DES NUTZERS; die KANDIDATEN hat der Code für dieses Ziel gebaut. Wähle danach und sag bei jedem Vorschlag in der Begründung, wie er diesem Ziel dient. Steht dort eine IDEE DES NUTZERS, richte Auswahl und Begründung nach ihr; Zahlen aus der Idee sind seine Annahmen — nenne sie als «deine Annahme», nicht als Messung. Spricht die gemessene Lage gegen das Ziel oder die Idee (z. B. die Struktur auf allen Zeitrahmen gegen die Richtung des Bots), sag das klar im Feld "lage", ohne Kursprognose.',
+        'Kandidaten, deren Änderung mit «Deine Idee:» beginnt, hat der Code aus der IDEE gebaut und gerechnet. Geh im Feld "antwort" auf JEDEN davon ein: was er laut den Zahlen bewirkt (nachschiessen, Liquidation neu und Abstand gegenüber heute, Rückblick). Ist die Idee eine Frage, beantworte sie dort direkt und zuerst. Steht ein KURS-SZENARIO da, nenne dort für die heutige Einstellung und die Idee-Kandidaten, was beim genannten Kurs wäre (Änderung, liquidiert oder nicht). Schreib NIE «dazu liegt keine Rechnung vor», wenn ein Idee-Kandidat oder ein Szenario dasteht. Nimm Idee-Kandidaten in die Vorschläge auf, ausser die Zahlen sprechen klar dagegen — dann sag in "antwort" warum. Ohne IDEE bleibt "antwort" leer.',
+        'Hebel erhöhen ändert bei Pionex weder Position noch Marge: die frei werdende Investition bleibt als Marge im Bot, die Liquidation bleibt also etwa gleich (Spalten „jetzt“). Näher rückt sie erst, wenn danach Marge entnommen oder die Position vergrössert wird — sag das, wenn nach einem höheren Hebel gefragt ist.',
         '«Investition erhöhen» vergrössert die Position (anders als Extra-Marge): „jetzt: nachschiessen" ist das zusätzliche Geld, und der Verlust bei weiter fallendem (Long) bzw. steigendem (Short) Kurs wächst mit. Nenne bei so einem Vorschlag die neue Liquidation und ihren Abstand und sag, ob ein gemessenes Niveau (Z…, C…) die Stelle stützt.',
         '«Nichts ändern», «pausieren», «reduzieren» und «beenden» sind gültige Vorschläge, wenn sie unter den KANDIDATEN stehen. Bei «reduzieren» und «beenden» steht in „jetzt: realisiert" der schwebende Gewinn oder Verlust, der damit fest wird; die neue Liquidation nach einem Reduzieren nennt erst Pionex bei der Prüfung (hier «—»).',
         'Beachte: Der Rückblick ist mit dem Wissen um den vergangenen Kursverlauf gerechnet — gewichte die Spalten „jetzt" (Liquidationsabstand, realisierter Verlust) mindestens so stark.',
         'So setzt Pionex Änderungen um: Band/Grids ändern behält die heutige Position (nichts wird realisiert), ein Band weiter nach unten (Long) bringt die Liquidation NÄHER. Hebel senken behält die Position und verlangt mehr Einsatz (Spalte „nachschiessen"). Extra-Marge lässt die Position gleich und schiebt die Liquidation weg. Nachschiessen braucht freies Guthaben auf dem Konto.',
         'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, und ob Bandgrenzen, Stop-Loss und Liquidation an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…) liegen. Nenne Niveaus nur mit ihrer ID und dem Preis aus der Eingabe.',
         'Nenne bei jedem Vorschlag das wichtigste Risiko und wann er nicht passt. Kein Gewinnversprechen, keine Kursprognose als Tatsache, nicht „garantiert", nicht „risikolos", nicht „optimal".',
-        'Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage des Bots", "vorschlaege": [{"id": "K3", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}',
+        'Antworte NUR mit JSON: {"antwort": "2–5 Sätze zur IDEE, sonst leer", "lage": "2–4 Sätze zur Lage des Bots", "vorschlaege": [{"id": "K3", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}',
     ].join('\n')
 }
 
@@ -359,7 +581,12 @@ export function pruefeKiAntwort(json, gerechnet, eingabe = '') {
     if (VERBOTEN.test(lage)) { verworfen.push({ id: 'lage', grund: 'wortwahl' }); lage = '' }
     let hinweis = kuerze(json.hinweis, 300)
     if (VERBOTEN.test(hinweis)) hinweis = ''
-    return { lage, vorschlaege, hinweis, verworfen, lageUnbelegt: eingabe && lage ? unbelegteZahlen(lage, eingabe) : [] }
+    let antwort = kuerze(json.antwort, 1200)
+    if (VERBOTEN.test(antwort)) { verworfen.push({ id: 'antwort', grund: 'wortwahl' }); antwort = '' }
+    return {
+        antwort, antwortUnbelegt: eingabe && antwort ? unbelegteZahlen(antwort, eingabe) : [],
+        lage, vorschlaege, hinweis, verworfen, lageUnbelegt: eingabe && lage ? unbelegteZahlen(lage, eingabe) : [],
+    }
 }
 
 /** Kann dieser Bot KI-Vorschläge bekommen? */

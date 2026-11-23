@@ -111,12 +111,69 @@ function kurz(r) {
 function liqRisikoVon(bot, liq) { return liqRisiko(bot.richtung, liq, bot.kurs) }
 
 /**
+ * Umstellen zum heutigen Kurs (rein): Eigenkapital bleibt, die Position wird zum Kurs auf die neue
+ * Einstellung gebracht. Welche Position hielte der Bot, wo läge die Liquidation, was wäre nachzuschiessen?
+ * `kursZiele` (Preise in USD): dazu je Preis, wie sich das Ergebnis auf dem DIREKTEN Weg dorthin ändert
+ * (eine Kerze vom Kurs zum Preis — ohne Grid-Gewinn aus Schwankungen unterwegs) und ob der Bot vorher
+ * liquidiert oder per Stop beendet würde. Ohne laufenden Bot oder Kurs → null.
+ */
+export function umstellenJetzt(bot, varianten = [], { kurs = bot.kurs, mmr = MMR_VORGABE, kursZiele = [] } = {}) {
+    if (!(bot.laufend && istZahl(kurs) && kurs > 0)) return null
+    const heute = heutigeStops(bot)
+    const mitHeute = (v) => ({ ...heute, ...v })
+    const opt = { ...gebuehrenFuer(bot), mmr, funding: null, durchstich: DURCHSTICH }
+    const g = gewinn(bot, kurs)
+    const einsatz = g.basis
+    const jetzt = [{ t: 0, o: kurs, h: kurs, l: kurs, c: kurs }]
+    const posJetzt = bot.position?.menge ?? null
+    const extra = bot.einsatz?.extraMarge || 0
+    const eigenkapital = istZahl(einsatz) && istZahl(g.gesamt) ? einsatz + extra + g.gesamt : null
+    const liqHeute = liqRisikoVon(bot, bot.liquidation)
+    return varianten.map((v) => {
+        // Nachzuschiessen: ausdrücklicher Einsatz, sonst bei Hebelwechsel Einsatz × alt/neu (wie Pionex)
+        const einsatzNeu = istZahl(v.einsatz) ? v.einsatz : (istZahl(v.hebel) && istZahl(einsatz) && bot.hebel > 0 ? einsatz * bot.hebel / v.hebel : einsatz)
+        // Weniger Investition (höherer Hebel) geht in die dynamische Marge — die Marge sinkt nicht
+        const zusatz = istZahl(einsatzNeu) && istZahl(einsatz) ? Math.max(0, einsatzNeu - einsatz) : 0
+        const optJetzt = { ...opt, startPreis: kurs, aenderung: mitHeute(v), marge: istZahl(eigenkapital) ? eigenkapital + zusatz : null }
+        // Band/Grids ändern wie Pionex „Direkt bearbeiten" (keepInvestment): die heutige
+        // Position bleibt, die Menge je Grid wird so gewählt, dass die neuen Grids beim
+        // heutigen Kurs genau sie halten. Gesehen in der App 11.11.2026: SOL 95–200/320 →
+        // 60–150/150 hob den Gewinn je Grid von 0,000052 auf 0,000805 SOL (Menge ≈ 3 → 12)
+        // und schob die Liquidation von 70,928 auf 72,523 — nichts wird realisiert.
+        // Ausdrücklich mehr Einsatz („Ergänzung") vergrössert die Position im selben Verhältnis.
+        const bandNeu = v.unten != null || v.oben != null || v.anzahl != null || v.art != null
+        if (bandNeu && istZahl(posJetzt) && posJetzt !== 0) {
+            const probe = simuliereBot(bot, jetzt, optJetzt)
+            if (probe && probe.position) {
+                let m = probe.menge * Math.abs(posJetzt) / Math.abs(probe.position)
+                if (istZahl(v.einsatz) && istZahl(einsatz) && einsatz > 0) m *= v.einsatz / einsatz
+                optJetzt.mengeFest = m
+            }
+        }
+        const r = simuliereBot(bot, jetzt, optJetzt)
+        const ziel = r ? r.position : null
+        let geschlossenAnteil = null, realisiertCa = null
+        if (istZahl(ziel) && istZahl(posJetzt) && posJetzt !== 0) {
+            const gleicheSeite = Math.sign(ziel) === Math.sign(posJetzt) || ziel === 0
+            geschlossenAnteil = gleicheSeite ? Math.max(0, 1 - Math.abs(ziel) / Math.abs(posJetzt)) : 1
+            if (geschlossenAnteil < 1e-9) geschlossenAnteil = 0   // Rundungsrest, keine Teilschliessung
+            realisiertCa = istZahl(g.schwebend) ? g.schwebend * geschlossenAnteil : null
+        }
+        const beiKurs = r ? kursZiele.filter((p) => istZahl(p) && p > 0).map((p) => {
+            const r2 = simuliereBot(bot, [...jetzt, { t: 60_000, o: kurs, h: Math.max(kurs, p), l: Math.min(kurs, p), c: p }], optJetzt)
+            return r2 ? { preis: p, aenderung: r2.gesamt - r.gesamt, liquidiert: !!r2.liquidation, ausstieg: r2.ausstieg?.art || null } : null
+        }).filter(Boolean) : []
+        return { ziel, aktuell: posJetzt, geschlossenAnteil, realisiertCa, liqNeu: r ? liqRisikoVon(bot, r.liqSchaetzung) : null, liqHeute, zusatz, ...(beiKurs.length ? { beiKurs } : {}) }
+    })
+}
+
+/**
  * @param bot    aus normalisiereBot (+ kurs)
  * @param kerzen [{t,o,h,l,c}] in USDT je Coin, ab Bot-Start
  * @param varianten bereinigte Varianten (pruefeVariante)
  * @param opt    { kurs, funding: [{t, rate}], mmr }
  */
-export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, funding = null, mmr = MMR_VORGABE, basis: basisVorgabe = null } = {}) {
+export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, funding = null, mmr = MMR_VORGABE, basis: basisVorgabe = null, kursZiele = [] } = {}) {
     if (!SIMULIERBAR.has(bot.typ)) return { fehler: 'typ' }
     if (!kerzen?.length) return { fehler: 'kerzen' }
     const heute = heutigeStops(bot)
@@ -151,48 +208,7 @@ export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, fundi
     const mitHeute = (v) => ({ ...heute, ...v })
     const ergebnisse = varianten.slice(0, MAX_VARIANTEN).map((v) => kurz(simuliereBot(bot, kerzen, { ...opt, aenderung: mitHeute(v) })))
 
-    // Umstellen zum heutigen Kurs: Eigenkapital bleibt, die Position wird zum Kurs
-    // auf das neue Band eingestellt. Welche Position hielte es, wo läge die Liquidation?
-    let abJetzt = null
-    if (bot.laufend && istZahl(kurs) && kurs > 0) {
-        const jetzt = [{ t: 0, o: kurs, h: kurs, l: kurs, c: kurs }]
-        const posJetzt = bot.position?.menge ?? null
-        const extra = bot.einsatz?.extraMarge || 0
-        const eigenkapital = istZahl(einsatz) && istZahl(g.gesamt) ? einsatz + extra + g.gesamt : null
-        const liqHeute = liqRisikoVon(bot, bot.liquidation)
-        abJetzt = varianten.slice(0, MAX_VARIANTEN).map((v) => {
-            // Nachzuschiessen: ausdrücklicher Einsatz, sonst bei Hebelwechsel Einsatz × alt/neu (wie Pionex)
-            const einsatzNeu = istZahl(v.einsatz) ? v.einsatz : (istZahl(v.hebel) && istZahl(einsatz) && bot.hebel > 0 ? einsatz * bot.hebel / v.hebel : einsatz)
-            // Weniger Investition (höherer Hebel) geht in die dynamische Marge — die Marge sinkt nicht
-            const zusatz = istZahl(einsatzNeu) && istZahl(einsatz) ? Math.max(0, einsatzNeu - einsatz) : 0
-            const optJetzt = { ...opt, funding: null, startPreis: kurs, aenderung: mitHeute(v), marge: istZahl(eigenkapital) ? eigenkapital + zusatz : null }
-            // Band/Grids ändern wie Pionex „Direkt bearbeiten" (keepInvestment): die heutige
-            // Position bleibt, die Menge je Grid wird so gewählt, dass die neuen Grids beim
-            // heutigen Kurs genau sie halten. Gesehen in der App 11.11.2026: SOL 95–200/320 →
-            // 60–150/150 hob den Gewinn je Grid von 0,000052 auf 0,000805 SOL (Menge ≈ 3 → 12)
-            // und schob die Liquidation von 70,928 auf 72,523 — nichts wird realisiert.
-            // Ausdrücklich mehr Einsatz („Ergänzung") vergrössert die Position im selben Verhältnis.
-            const bandNeu = v.unten != null || v.oben != null || v.anzahl != null || v.art != null
-            if (bandNeu && istZahl(posJetzt) && posJetzt !== 0) {
-                const probe = simuliereBot(bot, jetzt, optJetzt)
-                if (probe && probe.position) {
-                    let m = probe.menge * Math.abs(posJetzt) / Math.abs(probe.position)
-                    if (istZahl(v.einsatz) && istZahl(einsatz) && einsatz > 0) m *= v.einsatz / einsatz
-                    optJetzt.mengeFest = m
-                }
-            }
-            const r = simuliereBot(bot, jetzt, optJetzt)
-            const ziel = r ? r.position : null
-            let geschlossenAnteil = null, realisiertCa = null
-            if (istZahl(ziel) && istZahl(posJetzt) && posJetzt !== 0) {
-                const gleicheSeite = Math.sign(ziel) === Math.sign(posJetzt) || ziel === 0
-                geschlossenAnteil = gleicheSeite ? Math.max(0, 1 - Math.abs(ziel) / Math.abs(posJetzt)) : 1
-                if (geschlossenAnteil < 1e-9) geschlossenAnteil = 0   // Rundungsrest, keine Teilschliessung
-                realisiertCa = istZahl(g.schwebend) ? g.schwebend * geschlossenAnteil : null
-            }
-            return { ziel, aktuell: posJetzt, geschlossenAnteil, realisiertCa, liqNeu: r ? liqRisikoVon(bot, r.liqSchaetzung) : null, liqHeute, zusatz }
-        })
-    }
+    const abJetzt = umstellenJetzt(bot, varianten.slice(0, MAX_VARIANTEN), { kurs, mmr, kursZiele })
 
     return {
         von: kerzen[0].t,

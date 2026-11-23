@@ -8831,11 +8831,21 @@
         "aussteigen": "Reduce risk or close in an orderly way: reduce, pause, close."
       },
       "ideeTitel": "Your idea (optional)",
-      "ideePlatz": "e.g. “I expect a recovery and do not want to add money” or “The bot should only keep the loss small”.",
-      "ideeText": "Goes to the AI in your words and steers selection and reasoning. Prices in it count as your assumption; only the code calculates.",
+      "ideePlatz": "e.g. “What happens if I set leverage to 10?”, “What if the price drops to 0.80?”, “I have 50 USDT free” or “Liquidation should be below 0.45”.",
+      "ideeText": "Questions and wishes with values are calculated by the code (leverage, stop-loss, take-profit, range, grids, extra margin, adding to the position, reducing, a “what if” price, a target liquidation, your budget). Everything else steers the AI's selection and reasoning.",
       "zielStand": "Created for the goal “{ziel}”.",
       "ideeStand": "Your idea: “{idee}”",
-      "eingriff": "Intervention without new settings"
+      "eingriff": "Intervention without new settings",
+      "ideeAntwort": "About your idea",
+      "ideeGerechnet": "Calculated by the code from your idea",
+      "ideeHeute": "Current setting",
+      "ideeBeiKurs": "at price {kurs}",
+      "ideeLiquidiert": "liquidated",
+      "ideeBeendet": "closed by stop",
+      "ideeSzenarioHinweis": "Price scenario: straight path from the current price, change of the result compared with now – without grid profit from swings on the way and without funding.",
+      "ideeNicht": "Not calculated – {was}: {grund}",
+      "ideeNichts": "Nothing calculable could be read from your sentence; it only steers selection and reasoning. With a value (leverage, price, amount) the code calculates it.",
+      "ideeUngelesen": "The idea could not be evaluated this time (the call for it failed). It went to the AI as text only."
     },
     "st": {
       "titel": "Bot control (Pionex)",

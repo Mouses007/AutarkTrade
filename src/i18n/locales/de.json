@@ -8831,11 +8831,21 @@
         "aussteigen": "Risiko abbauen oder geordnet beenden: reduzieren, pausieren, beenden."
       },
       "ideeTitel": "Deine Idee (freiwillig)",
-      "ideePlatz": "z. B. «Ich rechne mit einer Erholung und will nicht nachschiessen» oder «Der Bot soll nur noch den Verlust klein halten».",
-      "ideeText": "Geht in deinen Worten an die KI und lenkt Auswahl und Begründung. Preise darin gelten als deine Annahme; gerechnet wird weiter nur vom Code.",
+      "ideePlatz": "z. B. «Was passiert, wenn ich den Hebel auf 10 stelle?», «Was, wenn der Kurs auf 0.80 fällt?», «Ich habe 50 USDT frei» oder «Die Liquidation soll unter 0.45 liegen».",
+      "ideeText": "Fragen und Wünsche mit Werten rechnet der Code durch (Hebel, Stop-Loss, Take-Profit, Band, Grids, Extra-Marge, Aufstocken, Reduzieren, ein Kurs «was wäre wenn», eine Ziel-Liquidation, dein Budget). Alles andere lenkt Auswahl und Begründung der KI.",
       "zielStand": "Erstellt für das Ziel «{ziel}».",
       "ideeStand": "Deine Idee: «{idee}»",
-      "eingriff": "Eingriff ohne neue Einstellung"
+      "eingriff": "Eingriff ohne neue Einstellung",
+      "ideeAntwort": "Zu deiner Idee",
+      "ideeGerechnet": "Vom Code aus deiner Idee gerechnet",
+      "ideeHeute": "Heutige Einstellung",
+      "ideeBeiKurs": "bei Kurs {kurs}",
+      "ideeLiquidiert": "liquidiert",
+      "ideeBeendet": "per Stop beendet",
+      "ideeSzenarioHinweis": "Kurs-Szenario: direkter Weg vom heutigen Kurs dorthin, Änderung des Ergebnisses gegenüber jetzt – ohne Grid-Gewinn aus Schwankungen unterwegs und ohne Funding.",
+      "ideeNicht": "Nicht gerechnet – {was}: {grund}",
+      "ideeNichts": "Aus deinem Satz liess sich nichts Rechenbares lesen; er lenkt nur Auswahl und Begründung. Mit einem Wert (Hebel, Preis, Betrag) rechnet der Code es durch.",
+      "ideeUngelesen": "Die Idee konnte diesmal nicht ausgewertet werden (der Aufruf dafür ist fehlgeschlagen). Sie ging nur als Text an die KI."
     },
     "st": {
       "titel": "Bot-Steuerung (Pionex)",
