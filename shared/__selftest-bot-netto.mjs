@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { nettoAusMarge, nettoAusGewinn, brauchtNettoKorrektur, tradeNettoKorrigiert, tagNettoKorrigiert, istSpotBot, botIdAusTradeId, tradeAusPionex, tagAusPionex, brauchtPionexAbgleich } from './botNetto.js'
+import { nettoAusMarge, nettoAusGewinn, brauchtNettoKorrektur, tradeNettoKorrigiert, tagNettoKorrigiert, istSpotBot, botIdAusTradeId, tradeAusPionex, tagAusPionex, brauchtPionexAbgleich, investitionHeute, realisiertLaufend } from './botNetto.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -77,6 +77,19 @@ console.log('Exakter Abgleich mit Pionex')
     const tag = tagAusPionex({ trades: [genaehert, fut], executions: [{ ...genaehert, trade: genaehert.id }] }, new Map([[id, -143.57]]))
     p('Tageszeile: Bot exakt, Futures gleich, Summe neu, Execution mit', tag.geaendert && nahe(tag.trades[0].netProceeds, -143.57) && tag.trades[1] === fut && nahe(tag.pAndL.netProceeds, -138.57) && nahe(tag.executions[0].netProceeds, -143.57))
     p('Zeile ohne offenen Bot-Trade: nichts zu tun', tagAusPionex({ trades: [fut, ex] }, new Map()).geaendert === false)
+}
+
+console.log('Laufender Bot: nachgelegte Investition ist kein Gewinn (Widget und Displays, 24.11.2026)')
+{
+    // Muster vom 15.11.2026: «Investition erhöhen» 9.2 → 19.2; `usdtInvestment` bleibt auf 9.2 stehen
+    const auf = { investCoin: 'USDT', usdtInvestment: '9.2', initUsdtInvestment: '9.2', quoteInvestment: '19.2', marginBalance: '19.12', extraMargin: '0' }
+    p('USDT-Bot: Investition heute = 19.2, nicht 9.2', investitionHeute(auf) === 19.2)
+    p('realisiert −0.08, nicht +9.92', nahe(realisiertLaufend(auf), -0.08))
+    p('Extra-Marge zählt zur Basis', nahe(realisiertLaufend({ ...auf, marginBalance: '24.12', extraMargin: '5' }), -0.08))
+    p('ausgetretener und entnommener Gewinn zählen zum Gewinn', nahe(realisiertLaufend({ ...auf, profitExited: '0.3', profitWithdrawn: '0.2' }), 0.42))
+    p('ohne quoteInvestment bleibt usdtInvestment der Rückfall', investitionHeute({ usdtInvestment: '9.2' }) === 9.2 && investitionHeute({ initUsdtInvestment: '7' }) === 7)
+    p('Coin-M: quoteInvestment in der Coin, Rückfall initQuoteInvestment', investitionHeute({ quoteInvestment: '1.5', usdtInvestment: '200' }, true) === 1.5 && investitionHeute({ initQuoteInvestment: '2' }, true) === 2)
+    p('ohne Marge → null', realisiertLaufend({ quoteInvestment: '10' }) === null && realisiertLaufend(null) === null)
 }
 
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)

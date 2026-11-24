@@ -1,7 +1,7 @@
 import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
 import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText, nichtEingerichtet } from './boersen-status.js'
-import { nettoAusMarge, nettoAusGewinn } from '../shared/botNetto.js'
+import { nettoAusMarge, nettoAusGewinn, investitionHeute, realisiertLaufend } from '../shared/botNetto.js'
 import { setzeBoersenAnker } from './trade-popups.js'
 import { BASE_URL, pionexRequest } from './pionex-transport.js'
 import { journalSymbol } from './pionex-symbole.js'
@@ -254,21 +254,13 @@ async function normalizeRunningBot(o) {
 
     const markPrice = await fetchTickerPrice(inst.tickerSymbol)   // USDT/Coin
 
-    // AKTUELLES Investment (Margin-Münze) — Pionex aktualisiert quoteInvestment/
-    // usdtInvestment bei Einsatz-Aufstockung, NICHT init*. init* nur als Fallback,
-    // sonst würde zugefügte Margin als „Gewinn" verbucht (marginBalance − init zu groß)
-    // und die Marge-Anzeige bliebe auf dem Startbetrag stehen.
-    const startInv = inst.coinM
-        ? parseFloat(d.quoteInvestment ?? d.initQuoteInvestment ?? 0)   // SOL
-        : parseFloat(d.usdtInvestment ?? d.initUsdtInvestment ?? 0)     // USDT
-    // Bei Hebel-/Margin-Änderung führt Pionex freigewordene Margin in „dynamische
-    // Marge" (extraMargin) zurück: quoteInvestment SINKT, marginBalance bleibt aber
-    // inkl. extraMargin stehen. Für die PnL-Basis extraMargin mitzählen, sonst wird
-    // die zurückgeführte Marge als Gewinn verbucht (z.B. Hebel 30x→50x = +0,125 SOL
-    // Phantom-Gewinn; gegen Pionex verifiziert: mit extraMargin = echte −0,0004 SOL).
-    // Reine Aufstockung: extraMargin = 0 → unverändert korrekt.
-    const extraMargin = parseFloat(d.extraMargin ?? 0)
-    const realized = parseFloat(d.marginBalance ?? 0) - (startInv + extraMargin)
+    // HEUTIGE Investition (Margin-Münze) und realisierter Teil — eine Rechnung mit der Bot-Seite
+    // (shared/botNetto.js). Bis 24.11.2026 las diese Stelle bei USDT-Bots `usdtInvestment`; das Feld
+    // bleibt nach «Investition erhöhen» auf dem Startbetrag stehen, die Marge wächst aber mit —
+    // Widget und Displays zeigten das Nachgelegte als Gewinn. Extra-Marge zählt zur Basis (Hebel
+    // 30x→50x: sonst +0,125 SOL Phantom-Gewinn), ausgetretener/entnommener Gewinn zählt zum Gewinn.
+    const startInv = investitionHeute(d, inst.coinM) ?? 0
+    const realized = realisiertLaufend(d, inst.coinM) ?? 0
 
     let floating = 0
     if (markPrice && entry) {

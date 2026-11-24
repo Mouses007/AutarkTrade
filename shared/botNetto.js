@@ -41,6 +41,28 @@ export function nettoAusMarge(d) {
     return marge - invest - (zahl(d.extraMargin) ?? 0) + (zahl(d.profitExited) ?? 0) + (zahl(d.profitWithdrawn) ?? 0)
 }
 
+/**
+ * Heutige Investition eines Futures-Grid-Bots in der Margin-Münze (Pionex «Tatsächliche Investition»).
+ * USDT-Bots: `quoteInvestment` — `usdtInvestment` blieb am 15.11.2026 nach «Investition erhöhen»
+ * (9.2 → 19.2) auf 9.2 stehen. Widget und Displays lasen bis 24.11.2026 noch `usdtInvestment` und
+ * zeigten das Nachgelegte als Gewinn. Dieselbe Wahl wie `einsatz.basis` in server/bots/pionex-bots.js.
+ */
+export function investitionHeute(d, coinM = false) {
+    const quote = zahl(d?.quoteInvestment), usdt = zahl(d?.usdtInvestment ?? d?.initUsdtInvestment)
+    if (coinM) return quote ?? zahl(d?.initQuoteInvestment)
+    return String(d?.investCoin || 'USDT').toUpperCase() === 'USDT' ? (quote ?? usdt) : (usdt ?? quote)
+}
+
+/**
+ * Realisierter Teil eines LAUFENDEN Futures-Grid-Bots: Marge − Investition − Extra-Marge, dazu Gewinn,
+ * der den Bot schon verlassen hat (`profitExited`, `profitWithdrawn`). `null`, wenn Marge oder Investition fehlt.
+ */
+export function realisiertLaufend(d, coinM = false) {
+    const marge = zahl(d?.marginBalance), invest = investitionHeute(d, coinM)
+    if (marge === null || invest === null) return null
+    return marge - invest - (zahl(d.extraMargin) ?? 0) + (zahl(d.profitExited) ?? 0) + (zahl(d.profitWithdrawn) ?? 0)
+}
+
 /** Näherung ohne Marge: Gewinn vor Gebühren − Gebühren + Funding (Funding trägt sein Vorzeichen). */
 export function nettoAusGewinn(gewinnVorGebuehren, gebuehr, funding) {
     return (zahl(gewinnVorGebuehren) ?? 0) - Math.abs(zahl(gebuehr) ?? 0) + (zahl(funding) ?? 0)
