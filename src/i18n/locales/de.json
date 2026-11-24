@@ -6760,6 +6760,7 @@
     },
     "stil": {
       "deckkraft": "Deckkraft der Zeichnung",
+      "balkenDeckkraft": "Deckkraft nur der Balken",
       "fortlaufend": "Fortlaufend: reicht immer bis zur aktuellen Kerze",
       "fortlaufendAn": "Fortlaufend an — reicht immer bis zur aktuellen Kerze (Klick: fest am Endpunkt)",
       "breite": "Strichstärke",
@@ -7139,7 +7140,8 @@
     },
     "indAktiv": "Aktiv in diesem Chart",
     "indHinzu": "Hinzufügen",
-    "radarSchnell": {"welle": "Momentum", "fluss": "Geldfluss", "spot": "Spot", "futures": "Futures", "signale": "Signale"},
+    "zeiteinheit": "Zeiteinheit",
+    "radarSchnell": {"titel": "Im Radar anzeigen", "welle": "Momentum", "fluss": "Geldfluss", "spot": "Spot", "futures": "Futures", "signale": "Signale"},
     "indGruppe": {
       "mrWelle": "Momentum",
       "mrFluss": "Geldfluss",

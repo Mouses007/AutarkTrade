@@ -31,6 +31,8 @@ import KiReiter from '../components/chart/KiReiter.vue'
 import AlarmDialog from '../components/chart/AlarmDialog.vue'
 import BotVorlageImChart from '../components/bots/BotVorlageImChart.vue'
 import MomentumBox from '../components/chart/MomentumBox.vue'
+import RadarSchnell from '../components/chart/RadarSchnell.vue'
+import TfRad from '../components/chart/TfRad.vue'
 import IndikatorSchalter from '../components/chart/IndikatorSchalter.vue'
 import { indBoxOffen } from '../stores/chartIndBox.js'
 import VorlagenMenue from '../components/chart/VorlagenMenue.vue'
@@ -1356,7 +1358,9 @@ watch(sichtbareAnzahl, async () => {
                 @layout-neu="layoutNeu" @layout-umbenennen="layoutUmbenennen" @layout-loeschen="layoutLoeschen"
                 @seitenleiste="daten.seitenleiste.offen = !daten.seitenleiste.offen" @foto="foto" @teilen="teilenOffen = true" />
 
-            <div v-if="!vollbild" class="coinTabs" :class="{ zieht: tabZieht !== null }" role="tablist" :aria-label="t(imAktienMarkt ? 'aktienTrennung.reiterTitel' : 'chart.coinTabs.titel')"
+            <div v-if="!vollbild" class="tabZeile">
+            <TfRad v-if="telefon" :interval="aktivesPanel.interval" :gesperrt="tfGesperrt" @waehle="(i) => setzePanel({ interval: i })" />
+            <div class="coinTabs" :class="{ zieht: tabZieht !== null }" role="tablist" :aria-label="t(imAktienMarkt ? 'aktienTrennung.reiterTitel' : 'chart.coinTabs.titel')"
                 @touchmove="tabTouchBewegt">
                 <div v-for="(tab, i) in coinTabs" :key="tab.symbol + '|' + tab.markt" class="coinTab"
                     :class="{ an: i === coinTabAktiv, gezogen: i === tabZieht, zielVor: tabZieht !== null && i === tabZiel && i !== tabZieht && i !== tabZieht + 1,
@@ -1370,6 +1374,7 @@ watch(sichtbareAnzahl, async () => {
                 </div>
                 <button v-if="coinTabs.length < COIN_TABS_MAX" type="button" class="coinTabNeu" :title="t(imAktienMarkt ? 'aktienTrennung.reiterNeu' : 'chart.coinTabs.neu')"
                     :aria-label="t(imAktienMarkt ? 'aktienTrennung.reiterNeu' : 'chart.coinTabs.neu')" @click="neuerCoinTab"><Symbol name="plus" /></button>
+            </div>
             </div>
 
             <!-- Alarm-Hinweis: zwei Wege — den Coin öffnen (Tab + Zeiteinheit) oder nur schliessen -->
@@ -1400,6 +1405,16 @@ watch(sichtbareAnzahl, async () => {
                     <Transition name="schubHg">
                         <div v-if="schublade" class="schubladeHg" @click="schublade = null"></div>
                     </Transition>
+                    <!-- Desktop-Vollbild: die Kopfleiste ist weg — Zeiteinheiten-Favoriten und
+                         Indikator-Vorlagen stehen oben in der Mitte, in der Zeile der Legende. -->
+                    <div v-if="!telefon" class="vollLeiste">
+                        <div class="tfLeiste" role="group" :aria-label="t('chart.tfFavoriten')">
+                            <button v-for="i in tfFavoriten" :key="i" type="button" :class="{ an: aktivesPanel.interval === i }"
+                                :disabled="tfGesperrt.has(i)" @click="setzePanel({ interval: i })">{{ i }}</button>
+                        </div>
+                        <span class="vollTrenner"></span>
+                        <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" :aktiv="aktivesPanel.vorlageId ?? null" @anwenden="vorlageAnwenden" />
+                    </div>
                     <template v-if="!telefon && !schublade">
                         <button v-for="g in GRIFFE" :key="g.seite" type="button" class="schubGriff" :class="['g-' + g.seite, RECHTS.has(g.seite) ? 'rechts' : 'links']"
                             :title="t(g.titel)" :aria-label="t(g.titel)"
@@ -1467,6 +1482,7 @@ watch(sichtbareAnzahl, async () => {
                         <aside v-if="schublade === 'rechts'" class="schublade rechts" :aria-label="t('chart.mbox.titel')">
                             <div class="reiterTitel">{{ t('chart.mbox.titel') }}</div>
                             <MomentumBox :symbol="aktivesPanel.symbol" :interval="aktivesPanel.interval" :markt="aktivesPanel.markt" />
+                            <RadarSchnell v-if="telefon" :panel="aktivesPanel" @schalte="(e) => indikatorAktion(aktivIndex, { aktion: 'params', ...e })" />
                         </aside>
                     </Transition>
                 </template>
@@ -1489,7 +1505,7 @@ watch(sichtbareAnzahl, async () => {
                     <ChartPanel v-for="(p, i) in sichtbarePanels" :key="layoutId + '-' + i"
                         :ref="(el) => { if (el) panelRefs[i] = el }" :panel="p" :nummer="i"
                         :class="{ ausgeblendet: vollbild && i !== aktivIndex }" @vollbild="schalteVollbild(i)"
-                        :seite-scrollt="telefon && !vollbild" :zeit-mit-einpassen="telefon"
+                        :seite-scrollt="telefon && !vollbild" :zeit-mit-einpassen="telefon" :radar-knoepfe="!telefon"
                         :aktiv="sichtbareAnzahl > 1 && i === aktivIndex" @fokus="fokus(i)" @kreuz="kreuz(i, $event)"
                         @bereich="bereich(i)" @indikator="indikatorAktion(i, $event)"
                         :werkzeug="i === aktivIndex ? werkzeug : null" :magnet="!!daten.zeichnen?.magnet"
@@ -1580,6 +1596,7 @@ watch(sichtbareAnzahl, async () => {
                     <div v-if="boxOffen" class="karte boxKarte">
                         <div class="boxBereich" :style="{ height: boxHoehe + 'px' }">
                             <MomentumBox :symbol="aktivesPanel.symbol" :interval="aktivesPanel.interval" :markt="aktivesPanel.markt" />
+                            <RadarSchnell v-if="telefon" :panel="aktivesPanel" @schalte="(e) => indikatorAktion(aktivIndex, { aktion: 'params', ...e })" />
                         </div>
                         <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
                             @pointerdown.prevent.stop="eckStart($event, 'momentum')" @pointermove="eckZiehen" @pointerup="eckEnde"
@@ -2081,7 +2098,17 @@ watch(sichtbareAnzahl, async () => {
 }
 
 /* Coin-Tabs unter der Kopfleiste */
+/* Telefon: links das Scrollrad der Zeiteinheit, daneben die Coin-Tabs */
+.tabZeile {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
 .coinTabs {
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -2188,6 +2215,48 @@ watch(sichtbareAnzahl, async () => {
     color: var(--muted);
     font-size: 12px;
     cursor: pointer;
+}
+
+/* Desktop-Vollbild: Zeiteinheiten + Indikator-Vorlagen oben in der Mitte über dem Chart */
+.vollLeiste {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 18;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100% - 700px);
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+}
+
+.vollLeiste .tfLeiste {
+    padding: 0;
+}
+
+.vollLeiste .tfLeiste button {
+    min-width: 0;
+    padding: 3px 6px;
+}
+
+.vollLeiste .tfLeiste button:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--panel-soft);
+}
+
+.vollTrenner {
+    width: 1px;
+    height: 14px;
+    background: var(--line-stark);
+}
+
+@media (max-width: 1100px) {
+    .vollLeiste {
+        max-width: calc(100% - 120px);
+    }
 }
 
 .tfLeiste button.an {

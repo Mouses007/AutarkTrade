@@ -1422,13 +1422,16 @@ export class ZeichenEbene {
                 // Balken von links, längster = 40 % der Bereichsbreite (mindestens 60 px)
                 const max = Math.max(...vp.zeilen.map((r) => r.summe))
                 const lang = Math.max(60, (x2 - x1) * 0.4)
+                // Eigene Deckkraft nur der Balken (Stil-Leiste, unter den Farben); Linien und Schilder bleiben
+                const bd = Number(s.balkenDeckkraft)
+                const balken = bd > 0 && bd < 1 ? Math.max(0.1, bd) : 1
                 for (let i = 0; i < vp.zeilen.length; i++) {
                     const r = vp.zeilen[i]
                     const ya = Y(r.bis), yb = Y(r.von)
                     if (fehlt(ya, yb) || !r.summe) continue
                     const h = Math.max(1, Math.abs(yb - ya) - 1)
                     const inVa = i >= vp.vaVon && i <= vp.vaBis
-                    ctx.fillStyle = mitAlpha(farbe, inVa ? 0.55 : 0.22)
+                    ctx.fillStyle = mitAlpha(farbe, (inVa ? 0.55 : 0.22) * balken)
                     ctx.fillRect(x1, Math.min(ya, yb), lang * r.summe / max, h)
                 }
                 const ende = s.rechts ? breite : x2

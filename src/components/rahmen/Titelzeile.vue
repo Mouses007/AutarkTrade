@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="at-titelzeile" :class="{ 'in-kopf': inKopf }">
+    <div class="at-titelzeile" :class="{ 'in-kopf': inKopf, mobil }">
         <div class="links">
             <button v-if="mobil" type="button" class="mobile-menu-toggle" :aria-label="t('nav.menueOeffnen')"
                 @click="schalteMobilMenue()">
@@ -118,6 +118,10 @@ onBeforeUnmount(() => {
                 <span v-if="filterText" class="nav-filter-info">{{ filterText }}</span>
             </template>
         </div>
+
+        <!-- Telefon: Platz für die Bedienung der Seite (Chart: Coin-Suche, Indikatoren, Teilen) —
+             die Seite setzt sie per Teleport hierher, statt eine eigene Zeile zu belegen. -->
+        <div v-if="mobil" id="at-titel-mitte" class="mitte"></div>
 
         <div class="rechts">
             <button v-if="appMode === 'journal'" type="button" class="symbolknopf" :class="{ aktiv: privacyMode }"
@@ -163,6 +167,23 @@ onBeforeUnmount(() => {
     flex-wrap: wrap;
     gap: 0.2rem var(--abstand-3);
     min-width: 0;
+}
+
+/* Anker für Aufklapplisten aus der Mitte (Coin-Suche): sie hängen unter der ganzen Zeile. */
+.at-titelzeile.mobil {
+    position: relative;
+    align-items: center;
+}
+
+.mitte {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.mitte:empty {
+    display: none;
 }
 
 .seitentitel {

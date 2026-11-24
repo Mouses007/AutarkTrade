@@ -6760,6 +6760,7 @@
     },
     "stil": {
       "deckkraft": "Drawing opacity",
+      "balkenDeckkraft": "Opacity of the bars only",
       "fortlaufend": "Continuous: always reaches the current candle",
       "fortlaufendAn": "Continuous on — always reaches the current candle (click: fixed at the end point)",
       "breite": "Line width",
@@ -7139,7 +7140,8 @@
     },
     "indAktiv": "Active in this chart",
     "indHinzu": "Add",
-    "radarSchnell": {"welle": "Momentum", "fluss": "Flow", "spot": "Spot", "futures": "Futures", "signale": "Signals"},
+    "zeiteinheit": "Timeframe",
+    "radarSchnell": {"titel": "Show in radar", "welle": "Momentum", "fluss": "Flow", "spot": "Spot", "futures": "Futures", "signale": "Signals"},
     "indGruppe": {
       "mrWelle": "Momentum",
       "mrFluss": "Money flow",

@@ -11,6 +11,7 @@ import { INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE, boerseFuer, waehlbareBoe
 import { overlaysFuer, overlayAn } from '../../utils/chart/overlays/liste.js'
 import { aktieVon, termineGrundSchluessel } from '../../utils/chart/aktienKontext.js'
 import { Symbol } from '../basis'
+import { bildschirmTyp } from '../../stores/ui.js'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -25,6 +26,13 @@ const emit = defineEmits(['panel', 'indikatoren', 'raster', 'sync', 'layoutWechs
 const { t, te } = useI18n()
 
 const suche = ref(null)
+/*
+ * Telefon: die Leiste sitzt in der Titelzeile der Seite (zwischen Titel und KI-Knopf) —
+ * Suche, Indikatoren, Teilen, Seitenleiste. Die Zeiteinheit steht dort als Scrollrad
+ * links neben den Coin-Tabs (TfRad). So bleibt die Höhe für Chart und Indikatoren.
+ * Das Ziel gibt es nur, solange die Titelzeile als eigene Zeile steht (unter 992 px).
+ */
+const imTitel = computed(() => props.telefon && bildschirmTyp.value === 'mobile')
 const mehrOffen = ref(false)
 const layoutOffen = ref(false)
 const syncOffen = ref(false)
@@ -142,14 +150,15 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 </script>
 
 <template>
-    <div class="kopfleiste">
+    <Teleport defer to="#at-titel-mitte" :disabled="!imTitel">
+    <div class="kopfleiste" :class="{ imTitel }">
         <SymbolSuche ref="suche" :symbol="panel.symbol" :markt="panel.markt" @waehle="emit('panel', $event)" />
         <select v-if="!telefon" class="quelle" :value="aktiveBoerse" :disabled="quelleGesperrt"
             :title="t('chart.quelle.titel')" @change="emit('panel', { boerse: $event.target.value, ...(panel.markt === 'spot' ? { markt: 'futures' } : {}) })">
             <option v-for="b in boersenListe" :key="b" :value="b">{{ t('chart.quelle.' + b) }}</option>
         </select>
 
-        <div class="gruppe">
+        <div v-if="!telefon" class="gruppe">
             <button v-for="i in sichtbareIntervalle" :key="i" class="tf" :class="{ an: panel.interval === i }"
                 :disabled="gesperrt.has(i)" :title="gesperrt.has(i) ? t('chart.quelle.tfFehlt') : ''"
                 @click="intervall(i)" :aria-label="gesperrt.has(i) ? t('chart.quelle.tfFehlt') : ''">{{ i }}</button>
@@ -250,6 +259,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
                 @click="emit('seitenleiste')" :aria-label="t('chart.seitenleiste')"><Symbol name="seitenleiste" /></button>
         </div>
     </div>
+    </Teleport>
 </template>
 
 <style scoped>
@@ -263,6 +273,49 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
     align-items: center;
     gap: 6px 8px;
     padding: 6px 4px;
+}
+
+/* Telefon, in der Titelzeile: eine Zeile, rechtsbündig, ohne Trennstriche. */
+.kopfleiste.imTitel {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 2px;
+    padding: 0;
+    min-width: 0;
+}
+
+.imTitel .gruppe {
+    padding-left: 0;
+    border-left: none;
+}
+
+.imTitel .rechts {
+    margin-left: 0;
+    gap: 0;
+}
+
+.imTitel .tf {
+    padding: 7px 6px;
+}
+
+.imTitel :deep(.symbolSuche) {
+    position: static;
+    min-width: 0;
+    margin-right: 2px;
+}
+
+.imTitel :deep(.symbolSuche > .knopf) {
+    max-width: 100%;
+    padding: 5px 8px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.imTitel :deep(.liste:not(.eingebettet)) {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
 }
 
 .quelle {

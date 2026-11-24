@@ -81,6 +81,8 @@ const props = defineProps({
     seiteScrollt: { type: Boolean, default: false },
     // Handy: „A" passt immer ein — Preis und Zeitachse (neueste Kerzen).
     zeitMitEinpassen: { type: Boolean, default: false },
+    // Schnellschalter des Momentum Radars neben dem Fenstertitel; am Handy stehen sie bei den Momentum-Infos.
+    radarKnoepfe: { type: Boolean, default: true },
     // Strategien-Modus: derselbe Chart, aber nur zum Ansehen. Kein Zeichnen,
     // keine Alarme, kein Rechtsklick-Anlegen, keine KI-Vorschau; eigene
     // Zeichnungen sind sichtbar und gesperrt. Gezeichnet wird im Chart-Arbeitsplatz.
@@ -2236,7 +2238,7 @@ defineExpose({
         <!-- „i" neben den Titeln der Indikator-Fenster (z. B. Momentum Radar); der Titel selbst ist Canvas. -->
         <span v-for="f in fensterTitel" :key="f.id" class="fensterInfo" :style="{ top: f.oben + 5 + 'px', left: 4 + f.breite + 6 + 'px' }">
             <InfoTipp v-if="te('chart.ind.' + f.typ + '.info')" :schluessel="'chart.ind.' + f.typ + '.info'" breit />
-            <template v-if="f.typ === 'momentum'">
+            <template v-if="f.typ === 'momentum' && radarKnoepfe">
                 <button v-for="s in radarSchalter(f.id)" :key="s.id" type="button" class="radarSchalter" :class="{ an: s.an }"
                     :aria-pressed="s.an" :title="t(s.an ? 'chart.ausblenden' : 'chart.einblenden') + ': ' + t('chart.radarSchnell.' + s.id)"
                     @click.stop="radarSchalten(f.id, s)" @pointerdown.stop>{{ t('chart.radarSchnell.' + s.id) }}</button>

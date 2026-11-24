@@ -70,6 +70,21 @@ function setzeDeckkraft(wert, sofort = false) {
     if (sofort) speichern(); else deckUhr = setTimeout(speichern, 150)
 }
 
+/*
+ * Volumenprofil: eigene Deckkraft nur für die Balken (`stil.balkenDeckkraft`, Bruch;
+ * ohne = voll) — zusätzlich zur Deckkraft der ganzen Zeichnung. So lassen sich die
+ * Balken zurücknehmen, während POC/VAH/VAL und ihre Schilder kräftig bleiben.
+ */
+const balkenProzent = ref(Math.round((s.value.balkenDeckkraft ?? 1) * 100))
+watch(() => props.zeichnung.id, () => { balkenProzent.value = Math.round((stilFuer(props.zeichnung).balkenDeckkraft ?? 1) * 100) })
+let balkenUhr = null
+function setzeBalkenDeckkraft(wert, sofort = false) {
+    balkenProzent.value = Math.max(10, Math.min(100, Number(wert) || 100))
+    clearTimeout(balkenUhr)
+    const speichern = () => stil({ balkenDeckkraft: balkenProzent.value >= 100 ? 1 : balkenProzent.value / 100 })
+    if (sofort) speichern(); else balkenUhr = setTimeout(speichern, 150)
+}
+
 function naechsteBreite() {
     const b = s.value.breite || 1
     stil({ breite: b >= 4 ? 1 : b + 1 })
@@ -91,7 +106,8 @@ watch(() => props.zeichnung.id, () => { paletteOffen.value = false; stufenOffen.
 if (typ.value === 'emoji') smileyOffen.value = true
 function waehleFarbe(f) {
     stil({ farbe: f })
-    paletteOffen.value = false
+    // Beim Volumenprofil bleibt die Palette offen: darunter steht der Regler für die Balken.
+    if (typ.value !== 'volprofil') paletteOffen.value = false
 }
 
 function nurDieseZeiteinheit() {
@@ -161,6 +177,11 @@ function nurDieseZeiteinheit() {
     <div v-if="paletteOffen && hatFarbe" class="palette" role="listbox" :aria-label="t('chart.stil.farbe')">
         <button v-for="f in FARBEN" :key="f" class="farbe" :class="{ an: s.farbe === f }" :style="{ background: f }"
             role="option" :aria-selected="s.farbe === f" :aria-label="f" @click="waehleFarbe(f)"></button>
+        <label v-if="typ === 'volprofil'" class="balkenDeck" :title="t('chart.stil.balkenDeckkraft')">
+            <input type="range" min="10" max="100" step="5" :value="balkenProzent" :aria-label="t('chart.stil.balkenDeckkraft')"
+                @input="setzeBalkenDeckkraft($event.target.value)" @change="setzeBalkenDeckkraft($event.target.value, true)" />
+            <span>{{ balkenProzent }}%</span>
+        </label>
     </div>
     <div v-if="smileyOffen && typ === 'emoji'" class="smileys" role="listbox" :aria-label="t('chart.stil.smiley')">
         <div v-for="[gruppe, zeichen] in SMILEYS" :key="gruppe" class="smileyGruppe">
@@ -196,6 +217,23 @@ function nurDieseZeiteinheit() {
     border: 1px solid var(--line-stark);
     border-radius: var(--radius-klein);
     box-shadow: var(--schatten);
+}
+
+/* Regler nur für die Balken des Volumenprofils, unter den Farben über die ganze Breite */
+.balkenDeck {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.balkenDeck input {
+    flex: 1;
+    min-width: 0;
+    width: 0;
+    accent-color: var(--accent);
 }
 
 .palette .farbe {
