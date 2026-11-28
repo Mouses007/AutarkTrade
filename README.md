@@ -3,7 +3,7 @@
 A self-hosted trading journal and analysis workstation for **crypto futures** on **Bitunix**, **Bitget** and **Pionex**.
 It runs on your own machine or NAS: no cloud, no account, no subscription.
 
-> **Status:** 4.4.4 (beta) · interface in **German** (default) and **English** · free software under AGPL-3.0
+> **Status:** 4.4.5 (beta) · interface in **German** (default) and **English** · free software under AGPL-3.0
 
 ![Chart workspace](assets/screenshots/chart.png)
 
